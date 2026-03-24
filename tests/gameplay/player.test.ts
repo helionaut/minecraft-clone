@@ -10,7 +10,56 @@ function createLookup(
   return (x, y, z) => set.has(`${x},${y},${z}`);
 }
 
+function createFloor(radius: number): Array<readonly [number, number, number]> {
+  const blocks: Array<readonly [number, number, number]> = [];
+
+  for (let x = -radius; x <= radius; x += 1) {
+    for (let z = -radius; z <= radius; z += 1) {
+      blocks.push([x, 0, z]);
+    }
+  }
+
+  return blocks;
+}
+
 describe('stepPlayer', () => {
+  it('moves W forward and S backward relative to the camera', () => {
+    const isSolidBlock = createLookup(createFloor(8));
+    const state = {
+      ...createPlayerState({ x: 0.5, y: 1, z: 0.5 }),
+      grounded: true,
+      yaw: 0,
+    };
+
+    const movedForward = stepPlayer(
+      state,
+      {
+        forward: true,
+        backward: false,
+        left: false,
+        right: false,
+        jump: false,
+      },
+      1 / 60,
+      isSolidBlock,
+    );
+    const movedBackward = stepPlayer(
+      state,
+      {
+        forward: false,
+        backward: true,
+        left: false,
+        right: false,
+        jump: false,
+      },
+      1 / 60,
+      isSolidBlock,
+    );
+
+    expect(movedForward.position.z).toBeLessThan(state.position.z);
+    expect(movedBackward.position.z).toBeGreaterThan(state.position.z);
+  });
+
   it('lands on the floor under gravity', () => {
     const isSolidBlock = createLookup([[0, 0, 0]]);
     let state = createPlayerState({ x: 0.5, y: 2.4, z: 0.5 });
@@ -37,19 +86,16 @@ describe('stepPlayer', () => {
 
   it('prevents walking through solid blocks', () => {
     const isSolidBlock = createLookup([
-      [0, 0, 0],
-      [0, 1, 0],
-      [0, 0, 1],
-      [0, 1, 1],
-      [0, 0, 2],
+      ...createFloor(3),
       [0, 1, 2],
-      [1, 0, 2],
       [1, 1, 2],
+      [0, 0, 2],
+      [1, 0, 2],
     ]);
     let state = {
       ...createPlayerState({ x: 1.5, y: 1, z: 1.5 }),
       grounded: true,
-      yaw: 0,
+      yaw: Math.PI,
     };
 
     for (let frame = 0; frame < 20; frame += 1) {

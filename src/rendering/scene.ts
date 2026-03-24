@@ -9,8 +9,9 @@ import {
   LineBasicMaterial,
   LineSegments,
   Mesh,
-  MeshLambertMaterial,
+  MeshStandardMaterial,
   PerspectiveCamera,
+  PointLight,
   Raycaster,
   Scene,
   Vector2,
@@ -18,7 +19,11 @@ import {
 } from 'three';
 import type { Intersection, Object3D } from 'three';
 
-import { BLOCK_DEFINITIONS } from '../gameplay/blocks.ts';
+import {
+  BLOCK_DEFINITIONS,
+  type PlaceableBlockType,
+} from '../gameplay/blocks.ts';
+import { computeVoxelLighting } from '../gameplay/lighting.ts';
 import {
   DEFAULT_PLAYER_CONFIG,
   createPlayerState,
@@ -32,10 +37,11 @@ import {
   parseWorldPersistence,
   type SolidBlockType,
 } from '../gameplay/world.ts';
+import { createBlockMaterialFactory } from './textures.ts';
 
 export interface SandboxStatus {
   readonly locked: boolean;
-  readonly selectedBlock: SolidBlockType;
+  readonly selectedBlock: PlaceableBlockType;
   readonly coords: string;
   readonly target: string;
   readonly prompt: string;
@@ -45,7 +51,7 @@ export interface SandboxStatus {
 export interface PlayableScene {
   readonly canvas: HTMLCanvasElement;
   readonly renderer: WebGLRenderer;
-  readonly setSelectedBlock: (type: SolidBlockType) => void;
+  readonly setSelectedBlock: (type: PlaceableBlockType) => void;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
 }
@@ -56,6 +62,15 @@ interface CellTarget {
   readonly z: number;
   readonly type: SolidBlockType;
 }
+
+const CARDINAL_DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+];
 
 function formatCoords(value: number): string {
   return value.toFixed(1);
@@ -77,16 +92,17 @@ export function createPlayableScene(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   const scene = new Scene();
-  scene.background = new Color(0x89c6ec);
-  scene.fog = new Fog(0x89c6ec, 18, 58);
+  scene.background = new Color(0x9ecff2);
+  scene.fog = new Fog(0x9ecff2, 24, 82);
 
-  const camera = new PerspectiveCamera(75, 1, 0.1, 120);
+  const camera = new PerspectiveCamera(75, 1, 0.1, 180);
   camera.rotation.order = 'YXZ';
 
-  const ambient = new AmbientLight(0xf4edd8, 1.7);
-  const sun = new DirectionalLight(0xfff4d4, 2.1);
-  sun.position.set(16, 20, 10);
-  scene.add(ambient, sun);
+  const ambient = new AmbientLight(0xc7def0, 0.42);
+  const sun = new DirectionalLight(0xfff3c8, 2.7);
+  sun.position.set(18, 28, 10);
+  const playerLantern = new PointLight(0xffd6a0, 1.6, 14, 2);
+  scene.add(ambient, sun, playerLantern);
 
   const storedWorld = parseWorldPersistence(
     window.localStorage.getItem(
@@ -101,21 +117,7 @@ export function createPlayableScene(
   const highlightGeometry = new EdgesGeometry(new BoxGeometry(1.02, 1.02, 1.02));
   const raycaster = new Raycaster();
   const center = new Vector2(0, 0);
-  const materialCache = new Map<SolidBlockType, MeshLambertMaterial>();
-
-  const getMaterial = (type: SolidBlockType): MeshLambertMaterial => {
-    const cached = materialCache.get(type);
-
-    if (cached) {
-      return cached;
-    }
-
-    const material = new MeshLambertMaterial({
-      color: BLOCK_DEFINITIONS[type].color,
-    });
-    materialCache.set(type, material);
-    return material;
-  };
+  const blockMaterialFactory = createBlockMaterialFactory();
 
   const targetOutline = new LineSegments(
     highlightGeometry,
@@ -126,7 +128,7 @@ export function createPlayableScene(
 
   const placementPreview = new Mesh(
     blockGeometry,
-    new MeshLambertMaterial({
+    new MeshStandardMaterial({
       color: BLOCK_DEFINITIONS.grass.color,
       transparent: true,
       opacity: 0.45,
@@ -135,13 +137,13 @@ export function createPlayableScene(
   placementPreview.visible = false;
   scene.add(placementPreview);
 
-  let selectedBlock: SolidBlockType = 'grass';
+  let selectedBlock: PlaceableBlockType = 'grass';
   let locked = false;
   const touchDevice =
     'ontouchstart' in window || navigator.maxTouchPoints > 0;
   let currentTarget: CellTarget | null = null;
   let currentPlacement: { x: number; y: number; z: number } | null = null;
-  let player = createPlayerState({ x: 0.5, y: 4.02, z: 0.5 });
+  let player = createPlayerState(world.getSpawnPoint());
   const input = {
     forward: false,
     backward: false,
@@ -170,9 +172,42 @@ export function createPlayableScene(
 
   const rebuildWorld = () => {
     worldGroup.clear();
+    const lighting = computeVoxelLighting(
+      {
+        minX: -world.config.radius,
+        maxX: world.config.radius,
+        minY: world.config.minY,
+        maxY: world.config.maxY + 1,
+        minZ: -world.config.radius,
+        maxZ: world.config.radius,
+      },
+      (x, y, z) => world.getBlock(x, y, z),
+    );
 
     for (const block of world.toBlocks()) {
-      const voxel = new Mesh(blockGeometry, getMaterial(block.type));
+      const hasVisibleFace = CARDINAL_DIRECTIONS.some(([dx, dy, dz]) => {
+        const neighbor = world.getBlock(block.x + dx, block.y + dy, block.z + dz);
+
+        if (!neighbor) {
+          return true;
+        }
+
+        if (block.type === 'water' || block.type === 'lava') {
+          return neighbor !== block.type;
+        }
+
+        return !BLOCK_DEFINITIONS[neighbor].opaque;
+      });
+
+      if (!hasVisibleFace) {
+        continue;
+      }
+
+      const brightness = lighting.getBlockBrightness(block.x, block.y, block.z);
+      const voxel = new Mesh(
+        blockGeometry,
+        blockMaterialFactory.getMaterials(block.type, brightness),
+      );
       voxel.position.set(block.x + 0.5, block.y + 0.5, block.z + 0.5);
       voxel.userData.cell = block;
       worldGroup.add(voxel);
@@ -241,7 +276,11 @@ export function createPlayableScene(
       placement.z,
     );
 
-    if (placement.y >= 0 && !world.hasBlock(placement.x, placement.y, placement.z) && !blockedByPlayer) {
+    if (
+      placement.y >= world.config.minY &&
+      !world.hasBlock(placement.x, placement.y, placement.z) &&
+      !blockedByPlayer
+    ) {
       currentPlacement = placement;
       placementPreview.visible = true;
       placementPreview.position.set(
@@ -250,7 +289,7 @@ export function createPlayableScene(
         placement.z + 0.5,
       );
       (
-        placementPreview.material as MeshLambertMaterial
+        placementPreview.material as MeshStandardMaterial
       ).color.setHex(BLOCK_DEFINITIONS[selectedBlock].color);
     } else {
       currentPlacement = null;
@@ -345,7 +384,7 @@ export function createPlayableScene(
     }
 
     if (event.code === 'Digit2') {
-      selectedBlock = 'dirt';
+      selectedBlock = 'sand';
       updateTargeting();
       return;
     }
@@ -378,7 +417,7 @@ export function createPlayableScene(
   const resetWorld = () => {
     world.reset();
     window.localStorage.removeItem(world.storageKey);
-    player = createPlayerState({ x: 0.5, y: 4.02, z: 0.5 });
+    player = createPlayerState(world.getSpawnPoint());
     rebuildWorld();
     updateTargeting();
   };
@@ -408,7 +447,7 @@ export function createPlayableScene(
       player,
       input,
       delta,
-      (x, y, z) => world.hasBlock(x, y, z),
+      (x, y, z) => world.isSolidBlock(x, y, z),
     );
 
     camera.position.set(
@@ -416,6 +455,7 @@ export function createPlayableScene(
       player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight,
       player.position.z,
     );
+    playerLantern.position.copy(camera.position);
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
 
@@ -444,9 +484,9 @@ export function createPlayableScene(
       renderer.dispose();
       blockGeometry.dispose();
       highlightGeometry.dispose();
-      materialCache.forEach((material) => material.dispose());
+      blockMaterialFactory.dispose();
       (
-        placementPreview.material as MeshLambertMaterial
+        placementPreview.material as MeshStandardMaterial
       ).dispose();
       (targetOutline.material as LineBasicMaterial).dispose();
       canvas.remove();

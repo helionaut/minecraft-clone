@@ -155,6 +155,9 @@ review.
 
 - Automated test coverage must exist for deterministic world generation, player
   collision or movement rules, and block placement or removal logic.
+- Those automated tests must assert stable, inspectable outputs such as player
+  coordinates, occupied voxel cells, collision outcomes, and serialized world
+  state rather than relying only on visual inspection.
 - Aggregate local validation must include the project's lint or type checks plus
   production build success.
 - Manual browser validation must confirm the full gameplay loop on desktop:
@@ -166,16 +169,23 @@ review.
 - Desktop evidence must include at least:
   - one screenshot of the app before entering or capturing controls
   - one screenshot of the in-world gameplay state with the world visible
+  - a short review note confirming that the start affordance and the active
+    interaction cue are both visible in the checked screenshots
 - Mobile evidence must include at least:
   - one screenshot of the shell in a phone-sized viewport
   - confirmation that text, buttons, and framing are readable without overlap or
     clipped primary controls
+- Mobile shell review should be captured at a viewport near `390x844` or an
+  equivalent modern phone size so future reviews compare against a consistent
+  baseline.
 - Review notes must state whether mobile is shell-only for v1 or supports active
   interaction.
 
 ## Success Criteria
 
-The first slice is successful when all of the following are true:
+The first slice is successful when all of the following are true.
+
+### Gameplay Success
 
 - A reviewer can open the deployed app and complete the promised gameplay loop
   without needing undocumented setup.
@@ -183,10 +193,23 @@ The first slice is successful when all of the following are true:
   in local validation.
 - The refresh behavior is explicit, deterministic, and matches the product
   contract.
-- The app builds as a static web artifact suitable for deployment without
-  backend infrastructure.
+
+### Validation Success
+
 - Required acceptance evidence exists for automated checks plus desktop and
   mobile shell review.
+- The automated tests that cover world generation, collision or movement rules,
+  and block editing pass on the intended branch head.
+- Desktop manual validation confirms load, entry, move, jump, collide, remove
+  block, place block, and refresh behavior in one continuous session.
+
+### Deployment Readiness Success
+
+- The app builds as a static web artifact suitable for deployment without
+  backend infrastructure.
+- The production build serves the first slice without runtime secrets or
+  required external services.
+- All required v1 assets are bundled, generated locally, or committed in-repo.
 
 ## Deployment Readiness Criteria
 

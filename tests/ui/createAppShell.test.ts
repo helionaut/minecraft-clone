@@ -15,6 +15,7 @@ const sandboxStub = {
 
 let statusListener: StatusListener | null = null;
 let viewportWidth = 390;
+let viewportHeight = 844;
 const mediaQueryListeners = new Set<() => void>();
 
 vi.mock('../../src/rendering/scene.ts', () => ({
@@ -32,7 +33,15 @@ function installMatchMediaMock(): void {
         media: query,
         onchange: null,
         get matches() {
-          return query === '(max-width: 700px)' ? viewportWidth <= 700 : false;
+          if (query === '(max-width: 700px)') {
+            return viewportWidth <= 700;
+          }
+
+          if (query === '(max-height: 560px)') {
+            return viewportHeight <= 560;
+          }
+
+          return false;
         },
         addEventListener: (_event: string, listener: () => void) => {
           mediaQueryListeners.add(listener);
@@ -54,8 +63,9 @@ function installMatchMediaMock(): void {
   });
 }
 
-function emitViewportChange(width: number): void {
+function emitViewportChange(width: number, height = viewportHeight): void {
   viewportWidth = width;
+  viewportHeight = height;
 
   for (const listener of mediaQueryListeners) {
     listener();
@@ -67,6 +77,7 @@ describe('createAppShell', () => {
     document.body.innerHTML = '<div id="app"></div>';
     statusListener = null;
     viewportWidth = 390;
+    viewportHeight = 844;
     mediaQueryListeners.clear();
     installMatchMediaMock();
     sandboxStub.setSelectedBlock.mockReset();
@@ -100,15 +111,47 @@ describe('createAppShell', () => {
     const drawer = root.querySelector<HTMLDetailsElement>('[data-hud-drawer]');
     const mobileStatus = root.querySelector<HTMLElement>('[data-mobile-status]');
     const mobileCoords = root.querySelector<HTMLElement>('[data-mobile-coords]');
+    const lookSurface = root.querySelector<HTMLElement>('[data-look-surface]');
 
     expect(hud?.classList.contains('compact-touch-hud')).toBe(true);
     expect(drawer?.open).toBe(false);
-    expect(mobileStatus?.textContent).toContain('Mine or Place');
+    expect(mobileStatus?.textContent).toContain('drag anywhere');
     expect(mobileCoords?.textContent).toBe('X 4.0 Y 10.0 Z -2.0');
+    expect(lookSurface?.classList.contains('active')).toBe(true);
 
     emitViewportChange(900);
 
     expect(hud?.classList.contains('compact-touch-hud')).toBe(false);
     expect(drawer?.open).toBe(true);
+  });
+
+  it('switches into the compact HUD in mobile landscape even when width is large', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    createAppShell(root);
+
+    if (!statusListener) {
+      throw new Error('Expected scene status listener.');
+    }
+
+    emitViewportChange(932, 430);
+    statusListener({
+      locked: false,
+      selectedBlock: 'grass',
+      coords: 'X 0.0 Y 5.0 Z 0.0',
+      target: 'Aim at a nearby block to mine or place.',
+      prompt: 'Use the left stick to move, drag anywhere to aim, tap Jump to swim upward, and use Mine or Place on the targeted block.',
+      touchDevice: true,
+    });
+
+    const hud = root.querySelector<HTMLElement>('.hud');
+    const drawer = root.querySelector<HTMLDetailsElement>('[data-hud-drawer]');
+
+    expect(hud?.classList.contains('compact-touch-hud')).toBe(true);
+    expect(drawer?.open).toBe(false);
   });
 });

@@ -139,4 +139,53 @@ describe('stepPlayer', () => {
     expect(jumped.velocity.y).toBeGreaterThan(0);
     expect(jumped.grounded).toBe(false);
   });
+
+  it('treats water as a fluid instead of solid ground and lets the player sink', () => {
+    const isSolidBlock = createLookup(createFloor(4));
+    const isFluidBlock = createLookup([[0, 1, 0]]);
+    const next = stepPlayer(
+      createPlayerState({ x: 0.5, y: 1.2, z: 0.5 }),
+      {
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        jump: false,
+      },
+      1 / 10,
+      isSolidBlock,
+      undefined,
+      isFluidBlock,
+    );
+
+    expect(next.inFluid).toBe(true);
+    expect(next.grounded).toBe(false);
+    expect(next.position.y).toBeLessThan(1.2);
+  });
+
+  it('uses jump to swim upward while submerged in water', () => {
+    const isSolidBlock = createLookup(createFloor(4));
+    const isFluidBlock = createLookup([
+      [0, 1, 0],
+      [0, 2, 0],
+    ]);
+    const next = stepPlayer(
+      createPlayerState({ x: 0.5, y: 1.1, z: 0.5 }),
+      {
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        jump: true,
+      },
+      1 / 10,
+      isSolidBlock,
+      undefined,
+      isFluidBlock,
+    );
+
+    expect(next.inFluid).toBe(true);
+    expect(next.velocity.y).toBeGreaterThan(0);
+    expect(next.position.y).toBeGreaterThan(1.1);
+  });
 });

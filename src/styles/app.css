@@ -250,6 +250,34 @@ button {
   height: 28px;
 }
 
+.touch-look-surface {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 4.2rem;
+  pointer-events: none;
+  touch-action: none;
+  z-index: 2;
+}
+
+.touch-look-surface.active {
+  display: flex;
+  pointer-events: auto;
+}
+
+.touch-look-hint {
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(9, 17, 24, 0.42);
+  color: rgba(255, 249, 231, 0.7);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  backdrop-filter: blur(6px);
+}
+
 .touch-ui {
   position: absolute;
   inset: auto 0 1rem 0;
@@ -259,7 +287,7 @@ button {
   gap: 0.75rem;
   padding: 0 1rem;
   pointer-events: none;
-  z-index: 3;
+  z-index: 4;
 }
 
 .touch-ui.active {
@@ -276,7 +304,7 @@ button {
   justify-items: start;
 }
 
-.touch-look {
+.touch-actions-panel {
   justify-items: end;
 }
 
@@ -289,8 +317,7 @@ button {
   text-transform: uppercase;
 }
 
-.touch-stick,
-.touch-lookpad {
+.touch-stick {
   position: relative;
   width: min(32vw, 9.5rem);
   height: min(32vw, 9.5rem);
@@ -316,15 +343,6 @@ button {
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
 }
 
-.touch-lookpad {
-  display: grid;
-  place-items: center;
-  color: rgba(255, 249, 231, 0.8);
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
 .touch-actions,
 .touch-hotbar-cycle {
   display: flex;
@@ -332,6 +350,8 @@ button {
 }
 
 .touch-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   justify-content: end;
 }
 
@@ -346,6 +366,14 @@ button {
   color: #fff7db;
   padding: 0.65rem 0.95rem;
   touch-action: manipulation;
+}
+
+.touch-button-primary {
+  min-width: 4.9rem;
+  background:
+    linear-gradient(180deg, rgba(88, 196, 255, 0.35), rgba(88, 196, 255, 0.12)),
+    rgba(13, 17, 22, 0.76);
+  border-color: rgba(88, 196, 255, 0.42);
 }
 
 .touch-button:active,
@@ -487,7 +515,7 @@ button {
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 560px), (max-height: 560px) {
   .hud {
     padding: 0.55rem;
   }
@@ -654,15 +682,21 @@ button {
     font-size: 0.62rem;
   }
 
-  .touch-stick,
-  .touch-lookpad {
+  .touch-look-surface {
+    padding-top: 2.7rem;
+  }
+
+  .touch-look-hint {
+    font-size: 0.62rem;
+  }
+
+  .touch-stick {
     width: min(34vw, 8rem);
     height: min(34vw, 8rem);
     border-radius: 24px;
   }
 
-  .compact-touch-hud .touch-stick,
-  .compact-touch-hud .touch-lookpad {
+  .compact-touch-hud .touch-stick {
     width: min(26vw, 5.8rem);
     height: min(26vw, 5.8rem);
     border-radius: 20px;
@@ -672,12 +706,13 @@ button {
     border-radius: 18px;
   }
 
-  .touch-lookpad {
-    font-size: 0.8rem;
+  .compact-touch-hud .touch-look-surface {
+    padding-top: 0.75rem;
   }
 
-  .compact-touch-hud .touch-lookpad {
-    font-size: 0.66rem;
+  .compact-touch-hud .touch-look-hint {
+    padding: 0.22rem 0.45rem;
+    font-size: 0.54rem;
   }
 
   .touch-actions,
@@ -686,9 +721,7 @@ button {
   }
 
   .compact-touch-hud .touch-actions {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    width: min(46vw, 10rem);
+    width: min(48vw, 10.6rem);
   }
 
   .compact-touch-hud .touch-hotbar-cycle {
@@ -738,6 +771,62 @@ button {
     border-radius: 999px;
     background: rgba(9, 17, 24, 0.72);
     box-shadow: var(--panel-shadow);
+  }
+}
+
+@media (max-height: 560px) {
+  .hud {
+    padding: 0.45rem;
+  }
+
+  .hud-summary {
+    padding: 0.46rem 0.6rem;
+    border-radius: 12px;
+  }
+
+  .hud-summary-status {
+    font-size: 0.68rem;
+  }
+
+  .hud-summary-coords {
+    font-size: 0.74rem;
+  }
+
+  .compact-touch-hud .hud-bottom {
+    padding-bottom: 6.75rem;
+  }
+
+  .compact-touch-hud .palette {
+    width: min(100%, 16rem);
+    padding: 0.3rem 0.35rem 0.2rem;
+  }
+
+  .compact-touch-hud .swatch {
+    flex-basis: 2.35rem;
+    min-height: 2.55rem;
+    padding: 0.26rem;
+  }
+
+  .compact-touch-hud .swatch-chip {
+    width: 1.05rem;
+    height: 1.05rem;
+  }
+
+  .compact-touch-hud .touch-ui {
+    inset: auto 0 0.26rem 0;
+  }
+
+  .compact-touch-hud .touch-stick {
+    width: min(22vw, 4.9rem);
+    height: min(22vw, 4.9rem);
+  }
+
+  .compact-touch-hud .touch-button,
+  .compact-touch-hud .touch-cycle,
+  .compact-touch-hud .reset-button {
+    min-height: 1.8rem;
+    padding: 0.32rem 0.42rem;
+    font-size: 0.68rem;
   }
 }
 

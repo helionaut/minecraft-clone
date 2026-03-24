@@ -1,7 +1,7 @@
+import { type PlaceableBlockType } from '../gameplay/blocks.ts';
 import { createPlayableScene, type SandboxStatus } from '../rendering/scene.ts';
-import type { SolidBlockType } from '../gameplay/world.ts';
 
-const BLOCK_ORDER: SolidBlockType[] = ['grass', 'dirt', 'stone'];
+const BLOCK_ORDER: PlaceableBlockType[] = ['grass', 'sand', 'stone'];
 
 export function createAppShell(root: HTMLDivElement): void {
   root.innerHTML = `
@@ -93,7 +93,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
   for (const button of paletteButtons) {
     button.addEventListener('click', () => {
-      const type = button.dataset.blockType as SolidBlockType;
+      const type = button.dataset.blockType as PlaceableBlockType;
       sandbox.setSelectedBlock(type);
     });
   }

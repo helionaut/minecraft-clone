@@ -29,53 +29,62 @@ describe('generateFlatWorld', () => {
 
 describe('generateWorld', () => {
   it('is deterministic for the same config', () => {
-    const world = generateWorld(DEFAULT_WORLD_CONFIG);
-
-    expect(world).toEqual(generateWorld(DEFAULT_WORLD_CONFIG));
-    expect(world.find((block) => block.x === 0 && block.y === 3 && block.z === 0)).toEqual({
-      x: 0,
-      y: 3,
-      z: 0,
-      type: 'grass',
-    });
+    expect(generateWorld(DEFAULT_WORLD_CONFIG)).toEqual(generateWorld(DEFAULT_WORLD_CONFIG));
   });
 
-  it('produces varied terrain away from the spawn plateau', () => {
+  it('produces a larger and more varied world with multiple materials and fluids', () => {
     const world = generateWorld(DEFAULT_WORLD_CONFIG);
-    const centerColumnHeight = world.filter(
-      (block) => block.x === 0 && block.z === 0,
-    ).length;
-    const edgeColumnHeight = world.filter(
-      (block) => block.x === DEFAULT_WORLD_CONFIG.radius && block.z === 0,
-    ).length;
+    const blockTypes = new Set(world.map((block) => block.type));
+    const minY = Math.min(...world.map((block) => block.y));
+    const maxY = Math.max(...world.map((block) => block.y));
 
-    expect(centerColumnHeight).toBeGreaterThan(edgeColumnHeight);
+    expect(DEFAULT_WORLD_CONFIG.radius).toBeGreaterThan(12);
+    expect(minY).toBeLessThan(0);
+    expect(maxY).toBeGreaterThan(DEFAULT_WORLD_CONFIG.seaLevel + 4);
+    expect([...blockTypes]).toEqual(
+      expect.arrayContaining(['grass', 'stone', 'sand', 'snow', 'water', 'lava']),
+    );
   });
 });
 
 describe('VoxelWorld', () => {
+  it('finds a deterministic spawn above non-fluid terrain', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+    const spawn = world.getSpawnPoint();
+    const footY = Math.floor(spawn.y - 0.02) - 1;
+
+    expect(world.getBlock(Math.floor(spawn.x), footY, Math.floor(spawn.z))).not.toMatchObject({
+      type: 'water',
+    });
+    expect(world.hasBlock(Math.floor(spawn.x), Math.floor(spawn.y), Math.floor(spawn.z))).toBe(false);
+    expect(world.hasBlock(Math.floor(spawn.x), Math.floor(spawn.y) + 1, Math.floor(spawn.z))).toBe(false);
+  });
+
   it('removes and places blocks while preserving persistence diffs', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+    const spawn = world.getSpawnPoint();
+    const x = Math.floor(spawn.x);
+    const z = Math.floor(spawn.z);
+    const groundY = Math.floor(spawn.y) - 1;
 
-    expect(world.removeBlock(0, 3, 0)).toBe(true);
-    expect(world.placeBlock(0, 4, 0, 'stone')).toBe(true);
-    expect(world.placeBlock(0, -1, 0, 'stone')).toBe(false);
+    expect(world.removeBlock(x, groundY, z)).toBe(true);
+    expect(world.placeBlock(x, groundY, z, 'stone')).toBe(true);
+    expect(world.placeBlock(0, DEFAULT_WORLD_CONFIG.minY - 1, 0, 'stone')).toBe(false);
 
-    expect(world.getPersistence()).toEqual({
-      version: 1,
-      seed: DEFAULT_WORLD_CONFIG.seed,
-      radius: DEFAULT_WORLD_CONFIG.radius,
-      mutations: [
-        { x: 0, y: 3, z: 0, type: null },
-        { x: 0, y: 4, z: 0, type: 'stone' },
-      ],
-    });
+    expect(world.getPersistence().mutations).toEqual([
+      { x, y: groundY, z, type: 'stone' },
+    ]);
   });
 
   it('restores saved mutations and ignores malformed persistence', () => {
     const base = new VoxelWorld(DEFAULT_WORLD_CONFIG);
-    base.removeBlock(0, 3, 0);
-    base.placeBlock(1, 5, 1, 'grass');
+    const spawn = base.getSpawnPoint();
+    const x = Math.floor(spawn.x);
+    const z = Math.floor(spawn.z);
+    const groundY = Math.floor(spawn.y) - 1;
+
+    base.removeBlock(x, groundY, z);
+    base.placeBlock(x, groundY + 1, z, 'grass');
     const saved = base.getPersistence();
 
     const restored = new VoxelWorld(
@@ -83,27 +92,32 @@ describe('VoxelWorld', () => {
       parseWorldPersistence(JSON.stringify(saved)),
     );
 
-    expect(restored.getBlock(0, 3, 0)).toBeNull();
-    expect(restored.getBlock(1, 5, 1)).toBe('grass');
+    expect(restored.getBlock(x, groundY, z)).toBeNull();
+    expect(restored.getBlock(x, groundY + 1, z)).toBe('grass');
     expect(parseWorldPersistence('{bad json')).toBeNull();
   });
 
   it('resets back to the deterministic baseline', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+    const spawn = world.getSpawnPoint();
+    const x = Math.floor(spawn.x);
+    const z = Math.floor(spawn.z);
+    const groundY = Math.floor(spawn.y) - 1;
 
-    world.removeBlock(0, 3, 0);
-    world.placeBlock(0, 4, 0, 'dirt');
+    world.removeBlock(x, groundY, z);
+    world.placeBlock(x, groundY + 1, z, 'dirt');
     world.reset();
 
     expect(world.getPersistence().mutations).toEqual([]);
-    expect(world.getBlock(0, 3, 0)).toBe('grass');
-    expect(world.getBlock(0, 4, 0)).toBeNull();
+    expect(world.getBlock(x, groundY, z)).not.toBeNull();
+    expect(world.getBlock(x, groundY + 1, z)).toBeNull();
   });
 });
 
 describe('BLOCK_DEFINITIONS', () => {
-  it('keeps the expected material map available for the renderer', () => {
+  it('keeps expected metadata available for rendering and lighting', () => {
     expect(BLOCK_DEFINITIONS.highlight.color).toBe(0xe6b84a);
-    expect(BLOCK_DEFINITIONS.grass.type).toBe('grass');
+    expect(BLOCK_DEFINITIONS.grass.texture.top).toBe('grass-top');
+    expect(BLOCK_DEFINITIONS.lava.emittedLight).toBe(15);
   });
 });

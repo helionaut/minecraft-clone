@@ -176,8 +176,8 @@ export function stepPlayer(
     Number(input.right) -
     Number(input.left);
   const localZ =
-    Number(input.forward) -
-    Number(input.backward);
+    Number(input.backward) -
+    Number(input.forward);
   const movementLength = Math.hypot(localX, localZ) || 1;
   const moveX = localX / movementLength;
   const moveZ = localZ / movementLength;

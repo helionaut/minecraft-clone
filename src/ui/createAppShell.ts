@@ -6,64 +6,58 @@ export function createAppShell(root: HTMLDivElement): void {
       <section class="experience" aria-label="Minecraft clone harness">
         <div class="viewport" data-viewport>
           <div class="hud" aria-hidden="true">
-            <div class="status-chip">Vertical Slice Staging Ground</div>
+            <div class="status-chip">Staging Biome</div>
             <div class="crosshair"></div>
             <div class="status-note">
-              Three.js is rendering a deterministic voxel plateau here. Gameplay
-              systems, input, collisions, and world mutation will layer on this
-              shell without replacing the harness.
+              Dawn over a quiet plateau. The first slice starts with movement,
+              mining, and block placement layered onto this world.
             </div>
           </div>
         </div>
         <aside class="sidebar">
           <header>
             <p class="eyebrow">Minecraft Clone</p>
-            <h1 class="title">Browser voxel harness</h1>
+            <h1 class="title">First light over the plateau</h1>
             <p class="lede">
-              A lightweight app shell for the first playable loop. The main route
-              stays product-shaped while engineering workflow lives in commands,
-              CI, and docs.
+              A calm proving ground for the opening survival loop: step into the
+              biome, read the terrain, and prepare for the first interactive slice.
             </p>
           </header>
 
           <section class="panel">
-            <h2>Ready for HEL-100</h2>
+            <h2>Slice goals</h2>
             <ul class="checklist">
               <li>
-                <strong>Gameplay logic</strong>
-                Pure world generation lives in testable modules before any UI-heavy flow.
+                <strong>Scout the terrain</strong>
+                The camera circles a deterministic voxel plateau that will become the first
+                spawn zone.
               </li>
               <li>
-                <strong>Rendering layer</strong>
-                Three.js setup is isolated to a dedicated rendering module.
+                <strong>Claim a first block</strong>
+                The highlighted cube marks the next interaction target for mining and
+                placement work.
               </li>
               <li>
-                <strong>Validation path</strong>
-                One aggregate command verifies lint, types, tests, and production build.
+                <strong>Grow into a playable loop</strong>
+                Movement, collisions, inventory, and world mutation can layer onto this
+                shell without replacing it.
               </li>
             </ul>
           </section>
 
           <section class="panel">
-            <h2>Current stack</h2>
+            <h2>World readout</h2>
             <ul class="stack">
-              <li><strong>Build</strong> Vite + TypeScript</li>
-              <li><strong>Rendering</strong> Three.js scene harness</li>
-              <li><strong>Tests</strong> Vitest for world and block logic</li>
-              <li><strong>Checks</strong> ESLint, typecheck, unit tests, build</li>
+              <li><strong>Biome</strong> Elevated grass plateau over dirt and stone</li>
+              <li><strong>Lighting</strong> Warm morning sun with soft ambient fill</li>
+              <li><strong>Focus point</strong> Highlight marker centered near the ridge</li>
+              <li><strong>Next systems</strong> Movement, mining, placement, and HUD state</li>
             </ul>
-            <div class="pill-row" aria-label="Stack tags">
-              <span class="pill">Vite</span>
-              <span class="pill">TypeScript</span>
-              <span class="pill">Three.js</span>
-              <span class="pill">Vitest</span>
-            </div>
-            <div class="code">npm run dev</div>
           </section>
 
           <p class="stack-copy">
-            Repo docs explain where gameplay logic, rendering code, tests, and static
-            assets should go next.
+            The visible route stays in-world. Setup, validation, and repo workflow stay in
+            the project docs.
           </p>
         </aside>
       </section>

@@ -21,6 +21,8 @@ import type { Intersection, Object3D } from 'three';
 
 import {
   BLOCK_DEFINITIONS,
+  type HotbarBlockType,
+  PLACEABLE_BLOCK_ORDER,
   type PlaceableBlockType,
 } from '../gameplay/blocks.ts';
 import { computeVoxelLighting } from '../gameplay/lighting.ts';
@@ -51,7 +53,7 @@ export interface SandboxStatus {
 export interface PlayableScene {
   readonly canvas: HTMLCanvasElement;
   readonly renderer: WebGLRenderer;
-  readonly setSelectedBlock: (type: PlaceableBlockType) => void;
+  readonly setSelectedBlock: (type: HotbarBlockType) => void;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
 }
@@ -74,6 +76,16 @@ const CARDINAL_DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
 
 function formatCoords(value: number): string {
   return value.toFixed(1);
+}
+
+function selectPlaceableBlock(
+  current: HotbarBlockType,
+  offset: number,
+): HotbarBlockType {
+  const index = PLACEABLE_BLOCK_ORDER.indexOf(current);
+  const nextIndex =
+    (index + offset + PLACEABLE_BLOCK_ORDER.length) % PLACEABLE_BLOCK_ORDER.length;
+  return PLACEABLE_BLOCK_ORDER[nextIndex] ?? PLACEABLE_BLOCK_ORDER[0];
 }
 
 export function createPlayableScene(
@@ -137,7 +149,7 @@ export function createPlayableScene(
   placementPreview.visible = false;
   scene.add(placementPreview);
 
-  let selectedBlock: PlaceableBlockType = 'grass';
+  let selectedBlock: HotbarBlockType = 'grass';
   let locked = false;
   const touchDevice =
     'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -217,7 +229,7 @@ export function createPlayableScene(
   const updateStatus = () => {
     const eyeY = player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight;
     const prompt = locked
-      ? 'WASD move, Space jump, click to mine/build, 1-3 switch blocks, Esc unlock'
+      ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch blocks, Esc unlock`
       : touchDevice
         ? 'Desktop controls use pointer lock. Mobile is view-only for this slice.'
         : 'Click the viewport to capture the mouse and enter the world.';
@@ -377,20 +389,25 @@ export function createPlayableScene(
       event.preventDefault();
     }
 
-    if (event.code === 'Digit1') {
-      selectedBlock = 'grass';
+    if (event.code.startsWith('Digit')) {
+      const slot = Number(event.code.slice(5)) - 1;
+      const nextBlock = PLACEABLE_BLOCK_ORDER[slot];
+
+      if (nextBlock) {
+        selectedBlock = nextBlock;
+        updateTargeting();
+        return;
+      }
+    }
+
+    if (event.code === 'BracketLeft') {
+      selectedBlock = selectPlaceableBlock(selectedBlock, -1);
       updateTargeting();
       return;
     }
 
-    if (event.code === 'Digit2') {
-      selectedBlock = 'sand';
-      updateTargeting();
-      return;
-    }
-
-    if (event.code === 'Digit3') {
-      selectedBlock = 'stone';
+    if (event.code === 'BracketRight') {
+      selectedBlock = selectPlaceableBlock(selectedBlock, 1);
       updateTargeting();
       return;
     }
@@ -414,6 +431,12 @@ export function createPlayableScene(
     }
   };
 
+  const onWheel = (event: WheelEvent) => {
+    event.preventDefault();
+    selectedBlock = selectPlaceableBlock(selectedBlock, event.deltaY > 0 ? 1 : -1);
+    updateTargeting();
+  };
+
   const resetWorld = () => {
     world.reset();
     window.localStorage.removeItem(world.storageKey);
@@ -434,6 +457,7 @@ export function createPlayableScene(
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
   let frameId = 0;
@@ -469,7 +493,7 @@ export function createPlayableScene(
   return {
     canvas,
     renderer,
-    setSelectedBlock: (type) => {
+    setSelectedBlock: (type: HotbarBlockType) => {
       selectedBlock = type;
       updateTargeting();
     },
@@ -481,6 +505,7 @@ export function createPlayableScene(
       document.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      canvas.removeEventListener('wheel', onWheel);
       renderer.dispose();
       blockGeometry.dispose();
       highlightGeometry.dispose();

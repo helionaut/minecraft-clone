@@ -1,7 +1,11 @@
-import { type PlaceableBlockType } from '../gameplay/blocks.ts';
+import {
+  type HotbarBlockType,
+  PLACEABLE_BLOCK_ORDER,
+  type PlaceableBlockType,
+} from '../gameplay/blocks.ts';
 import { createPlayableScene, type SandboxStatus } from '../rendering/scene.ts';
 
-const BLOCK_ORDER: PlaceableBlockType[] = ['grass', 'sand', 'stone'];
+const BLOCK_ORDER: readonly PlaceableBlockType[] = PLACEABLE_BLOCK_ORDER;
 
 export function createAppShell(root: HTMLDivElement): void {
   root.innerHTML = `
@@ -28,7 +32,8 @@ export function createAppShell(root: HTMLDivElement): void {
 
             <div class="hud-bottom">
               <div class="panel palette">
-                <p class="label">Build palette</p>
+                <p class="label">Hotbar</p>
+                <p class="note">Scroll or press slot keys to switch blocks.</p>
                 <div class="palette-row" data-palette></div>
               </div>
               <div class="panel panel-actions">
@@ -63,7 +68,7 @@ export function createAppShell(root: HTMLDivElement): void {
     (type, index) => `
       <button class="swatch${index === 0 ? ' active' : ''}" type="button" data-block-type="${type}">
         <span class="swatch-chip swatch-${type}"></span>
-        <span>${type}</span>
+        <span class="swatch-name">${type.replace('-', ' ')}</span>
         <span class="swatch-key">${index + 1}</span>
       </button>
     `,
@@ -93,7 +98,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
   for (const button of paletteButtons) {
     button.addEventListener('click', () => {
-      const type = button.dataset.blockType as PlaceableBlockType;
+      const type = button.dataset.blockType as HotbarBlockType;
       sandbox.setSelectedBlock(type);
     });
   }

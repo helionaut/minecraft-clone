@@ -9,6 +9,7 @@ type StatusListener = (status: SandboxStatus) => void;
 
 const sandboxStub = {
   setSelectedBlock: vi.fn(),
+  craftRecipe: vi.fn(),
   resetWorld: vi.fn(),
   dispose: vi.fn(),
 };
@@ -81,6 +82,7 @@ describe('createAppShell', () => {
     mediaQueryListeners.clear();
     installMatchMediaMock();
     sandboxStub.setSelectedBlock.mockReset();
+    sandboxStub.craftRecipe.mockReset();
     sandboxStub.resetWorld.mockReset();
     sandboxStub.dispose.mockReset();
   });
@@ -105,6 +107,11 @@ describe('createAppShell', () => {
       target: 'Aim at a nearby block to mine or place.',
       prompt: 'Use the left stick to move, drag the look pad to aim, tap Jump to hop, and use Mine or Place on the targeted block.',
       touchDevice: true,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      inventory: [],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
     });
 
     const hud = root.querySelector<HTMLElement>('.hud');
@@ -115,7 +122,7 @@ describe('createAppShell', () => {
 
     expect(hud?.classList.contains('compact-touch-hud')).toBe(true);
     expect(drawer?.open).toBe(false);
-    expect(mobileStatus?.textContent).toContain('drag anywhere');
+    expect(mobileStatus?.textContent).toContain('craft from the drawer');
     expect(mobileCoords?.textContent).toBe('X 4.0 Y 10.0 Z -2.0');
     expect(lookSurface?.classList.contains('active')).toBe(true);
 
@@ -146,6 +153,11 @@ describe('createAppShell', () => {
       target: 'Aim at a nearby block to mine or place.',
       prompt: 'Use the left stick to move, drag anywhere to aim, tap Jump to swim upward, and use Mine or Place on the targeted block.',
       touchDevice: true,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      inventory: [],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
     });
 
     const hud = root.querySelector<HTMLElement>('.hud');

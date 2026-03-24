@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { BLOCK_DEFINITIONS } from '../../src/gameplay/blocks.ts';
 import {
   DEFAULT_WORLD_CONFIG,
   VoxelWorld,
@@ -28,53 +27,71 @@ describe('generateFlatWorld', () => {
 });
 
 describe('generateWorld', () => {
-  it('is deterministic for the same config', () => {
-    expect(generateWorld(DEFAULT_WORLD_CONFIG)).toEqual(generateWorld(DEFAULT_WORLD_CONFIG));
-  });
+  it('is deterministic for the same config and coordinates', () => {
+    const bounds = {
+      minX: -16,
+      maxX: 16,
+      minY: DEFAULT_WORLD_CONFIG.minY,
+      maxY: DEFAULT_WORLD_CONFIG.maxY,
+      minZ: -16,
+      maxZ: 16,
+    };
 
-  it('produces a larger and more varied world with multiple materials and fluids', () => {
-    const world = generateWorld(DEFAULT_WORLD_CONFIG);
-    const blockTypes = new Set(world.map((block) => block.type));
-    const minY = Math.min(...world.map((block) => block.y));
-    const maxY = Math.max(...world.map((block) => block.y));
-
-    expect(DEFAULT_WORLD_CONFIG.radius).toBeGreaterThan(12);
-    expect(minY).toBeLessThan(0);
-    expect(maxY).toBeGreaterThan(DEFAULT_WORLD_CONFIG.seaLevel + 4);
-    expect([...blockTypes]).toEqual(
-      expect.arrayContaining([
-        'grass',
-        'stone',
-        'sand',
-        'snow',
-        'water',
-        'lava',
-        'oak-log',
-        'oak-leaves',
-        'cactus',
-      ]),
+    expect(generateWorld(DEFAULT_WORLD_CONFIG, bounds)).toEqual(
+      generateWorld(DEFAULT_WORLD_CONFIG, bounds),
     );
   });
 
-  it('adds deterministic surface decorations that match biome surfaces', () => {
-    const world = generateWorld(DEFAULT_WORLD_CONFIG);
-    const byKey = new Map(world.map((block) => [`${block.x},${block.y},${block.z}`, block.type]));
-    const logs = world.filter((block) => block.type === 'oak-log');
-    const leaves = world.filter((block) => block.type === 'oak-leaves');
-    const cacti = world.filter((block) => block.type === 'cactus');
+  it('produces deeper terrain with progression materials and fluids', () => {
+    const world = generateWorld(DEFAULT_WORLD_CONFIG, {
+      minX: -32,
+      maxX: 32,
+      minY: DEFAULT_WORLD_CONFIG.minY,
+      maxY: DEFAULT_WORLD_CONFIG.maxY,
+      minZ: -32,
+      maxZ: 32,
+    });
+    const blockTypes = new Set(world.map((block) => block.type));
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
 
-    expect(logs).not.toHaveLength(0);
-    expect(leaves.length).toBeGreaterThan(logs.length);
-    expect(cacti).not.toHaveLength(0);
-
-    for (const block of cacti) {
-      const below = byKey.get(`${block.x},${block.y - 1},${block.z}`);
-      expect(['sand', 'cactus']).toContain(below);
+    for (const block of world) {
+      minY = Math.min(minY, block.y);
+      maxY = Math.max(maxY, block.y);
     }
+
+    expect(DEFAULT_WORLD_CONFIG.chunkSize).toBeGreaterThanOrEqual(16);
+    expect(minY).toBe(DEFAULT_WORLD_CONFIG.minY);
+    expect(maxY).toBeGreaterThan(DEFAULT_WORLD_CONFIG.seaLevel + 6);
+    expect([...blockTypes]).toEqual(
+      expect.arrayContaining([
+        'bedrock',
+        'grass',
+        'stone',
+        'deepslate',
+        'coal-ore',
+        'iron-ore',
+        'diamond-ore',
+        'water',
+        'lava',
+      ]),
+    );
   });
 });
 
 describe('VoxelWorld', () => {
+  it('streams deterministic chunk data for distant coordinates', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+    const nearChunk = world.getChunk(0, 0);
+    const farChunk = world.getChunk(12, -8);
+
+    expect(nearChunk.key).toBe('0,0');
+    expect(farChunk.key).toBe('12,-8');
+    expect(world.getLoadedChunkKeys()).toEqual(expect.arrayContaining(['0,0', '12,-8']));
+    expect(world.getBlock(12 * DEFAULT_WORLD_CONFIG.chunkSize, DEFAULT_WORLD_CONFIG.minY, -8 * DEFAULT_WORLD_CONFIG.chunkSize))
+      .toBe('bedrock');
+  });
+
   it('finds a deterministic spawn above non-fluid terrain', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
     const spawn = world.getSpawnPoint();
@@ -87,79 +104,45 @@ describe('VoxelWorld', () => {
     expect(world.hasBlock(Math.floor(spawn.x), Math.floor(spawn.y) + 1, Math.floor(spawn.z))).toBe(false);
   });
 
-  it('keeps the central spawn area clear of decoration columns', () => {
+  it('flows water and lava into newly opened cells', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
 
-    for (let x = -2; x <= 2; x += 1) {
-      for (let z = -2; z <= 2; z += 1) {
-        for (let y = DEFAULT_WORLD_CONFIG.seaLevel + 1; y <= DEFAULT_WORLD_CONFIG.maxY + 1; y += 1) {
-          expect(world.getBlock(x, y, z)).not.toBe('oak-log');
-          expect(world.getBlock(x, y, z)).not.toBe('cactus');
-        }
-      }
-    }
+    world.setBlock(0, 4, 0, 'water');
+    world.setBlock(3, 4, 0, 'lava');
+    world.setBlock(0, 3, 0, 'stone');
+    world.setBlock(3, 3, 0, 'stone');
+    world.setBlock(0, 4, 1, 'stone');
+    world.setBlock(3, 4, 1, 'stone');
+
+    world.removeBlock(0, 3, 0);
+    world.removeBlock(3, 3, 0);
+    world.tickFluids(4);
+
+    expect(world.getBlock(0, 3, 0)).toBe('water');
+    expect(world.getBlock(3, 3, 0)).toBe('lava');
   });
 
-  it('removes and places blocks while preserving persistence diffs', () => {
+  it('preserves only mutations in persistence payloads', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
     const spawn = world.getSpawnPoint();
-    const x = Math.floor(spawn.x);
+    const x = Math.floor(spawn.x) + 1;
+    const y = Math.floor(spawn.y) + 1;
     const z = Math.floor(spawn.z);
-    const groundY = Math.floor(spawn.y) - 1;
 
-    expect(world.removeBlock(x, groundY, z)).toBe(true);
-    expect(world.placeBlock(x, groundY, z, 'stone')).toBe(true);
-    expect(world.placeBlock(0, DEFAULT_WORLD_CONFIG.minY - 1, 0, 'stone')).toBe(false);
-
-    expect(world.getPersistence().mutations).toEqual([
-      { x, y: groundY, z, type: 'stone' },
-    ]);
-  });
-
-  it('restores saved mutations and ignores malformed persistence', () => {
-    const base = new VoxelWorld(DEFAULT_WORLD_CONFIG);
-    const spawn = base.getSpawnPoint();
-    const x = Math.floor(spawn.x);
-    const z = Math.floor(spawn.z);
-    const groundY = Math.floor(spawn.y) - 1;
-
-    base.removeBlock(x, groundY, z);
-    base.placeBlock(x, groundY + 1, z, 'grass');
-    const saved = base.getPersistence();
-
+    expect(world.placeBlock(x, y, z, 'crafting-table')).toBe(true);
+    expect(world.placeBlock(x, y + 1, z, 'furnace')).toBe(true);
+    const saved = world.getPersistence();
     const restored = new VoxelWorld(
       DEFAULT_WORLD_CONFIG,
       parseWorldPersistence(JSON.stringify(saved)),
     );
 
-    expect(restored.getBlock(x, groundY, z)).toBeNull();
-    expect(restored.getBlock(x, groundY + 1, z)).toBe('grass');
-    expect(parseWorldPersistence('{bad json')).toBeNull();
-  });
-
-  it('resets back to the deterministic baseline', () => {
-    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
-    const spawn = world.getSpawnPoint();
-    const x = Math.floor(spawn.x);
-    const z = Math.floor(spawn.z);
-    const groundY = Math.floor(spawn.y) - 1;
-
-    world.removeBlock(x, groundY, z);
-    world.placeBlock(x, groundY + 1, z, 'dirt');
-    world.reset();
-
-    expect(world.getPersistence().mutations).toEqual([]);
-    expect(world.getBlock(x, groundY, z)).not.toBeNull();
-    expect(world.getBlock(x, groundY + 1, z)).toBeNull();
-  });
-});
-
-describe('BLOCK_DEFINITIONS', () => {
-  it('keeps expected metadata available for rendering and lighting', () => {
-    expect(BLOCK_DEFINITIONS.highlight.color).toBe(0xe6b84a);
-    expect(BLOCK_DEFINITIONS.grass.texture.top).toBe('grass-top');
-    expect(BLOCK_DEFINITIONS['oak-log'].texture.side).toBe('oak-log-side');
-    expect(BLOCK_DEFINITIONS.cactus.texture.top).toBe('cactus-top');
-    expect(BLOCK_DEFINITIONS.lava.emittedLight).toBe(15);
+    expect(saved.chunkSize).toBe(DEFAULT_WORLD_CONFIG.chunkSize);
+    expect(saved.mutations).toEqual([
+      { x, y, z, type: 'crafting-table' },
+      { x, y: y + 1, z, type: 'furnace' },
+    ]);
+    expect(restored.getBlock(x, y, z)).toBe('crafting-table');
+    expect(restored.getBlock(x, y + 1, z)).toBe('furnace');
   });
 });

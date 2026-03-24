@@ -36,6 +36,15 @@ import {
   withLook,
 } from '../gameplay/player.ts';
 import {
+  Inventory,
+  RECIPES,
+  resolveMiningOutcome,
+  type InventoryItemType,
+  type Recipe,
+  type StationItemType,
+  type ToolItemType,
+} from '../gameplay/progression.ts';
+import {
   movementInputFromTouchVector,
   normalizeStickVector,
 } from '../gameplay/touchControls.ts';
@@ -50,6 +59,18 @@ import {
   type FaceVisibilityMask,
 } from './textures.ts';
 
+export interface InventoryStatusEntry {
+  readonly type: string;
+  readonly count: number;
+}
+
+export interface RecipeStatusEntry {
+  readonly id: string;
+  readonly label: string;
+  readonly station: string | null;
+  readonly available: boolean;
+}
+
 export interface SandboxStatus {
   readonly locked: boolean;
   readonly selectedBlock: PlaceableBlockType;
@@ -57,12 +78,18 @@ export interface SandboxStatus {
   readonly target: string;
   readonly prompt: string;
   readonly touchDevice: boolean;
+  readonly selectedTool: string;
+  readonly stations: string;
+  readonly inventory: readonly InventoryStatusEntry[];
+  readonly recipes: readonly RecipeStatusEntry[];
+  readonly placeableCounts: Readonly<Record<string, number>>;
 }
 
 export interface PlayableScene {
   readonly canvas: HTMLCanvasElement;
   readonly renderer: WebGLRenderer;
   readonly setSelectedBlock: (type: HotbarBlockType) => void;
+  readonly craftRecipe: (recipeId: string) => void;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
 }
@@ -95,29 +122,62 @@ const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number,
   ['nz', 0, 0, -1],
 ];
 
+const WORLD_RENDER_CHUNK_RADIUS = 1;
+const WORLD_KEEP_LOADED_CHUNK_RADIUS = 2;
+
 function formatCoords(value: number): string {
   return value.toFixed(1);
 }
 
-function selectPlaceableBlock(
-  current: HotbarBlockType,
-  offset: number,
-): HotbarBlockType {
+function selectPlaceableBlock(current: HotbarBlockType, offset: number): HotbarBlockType {
   const index = PLACEABLE_BLOCK_ORDER.indexOf(current);
-  const nextIndex =
-    (index + offset + PLACEABLE_BLOCK_ORDER.length) % PLACEABLE_BLOCK_ORDER.length;
+  const nextIndex = (index + offset + PLACEABLE_BLOCK_ORDER.length) % PLACEABLE_BLOCK_ORDER.length;
   return PLACEABLE_BLOCK_ORDER[nextIndex] ?? PLACEABLE_BLOCK_ORDER[0];
 }
 
 function createVisibleFaces(): FaceVisibilityMask {
-  return {
-    px: true,
-    nx: true,
-    py: true,
-    ny: true,
-    pz: true,
-    nz: true,
-  };
+  return { px: true, nx: true, py: true, ny: true, pz: true, nz: true };
+}
+
+function inventoryStorageKey(): string {
+  return `minecraft-clone:inventory:v1:${DEFAULT_WORLD_CONFIG.seed}`;
+}
+
+function getBestTool(inventory: Inventory): ToolItemType | null {
+  for (const tool of ['iron-pickaxe', 'stone-pickaxe', 'wooden-pickaxe'] as const) {
+    if (inventory.getCount(tool) > 0) {
+      return tool;
+    }
+  }
+
+  return null;
+}
+
+function getReadableName(value: string): string {
+  return value.replaceAll('-', ' ');
+}
+
+function getNearbyStations(world: VoxelWorld, x: number, y: number, z: number): StationItemType[] {
+  const nearby = new Set<StationItemType>();
+
+  for (let offsetX = -2; offsetX <= 2; offsetX += 1) {
+    for (let offsetY = -1; offsetY <= 2; offsetY += 1) {
+      for (let offsetZ = -2; offsetZ <= 2; offsetZ += 1) {
+        const block = world.getBlock(x + offsetX, y + offsetY, z + offsetZ);
+
+        if (block === 'crafting-table' || block === 'furnace') {
+          nearby.add(block);
+        }
+      }
+    }
+  }
+
+  return [...nearby].sort();
+}
+
+function recipeAvailable(recipe: Recipe, inventory: Inventory, nearbyStations: readonly StationItemType[]): boolean {
+  const probe = Inventory.fromJSON(JSON.stringify(inventory.toJSON()));
+  return probe.craft(recipe.id, nearbyStations);
 }
 
 export function createPlayableScene(
@@ -149,12 +209,11 @@ export function createPlayableScene(
   const playerLantern = new PointLight(0xffd6a0, 1.6, 14, 2);
   scene.add(ambient, sun, playerLantern);
 
-  const storedWorld = parseWorldPersistence(
-    window.localStorage.getItem(
-      `minecraft-clone:world:v1:${DEFAULT_WORLD_CONFIG.seed}:${DEFAULT_WORLD_CONFIG.radius}`,
-    ),
-  );
+  const storedWorld = parseWorldPersistence(window.localStorage.getItem(
+    `minecraft-clone:world:v2:${DEFAULT_WORLD_CONFIG.seed}:${DEFAULT_WORLD_CONFIG.chunkSize}`,
+  ));
   const world = new VoxelWorld(DEFAULT_WORLD_CONFIG, storedWorld);
+  const inventory = Inventory.fromJSON(window.localStorage.getItem(inventoryStorageKey()));
   const worldGroup = new Group();
   scene.add(worldGroup);
 
@@ -194,6 +253,9 @@ export function createPlayableScene(
   let currentTarget: CellTarget | null = null;
   let currentPlacement: { x: number; y: number; z: number } | null = null;
   let player = createPlayerState(world.getSpawnPoint());
+  let worldDirty = true;
+  let activeChunkKey = '';
+  let fluidAccumulator = 0;
   const input = {
     forward: false,
     backward: false,
@@ -214,27 +276,59 @@ export function createPlayableScene(
 
     if (snapshot.mutations.length === 0) {
       window.localStorage.removeItem(world.storageKey);
+    } else {
+      window.localStorage.setItem(world.storageKey, JSON.stringify(snapshot));
+    }
+  };
+
+  const persistInventory = () => {
+    const snapshot = inventory.toJSON();
+
+    if (Object.keys(snapshot).length === 0) {
+      window.localStorage.removeItem(inventoryStorageKey());
       return;
     }
 
-    window.localStorage.setItem(world.storageKey, JSON.stringify(snapshot));
+    window.localStorage.setItem(inventoryStorageKey(), JSON.stringify(snapshot));
+  };
+
+  const getVisibleBounds = () => {
+    const chunkSize = world.config.chunkSize;
+    const centerChunkX = Math.floor(player.position.x / chunkSize);
+    const centerChunkZ = Math.floor(player.position.z / chunkSize);
+    const minChunkX = centerChunkX - WORLD_RENDER_CHUNK_RADIUS;
+    const maxChunkX = centerChunkX + WORLD_RENDER_CHUNK_RADIUS;
+    const minChunkZ = centerChunkZ - WORLD_RENDER_CHUNK_RADIUS;
+    const maxChunkZ = centerChunkZ + WORLD_RENDER_CHUNK_RADIUS;
+
+    return {
+      minX: minChunkX * chunkSize,
+      maxX: (maxChunkX + 1) * chunkSize - 1,
+      minY: world.config.minY,
+      maxY: world.config.maxY + 1,
+      minZ: minChunkZ * chunkSize,
+      maxZ: (maxChunkZ + 1) * chunkSize - 1,
+    };
   };
 
   const rebuildWorld = () => {
-    worldGroup.clear();
-    const lighting = computeVoxelLighting(
-      {
-        minX: -world.config.radius,
-        maxX: world.config.radius,
-        minY: world.config.minY,
-        maxY: world.config.maxY + 1,
-        minZ: -world.config.radius,
-        maxZ: world.config.radius,
-      },
-      (x, y, z) => world.getBlock(x, y, z),
+    world.loadChunksAround(
+      Math.floor(player.position.x),
+      Math.floor(player.position.z),
+      WORLD_RENDER_CHUNK_RADIUS,
+    );
+    world.pruneLoadedChunks(
+      Math.floor(player.position.x),
+      Math.floor(player.position.z),
+      WORLD_KEEP_LOADED_CHUNK_RADIUS,
     );
 
-    for (const block of world.toBlocks()) {
+    const bounds = getVisibleBounds();
+    const visibleBlocks = world.getBlocksInBounds(bounds);
+    worldGroup.clear();
+    const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z));
+
+    for (const block of visibleBlocks) {
       const visibleFaces = createVisibleFaces();
       let hasVisibleFace = false;
 
@@ -266,22 +360,35 @@ export function createPlayableScene(
       voxel.userData.cell = block;
       worldGroup.add(voxel);
     }
+
+    worldDirty = false;
   };
 
   const updateStatus = () => {
     const eyeY = player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight;
+    const selectedTool = getBestTool(inventory);
+    const nearbyStations = getNearbyStations(
+      world,
+      Math.floor(player.position.x),
+      Math.floor(player.position.y),
+      Math.floor(player.position.z),
+    );
     const prompt = locked
-      ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch blocks, Esc unlock`
+      ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch blocks, craft from the inventory panel`
       : touchDevice
-        ? 'Use the left thumbstick to move, drag anywhere to aim, tap Jump to swim upward, and use Mine or Place on the targeted block.'
+        ? 'Use the left thumbstick to move, drag anywhere to aim, mine blocks for drops, and craft tools or stations from the drawer.'
         : 'Click the viewport to capture the mouse and enter the world.';
     const target = currentTarget
-      ? `Break ${currentTarget.type} @ ${currentTarget.x}, ${currentTarget.y}, ${currentTarget.z}${
+      ? `Target ${currentTarget.type} @ ${currentTarget.x}, ${currentTarget.y}, ${currentTarget.z}${
           currentPlacement
             ? ` | Place ${selectedBlock} @ ${currentPlacement.x}, ${currentPlacement.y}, ${currentPlacement.z}`
             : ''
         }`
-      : 'Aim at a nearby block to mine or place.';
+      : 'Aim at terrain, ore, or stations to mine. Place blocks from your inventory.';
+    const inventoryEntries = inventory.entries();
+    const placeableCounts = Object.fromEntries(
+      PLACEABLE_BLOCK_ORDER.map((type) => [type, inventory.getCount(type as InventoryItemType)]),
+    );
 
     onStatusChange({
       locked,
@@ -290,18 +397,23 @@ export function createPlayableScene(
       target,
       prompt,
       touchDevice,
+      selectedTool: selectedTool ? getReadableName(selectedTool) : 'hand',
+      stations: nearbyStations.length > 0 ? nearbyStations.map(getReadableName).join(', ') : 'none nearby',
+      inventory: inventoryEntries.slice(0, 12),
+      recipes: RECIPES.map((recipe) => ({
+        id: recipe.id,
+        label: getReadableName(recipe.id),
+        station: recipe.station ? getReadableName(recipe.station) : null,
+        available: recipeAvailable(recipe, inventory, nearbyStations),
+      })),
+      placeableCounts,
     });
   };
 
   const updateTargeting = () => {
     raycaster.setFromCamera(center, camera);
-    const intersections = raycaster.intersectObjects(
-      worldGroup.children,
-      false,
-    ) as Array<Intersection<Object3D>>;
-    const hit = intersections.find(
-      (entry) => entry.object instanceof Mesh && entry.object.userData.cell,
-    );
+    const intersections = raycaster.intersectObjects(worldGroup.children, false) as Array<Intersection<Object3D>>;
+    const hit = intersections.find((entry) => entry.object instanceof Mesh && entry.object.userData.cell);
 
     if (!hit || !(hit.object instanceof Mesh) || !hit.face) {
       currentTarget = null;
@@ -323,28 +435,18 @@ export function createPlayableScene(
       y: block.y + Math.round(normal.y),
       z: block.z + Math.round(normal.z),
     };
-    const blockedByPlayer = playerIntersectsBlock(
-      player.position,
-      placement.x,
-      placement.y,
-      placement.z,
-    );
+    const blockedByPlayer = playerIntersectsBlock(player.position, placement.x, placement.y, placement.z);
 
     if (
       placement.y >= world.config.minY &&
+      placement.y <= world.config.maxY + 1 &&
       !world.hasBlock(placement.x, placement.y, placement.z) &&
       !blockedByPlayer
     ) {
       currentPlacement = placement;
       placementPreview.visible = true;
-      placementPreview.position.set(
-        placement.x + 0.5,
-        placement.y + 0.5,
-        placement.z + 0.5,
-      );
-      (
-        placementPreview.material as MeshStandardMaterial
-      ).color.setHex(BLOCK_DEFINITIONS[selectedBlock].color);
+      placementPreview.position.set(placement.x + 0.5, placement.y + 0.5, placement.z + 0.5);
+      (placementPreview.material as MeshStandardMaterial).color.setHex(BLOCK_DEFINITIONS[selectedBlock].color);
     } else {
       currentPlacement = null;
       placementPreview.visible = false;
@@ -359,18 +461,38 @@ export function createPlayableScene(
     }
 
     if (button === 0) {
-      world.removeBlock(currentTarget.x, currentTarget.y, currentTarget.z);
-      audio.playMine();
-      persistWorld();
-      rebuildWorld();
-      updateTargeting();
+      const outcome = resolveMiningOutcome(currentTarget.type, getBestTool(inventory));
+
+      if (!outcome.success) {
+        updateStatus();
+        return;
+      }
+
+      if (world.removeBlock(currentTarget.x, currentTarget.y, currentTarget.z)) {
+        if (outcome.drop) {
+          inventory.addItem(outcome.drop);
+          persistInventory();
+        }
+
+        audio.playMine();
+        world.tickFluids(4);
+        persistWorld();
+        worldDirty = true;
+        rebuildWorld();
+        updateTargeting();
+      }
+
       return;
     }
 
-    if (button === 2 && currentPlacement) {
+    if (button === 2 && currentPlacement && inventory.getCount(selectedBlock) > 0) {
       if (world.placeBlock(currentPlacement.x, currentPlacement.y, currentPlacement.z, selectedBlock)) {
+        inventory.removeItem(selectedBlock);
+        persistInventory();
         audio.playPlace();
+        world.tickFluids(2);
         persistWorld();
+        worldDirty = true;
         rebuildWorld();
         updateTargeting();
       }
@@ -385,13 +507,26 @@ export function createPlayableScene(
     }
   };
 
+  const craftRecipe = (recipeId: string) => {
+    const nearbyStations = getNearbyStations(
+      world,
+      Math.floor(player.position.x),
+      Math.floor(player.position.y),
+      Math.floor(player.position.z),
+    );
+
+    if (!inventory.craft(recipeId, nearbyStations)) {
+      updateStatus();
+      return;
+    }
+
+    persistInventory();
+    updateStatus();
+  };
+
   const applyTouchLook = (deltaX: number, deltaY: number) => {
     const lookSensitivity = 0.0074;
-    player = withLook(
-      player,
-      player.yaw - deltaX * lookSensitivity,
-      player.pitch - deltaY * lookSensitivity,
-    );
+    player = withLook(player, player.yaw - deltaX * lookSensitivity, player.pitch - deltaY * lookSensitivity);
     updateStatus();
   };
 
@@ -406,11 +541,7 @@ export function createPlayableScene(
     }
 
     const lookSensitivity = 0.0026;
-    player = withLook(
-      player,
-      player.yaw - event.movementX * lookSensitivity,
-      player.pitch - event.movementY * lookSensitivity,
-    );
+    player = withLook(player, player.yaw - event.movementX * lookSensitivity, player.pitch - event.movementY * lookSensitivity);
     updateStatus();
   };
 
@@ -585,10 +716,7 @@ export function createPlayableScene(
     }
 
     event.preventDefault();
-    applyTouchLook(
-      event.clientX - lookPointerState.lastX,
-      event.clientY - lookPointerState.lastY,
-    );
+    applyTouchLook(event.clientX - lookPointerState.lastX, event.clientY - lookPointerState.lastY);
     lookPointerState.lastX = event.clientX;
     lookPointerState.lastY = event.clientY;
   };
@@ -649,8 +777,11 @@ export function createPlayableScene(
 
   const resetWorld = () => {
     world.reset();
+    inventory.clear();
     window.localStorage.removeItem(world.storageKey);
+    window.localStorage.removeItem(inventoryStorageKey());
     player = createPlayerState(world.getSpawnPoint());
+    worldDirty = true;
     rebuildWorld();
     updateTargeting();
   };
@@ -706,6 +837,25 @@ export function createPlayableScene(
     );
     audio.update(previousPlayer, player, input, delta);
 
+    const currentChunkKey = `${Math.floor(player.position.x / world.config.chunkSize)},${Math.floor(player.position.z / world.config.chunkSize)}`;
+    if (currentChunkKey !== activeChunkKey) {
+      activeChunkKey = currentChunkKey;
+      worldDirty = true;
+    }
+
+    fluidAccumulator += delta;
+    if (fluidAccumulator >= 0.35) {
+      fluidAccumulator = 0;
+      if (world.tickFluids(1) > 0) {
+        persistWorld();
+        worldDirty = true;
+      }
+    }
+
+    if (worldDirty) {
+      rebuildWorld();
+    }
+
     camera.position.set(
       player.position.x,
       player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight,
@@ -729,6 +879,7 @@ export function createPlayableScene(
       selectedBlock = type;
       updateTargeting();
     },
+    craftRecipe,
     resetWorld,
     dispose: () => {
       window.cancelAnimationFrame(frameId);
@@ -761,9 +912,7 @@ export function createPlayableScene(
       highlightGeometry.dispose();
       blockMaterialFactory.dispose();
       audio.dispose();
-      (
-        placementPreview.material as MeshStandardMaterial
-      ).dispose();
+      (placementPreview.material as MeshStandardMaterial).dispose();
       (targetOutline.material as LineBasicMaterial).dispose();
       canvas.remove();
     },

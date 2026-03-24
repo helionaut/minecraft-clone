@@ -1,74 +1,104 @@
-import { createHarnessScene } from '../rendering/scene.ts';
+import { createPlayableScene, type SandboxStatus } from '../rendering/scene.ts';
+import type { SolidBlockType } from '../gameplay/world.ts';
+
+const BLOCK_ORDER: SolidBlockType[] = ['grass', 'dirt', 'stone'];
 
 export function createAppShell(root: HTMLDivElement): void {
   root.innerHTML = `
     <main class="shell">
-      <section class="experience" aria-label="Minecraft clone harness">
-        <div class="viewport" data-viewport>
-          <div class="hud" aria-hidden="true">
-            <div class="status-chip">Staging Biome</div>
-            <div class="crosshair"></div>
-            <div class="status-note">
-              Dawn over a quiet plateau. The first slice starts with movement,
-              mining, and block placement layered onto this world.
+      <section class="sandbox">
+        <div class="viewport-wrap">
+          <div class="viewport" data-viewport></div>
+          <div class="hud" aria-live="polite">
+            <div class="hud-top">
+              <div class="panel panel-title">
+                <p class="eyebrow">Minecraft Clone</p>
+                <h1>Playable voxel sandbox</h1>
+                <p class="hint" data-prompt></p>
+              </div>
+              <div class="panel panel-readout">
+                <p class="label">Coordinates</p>
+                <p class="value" data-coords></p>
+                <p class="label">Target</p>
+                <p class="value small" data-target></p>
+              </div>
+            </div>
+
+            <div class="crosshair" aria-hidden="true"></div>
+
+            <div class="hud-bottom">
+              <div class="panel palette">
+                <p class="label">Build palette</p>
+                <div class="palette-row" data-palette></div>
+              </div>
+              <div class="panel panel-actions">
+                <button class="reset-button" type="button" data-reset>
+                  Reset world
+                </button>
+                <p class="note">
+                  Local world edits persist in this browser until reset.
+                </p>
+                <p class="note" data-device-note></p>
+              </div>
             </div>
           </div>
         </div>
-        <aside class="sidebar">
-          <header>
-            <p class="eyebrow">Minecraft Clone</p>
-            <h1 class="title">First light over the plateau</h1>
-            <p class="lede">
-              A calm proving ground for the opening survival loop: step into the
-              biome, read the terrain, and prepare for the first interactive slice.
-            </p>
-          </header>
-
-          <section class="panel">
-            <h2>Slice goals</h2>
-            <ul class="checklist">
-              <li>
-                <strong>Scout the terrain</strong>
-                The camera circles a deterministic voxel plateau that will become the first
-                spawn zone.
-              </li>
-              <li>
-                <strong>Claim a first block</strong>
-                The highlighted cube marks the next interaction target for mining and
-                placement work.
-              </li>
-              <li>
-                <strong>Grow into a playable loop</strong>
-                Movement, collisions, inventory, and world mutation can layer onto this
-                shell without replacing it.
-              </li>
-            </ul>
-          </section>
-
-          <section class="panel">
-            <h2>World readout</h2>
-            <ul class="stack">
-              <li><strong>Biome</strong> Elevated grass plateau over dirt and stone</li>
-              <li><strong>Lighting</strong> Warm morning sun with soft ambient fill</li>
-              <li><strong>Focus point</strong> Highlight marker centered near the ridge</li>
-              <li><strong>Next systems</strong> Movement, mining, placement, and HUD state</li>
-            </ul>
-          </section>
-
-          <p class="stack-copy">
-            The visible route stays in-world. Setup, validation, and repo workflow stay in
-            the project docs.
-          </p>
-        </aside>
       </section>
     </main>
   `;
 
   const viewport = root.querySelector<HTMLElement>('[data-viewport]');
+  const palette = root.querySelector<HTMLElement>('[data-palette]');
+  const prompt = root.querySelector<HTMLElement>('[data-prompt]');
+  const coords = root.querySelector<HTMLElement>('[data-coords]');
+  const target = root.querySelector<HTMLElement>('[data-target]');
+  const resetButton = root.querySelector<HTMLButtonElement>('[data-reset]');
+  const deviceNote = root.querySelector<HTMLElement>('[data-device-note]');
 
-  if (!viewport) {
-    throw new Error('Missing viewport container.');
+  if (!viewport || !palette || !prompt || !coords || !target || !resetButton || !deviceNote) {
+    throw new Error('Missing sandbox UI node.');
   }
 
-  createHarnessScene(viewport);
+  palette.innerHTML = BLOCK_ORDER.map(
+    (type, index) => `
+      <button class="swatch${index === 0 ? ' active' : ''}" type="button" data-block-type="${type}">
+        <span class="swatch-chip swatch-${type}"></span>
+        <span>${type}</span>
+        <span class="swatch-key">${index + 1}</span>
+      </button>
+    `,
+  ).join('');
+
+  const paletteButtons = [
+    ...palette.querySelectorAll<HTMLButtonElement>('[data-block-type]'),
+  ];
+
+  const applyStatus = (status: SandboxStatus) => {
+    prompt.textContent = status.prompt;
+    coords.textContent = status.coords;
+    target.textContent = status.target;
+    deviceNote.textContent = status.touchDevice
+      ? 'Mobile layout is view-only for this milestone.'
+      : 'Desktop supports pointer-lock mining and placement.';
+
+    for (const button of paletteButtons) {
+      button.classList.toggle(
+        'active',
+        button.dataset.blockType === status.selectedBlock,
+      );
+    }
+  };
+
+  const sandbox = createPlayableScene(viewport, applyStatus);
+
+  for (const button of paletteButtons) {
+    button.addEventListener('click', () => {
+      const type = button.dataset.blockType as SolidBlockType;
+      sandbox.setSelectedBlock(type);
+    });
+  }
+
+  resetButton.addEventListener('click', () => {
+    sandbox.resetWorld();
+  });
 }

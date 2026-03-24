@@ -1,0 +1,28 @@
+name: PRD Docs
+
+on:
+  pull_request:
+    paths:
+      - "docs/PRD.md"
+      - ".github/workflows/prd-docs.yml"
+  push:
+    branches:
+      - main
+      - eugeniy/hel-95-prd-and-success-criteria-minecraft-clone
+    paths:
+      - "docs/PRD.md"
+      - ".github/workflows/prd-docs.yml"
+
+jobs:
+  validate-prd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify PRD file and required sections
+        run: |
+          set -euo pipefail
+          test -s docs/PRD.md
+          grep -nE '^## (Target User|In Scope For V1|Non-Goals For V1|Acceptance Criteria|Success Criteria|Technical Constraints|Deployment Readiness Criteria)$' docs/PRD.md

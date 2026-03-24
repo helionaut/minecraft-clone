@@ -15,11 +15,13 @@ CEO-supplied, or player-supplied inputs.
 Required inputs for the first slice:
 - none outside the repository and lockfile-managed package dependencies
 
-Implemented baseline assumptions:
-- initial world: generated locally in the app from checked-in logic and defaults
-- block materials: procedural colors by default
-- placeholder textures: allowed only as checked-in repo assets
-- fixtures/manifests: generated from repo-local code or checked in with tests
+Current baseline in this repository:
+- initial world: generated locally from checked-in logic in
+  `src/gameplay/world.ts`
+- block materials: procedural colors from checked-in definitions in
+  `src/gameplay/blocks.ts`
+- placeholder textures: not required for the first slice
+- fixtures/manifests: optional and only needed if a later change introduces them
 - audio: omitted from the first slice
 - backend data or hosted services: not required
 
@@ -29,22 +31,27 @@ art delivery.
 
 ## Deterministic Repo-Local Paths
 
-These paths are the reserved source-of-truth locations if the project needs them.
-They are deterministic even when a directory does not exist yet.
+These paths are the source of truth for the current baseline or the reserved
+deterministic locations for optional asset lanes.
 
-- gameplay world generation defaults: `src/game/world/`
-- checked-in optional placeholder textures: `public/textures/blocks/`
-- checked-in test fixtures for world/block behavior: `tests/fixtures/worlds/`
-- generated or checked-in asset manifests: `manifests/assets/`
-- optional local asset-preparation scripts: `scripts/`
+- world-generation baseline: `src/gameplay/world.ts`
+- block/material baseline: `src/gameplay/blocks.ts`
+- checked-in gameplay tests: `tests/gameplay/`
+- optional checked-in placeholder textures: `public/textures/blocks/`
+- optional checked-in world fixtures: `tests/fixtures/worlds/`
+- optional generated or checked-in asset manifests: `manifests/assets/`
 
 Path rules:
 - first-slice gameplay must not require files outside the repository
+- `src/gameplay/world.ts` and `src/gameplay/blocks.ts` remain the canonical
+  first-slice defaults until another committed source of truth replaces them
 - anything under `public/textures/blocks/` is optional unless the codebase is
   explicitly changed to consume it
+- anything under `tests/fixtures/worlds/` is optional unless tests or tooling
+  are updated to load serialized fixtures instead of inline test data
 - generated manifests must be reproducible from repo-local code and stored under
   `manifests/assets/`
-- test fixtures must remain checked in and deterministic
+- test fixtures must remain checked in and deterministic when introduced
 
 ## Optional Art Asset Lane
 
@@ -54,18 +61,22 @@ If the project later upgrades from procedural materials to a checked-in texture
 set, use this contract:
 - source art must be licensed for repository or build use
 - prepared outputs must live under `public/textures/blocks/`
-- any generation or normalization step must be invoked by a repo-local script in
-  `scripts/`
+- any generation or normalization step must be invoked by a repo-local script
+  added under `scripts/` in the same change that introduces the dependency
+- the prepared-texture manifest must live under `manifests/assets/`
 - the script and manifest become part of the implementation change that adds the
-  dependency
+  dependency; they are optional until that change exists
 
-Until that happens, no fetch, conversion, or preparation step is required.
+Until that happens, no fetch, conversion, or preparation step is required, and
+there is intentionally no blocking asset-preparation path in the repo.
 
 ## Prepared Artifact Expectations
 
 Expected first-slice prepared artifacts are:
-- block/material definitions in source code or checked-in config
-- deterministic world-generation fixtures for tests
+- block/material definitions in `src/gameplay/blocks.ts`
+- deterministic world-generation logic in `src/gameplay/world.ts`
+- test coverage in `tests/gameplay/world.test.ts`
+- optional world fixtures only if future tests need checked-in serialized data
 - optional asset manifests only if optional textures are actually adopted
 
 No private raw-input directory, secret material bundle, or CEO handoff is part

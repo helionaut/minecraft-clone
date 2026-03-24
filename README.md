@@ -58,6 +58,13 @@ npm run check
 
 GitHub Actions runs the same aggregate command in [ci.yml](/home/helionaut/src/projects/minecraft-clone/.github/workflows/ci.yml).
 
+## Deployment
+
+The first static production path uses GitHub Pages. The deploy workflow is in
+[deploy-pages.yml](/home/helionaut/src/projects/minecraft-clone/.github/workflows/deploy-pages.yml),
+and the release/verification runbook is in
+[docs/DEPLOYMENT.md](/home/helionaut/src/projects/minecraft-clone/docs/DEPLOYMENT.md).
+
 ## Repo Structure
 
 The harness keeps engineering workflow details in docs and scripts rather than

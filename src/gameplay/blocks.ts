@@ -5,12 +5,27 @@ export type BlockType =
   | 'sand'
   | 'sandstone'
   | 'snow'
+  | 'oak-log'
+  | 'oak-leaves'
+  | 'cactus'
   | 'water'
   | 'lava'
   | 'highlight';
 
 export type PlaceableBlockType = Exclude<BlockType, 'highlight' | 'water' | 'lava'>;
 export type WorldBlockType = Exclude<BlockType, 'highlight'>;
+
+export const PLACEABLE_BLOCK_ORDER = [
+  'grass',
+  'dirt',
+  'sand',
+  'stone',
+  'oak-log',
+  'oak-leaves',
+  'cactus',
+] as const satisfies readonly PlaceableBlockType[];
+
+export type HotbarBlockType = (typeof PLACEABLE_BLOCK_ORDER)[number];
 
 export interface BlockDefinition {
   readonly type: BlockType;
@@ -92,6 +107,41 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
       top: 'snow-top',
       bottom: 'dirt',
       side: 'snow-side',
+    },
+  },
+  'oak-log': {
+    type: 'oak-log',
+    color: 0x8a633d,
+    solid: true,
+    opaque: true,
+    lightAttenuation: 15,
+    emittedLight: 0,
+    texture: {
+      top: 'oak-log-top',
+      bottom: 'oak-log-top',
+      side: 'oak-log-side',
+    },
+  },
+  'oak-leaves': {
+    type: 'oak-leaves',
+    color: 0x5b9240,
+    solid: true,
+    opaque: false,
+    lightAttenuation: 3,
+    emittedLight: 0,
+    texture: { all: 'oak-leaves' },
+  },
+  cactus: {
+    type: 'cactus',
+    color: 0x4b8d39,
+    solid: true,
+    opaque: true,
+    lightAttenuation: 15,
+    emittedLight: 0,
+    texture: {
+      top: 'cactus-top',
+      bottom: 'cactus-bottom',
+      side: 'cactus-side',
     },
   },
   water: {

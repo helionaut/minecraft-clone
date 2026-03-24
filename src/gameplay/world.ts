@@ -298,6 +298,173 @@ function buildColumnMap(config: WorldConfig): ColumnMap {
   return columns;
 }
 
+function getDecorationScore(seed: number, x: number, z: number): number {
+  return fbm2d(seed + 211, x * 0.33, z * 0.33, 2, 2.1, 0.55);
+}
+
+function isDecorationPeak(seed: number, x: number, z: number): boolean {
+  const score = getDecorationScore(seed, x, z);
+
+  for (let dx = -1; dx <= 1; dx += 1) {
+    for (let dz = -1; dz <= 1; dz += 1) {
+      if (dx === 0 && dz === 0) {
+        continue;
+      }
+
+      if (getDecorationScore(seed, x + dx, z + dz) > score) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function placeDecorationBlock(
+  blocks: BlockMap,
+  config: WorldConfig,
+  x: number,
+  y: number,
+  z: number,
+  type: SolidBlockType,
+): void {
+  if (
+    y < config.minY ||
+    y > config.maxY + 1 ||
+    Math.abs(x) > config.radius ||
+    Math.abs(z) > config.radius ||
+    blocks.has(createBlockKey(x, y, z))
+  ) {
+    return;
+  }
+
+  blocks.set(createBlockKey(x, y, z), type);
+}
+
+function placeTree(
+  blocks: BlockMap,
+  config: WorldConfig,
+  x: number,
+  groundY: number,
+  z: number,
+): void {
+  const trunkHeight = 4 + Math.floor(hash(config.seed + 307, x, groundY, z) * 2);
+
+  for (let offset = 1; offset <= trunkHeight; offset += 1) {
+    placeDecorationBlock(blocks, config, x, groundY + offset, z, 'oak-log');
+  }
+
+  const canopyStart = groundY + trunkHeight - 1;
+
+  for (let dy = 0; dy <= 2; dy += 1) {
+    const radius = dy === 1 ? 2 : 1;
+
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      for (let dz = -radius; dz <= radius; dz += 1) {
+        if (Math.abs(dx) + Math.abs(dz) > radius + 1) {
+          continue;
+        }
+
+        if (dx === 0 && dz === 0 && dy < 2) {
+          continue;
+        }
+
+        placeDecorationBlock(
+          blocks,
+          config,
+          x + dx,
+          canopyStart + dy,
+          z + dz,
+          'oak-leaves',
+        );
+      }
+    }
+  }
+
+  placeDecorationBlock(blocks, config, x, canopyStart + 3, z, 'oak-leaves');
+}
+
+function placeCactus(
+  blocks: BlockMap,
+  config: WorldConfig,
+  x: number,
+  groundY: number,
+  z: number,
+): void {
+  let baseY = groundY;
+
+  while (blocks.get(createBlockKey(x, baseY, z)) === 'water' && baseY > config.minY) {
+    baseY -= 1;
+  }
+
+  if (
+    blocks.get(createBlockKey(x, baseY, z)) !== 'sand' ||
+    blocks.has(createBlockKey(x, baseY + 1, z))
+  ) {
+    return;
+  }
+
+  const height = 2 + Math.floor(hash(config.seed + 331, x, groundY, z) * 3);
+
+  for (let offset = 1; offset <= height; offset += 1) {
+    placeDecorationBlock(blocks, config, x, baseY + offset, z, 'cactus');
+  }
+}
+
+function decorateSurface(
+  blocks: BlockMap,
+  columns: ColumnMap,
+  config: WorldConfig,
+): void {
+  for (let x = -config.radius; x <= config.radius; x += 1) {
+    for (let z = -config.radius; z <= config.radius; z += 1) {
+      const column = columns.get(createColumnKey(x, z));
+
+      if (!column) {
+        continue;
+      }
+
+      const topSurface = blocks.get(createBlockKey(x, column.height, z));
+
+      if (
+        topSurface === 'sand' &&
+        hash(config.seed + 353, x, column.height, z) > 0.55 &&
+        (Math.abs(x) > 2 || Math.abs(z) > 2)
+      ) {
+        placeCactus(blocks, config, x, column.height, z);
+        continue;
+      }
+
+      if (
+        column.flooded ||
+        column.height < config.seaLevel ||
+        (Math.abs(x) <= 2 && Math.abs(z) <= 2)
+      ) {
+        continue;
+      }
+
+      if (
+        Math.abs(x) >= config.radius - 2 ||
+        Math.abs(z) >= config.radius - 2
+      ) {
+        continue;
+      }
+
+      if (!isDecorationPeak(config.seed, x, z)) {
+        continue;
+      }
+
+      if (
+        (column.biome === 'forest' && getDecorationScore(config.seed, x, z) > 0.71) ||
+        (column.biome === 'plains' && getDecorationScore(config.seed, x, z) > 0.81)
+      ) {
+        placeTree(blocks, config, x, column.height, z);
+        continue;
+      }
+    }
+  }
+}
+
 function createBaseBlockMap(config: WorldConfig): BlockMap {
   const blocks: BlockMap = new Map();
   const columns = buildColumnMap(config);
@@ -369,6 +536,7 @@ function createBaseBlockMap(config: WorldConfig): BlockMap {
     }
   }
 
+  decorateSurface(blocks, columns, config);
   return blocks;
 }
 

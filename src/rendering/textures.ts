@@ -104,6 +104,50 @@ function drawSandstoneTop(context: CanvasRenderingContext2D, size: number): void
   context.strokeRect(4, 4, size - 8, size - 8);
 }
 
+function drawOakLogSide(context: CanvasRenderingContext2D, size: number): void {
+  fillNoise(context, size, 0x8a633d, 0.14, 'oak-log-side');
+  context.fillStyle = 'rgba(68, 42, 18, 0.24)';
+
+  for (let x = 4; x < size; x += 7) {
+    context.fillRect(x, 0, 2, size);
+  }
+}
+
+function drawOakLogTop(context: CanvasRenderingContext2D, size: number): void {
+  fillNoise(context, size, 0xc89c68, 0.1, 'oak-log-top');
+  context.strokeStyle = 'rgba(110, 68, 29, 0.4)';
+  context.lineWidth = 2;
+  context.strokeRect(5, 5, size - 10, size - 10);
+  context.strokeRect(11, 11, size - 22, size - 22);
+}
+
+function drawLeaves(context: CanvasRenderingContext2D, size: number): void {
+  fillNoise(context, size, 0x5b9240, 0.18, 'oak-leaves');
+  context.fillStyle = 'rgba(132, 188, 85, 0.22)';
+
+  for (let y = 2; y < size; y += 5) {
+    for (let x = (y / 5) % 2 === 0 ? 1 : 3; x < size; x += 6) {
+      context.fillRect(x, y, 2, 2);
+    }
+  }
+}
+
+function drawCactusSide(context: CanvasRenderingContext2D, size: number): void {
+  fillNoise(context, size, 0x4b8d39, 0.14, 'cactus-side');
+  context.fillStyle = 'rgba(210, 240, 160, 0.16)';
+
+  for (let x = 2; x < size; x += 6) {
+    context.fillRect(x, 0, 1, size);
+  }
+}
+
+function drawCactusCap(context: CanvasRenderingContext2D, size: number): void {
+  fillNoise(context, size, 0x79b85e, 0.1, 'cactus-cap');
+  context.strokeStyle = 'rgba(49, 91, 37, 0.34)';
+  context.lineWidth = 2;
+  context.strokeRect(4, 4, size - 8, size - 8);
+}
+
 function drawTextureTile(textureId: string, baseColor: number): HTMLCanvasElement {
   const size = 32;
   const canvas = document.createElement('canvas');
@@ -143,6 +187,22 @@ function drawTextureTile(textureId: string, baseColor: number): HTMLCanvasElemen
       break;
     case 'snow-side':
       drawSnowSide(context, size);
+      break;
+    case 'oak-log-side':
+      drawOakLogSide(context, size);
+      break;
+    case 'oak-log-top':
+      drawOakLogTop(context, size);
+      break;
+    case 'oak-leaves':
+      drawLeaves(context, size);
+      break;
+    case 'cactus-side':
+      drawCactusSide(context, size);
+      break;
+    case 'cactus-top':
+    case 'cactus-bottom':
+      drawCactusCap(context, size);
       break;
     case 'water':
       fillNoise(context, size, 0x4f8fdb, 0.12, textureId);

@@ -42,8 +42,35 @@ describe('generateWorld', () => {
     expect(minY).toBeLessThan(0);
     expect(maxY).toBeGreaterThan(DEFAULT_WORLD_CONFIG.seaLevel + 4);
     expect([...blockTypes]).toEqual(
-      expect.arrayContaining(['grass', 'stone', 'sand', 'snow', 'water', 'lava']),
+      expect.arrayContaining([
+        'grass',
+        'stone',
+        'sand',
+        'snow',
+        'water',
+        'lava',
+        'oak-log',
+        'oak-leaves',
+        'cactus',
+      ]),
     );
+  });
+
+  it('adds deterministic surface decorations that match biome surfaces', () => {
+    const world = generateWorld(DEFAULT_WORLD_CONFIG);
+    const byKey = new Map(world.map((block) => [`${block.x},${block.y},${block.z}`, block.type]));
+    const logs = world.filter((block) => block.type === 'oak-log');
+    const leaves = world.filter((block) => block.type === 'oak-leaves');
+    const cacti = world.filter((block) => block.type === 'cactus');
+
+    expect(logs).not.toHaveLength(0);
+    expect(leaves.length).toBeGreaterThan(logs.length);
+    expect(cacti).not.toHaveLength(0);
+
+    for (const block of cacti) {
+      const below = byKey.get(`${block.x},${block.y - 1},${block.z}`);
+      expect(['sand', 'cactus']).toContain(below);
+    }
   });
 });
 
@@ -58,6 +85,19 @@ describe('VoxelWorld', () => {
     });
     expect(world.hasBlock(Math.floor(spawn.x), Math.floor(spawn.y), Math.floor(spawn.z))).toBe(false);
     expect(world.hasBlock(Math.floor(spawn.x), Math.floor(spawn.y) + 1, Math.floor(spawn.z))).toBe(false);
+  });
+
+  it('keeps the central spawn area clear of decoration columns', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+
+    for (let x = -2; x <= 2; x += 1) {
+      for (let z = -2; z <= 2; z += 1) {
+        for (let y = DEFAULT_WORLD_CONFIG.seaLevel + 1; y <= DEFAULT_WORLD_CONFIG.maxY + 1; y += 1) {
+          expect(world.getBlock(x, y, z)).not.toBe('oak-log');
+          expect(world.getBlock(x, y, z)).not.toBe('cactus');
+        }
+      }
+    }
   });
 
   it('removes and places blocks while preserving persistence diffs', () => {
@@ -118,6 +158,8 @@ describe('BLOCK_DEFINITIONS', () => {
   it('keeps expected metadata available for rendering and lighting', () => {
     expect(BLOCK_DEFINITIONS.highlight.color).toBe(0xe6b84a);
     expect(BLOCK_DEFINITIONS.grass.texture.top).toBe('grass-top');
+    expect(BLOCK_DEFINITIONS['oak-log'].texture.side).toBe('oak-log-side');
+    expect(BLOCK_DEFINITIONS.cactus.texture.top).toBe('cactus-top');
     expect(BLOCK_DEFINITIONS.lava.emittedLight).toBe(15);
   });
 });

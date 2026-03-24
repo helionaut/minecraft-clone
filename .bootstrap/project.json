@@ -1,0 +1,83 @@
+{
+  "project": {
+    "name": "Minecraft Clone",
+    "task": "Build a browser-based Minecraft-clone game using Three.js.",
+    "mode": "product",
+    "workflow_profile": "simple-product"
+  },
+  "repo": {
+    "slug": "minecraft-clone",
+    "owner": "helionaut",
+    "url": "https://github.com/helionaut/minecraft-clone",
+    "dir": "/home/helionaut/src/projects/minecraft-clone",
+    "visibility": "private"
+  },
+  "linear": {
+    "project_id": "e6debfb9-35a2-4c81-a27c-30b9fad039fe",
+    "project_slug": "bb0a18474268",
+    "project_url": "https://linear.app/heliagents/project/minecraft-clone-bb0a18474268",
+    "starter_issue_id": "83bcbd76-7992-4d52-9099-324c09b0cd98",
+    "starter_issue_identifier": "HEL-94",
+    "starter_issue_url": "https://linear.app/heliagents/issue/HEL-94/project-intake-minecraft-clone",
+    "issues": [
+      {
+        "key": "project-intake",
+        "id": "83bcbd76-7992-4d52-9099-324c09b0cd98",
+        "identifier": "HEL-94",
+        "url": "https://linear.app/heliagents/issue/HEL-94/project-intake-minecraft-clone",
+        "title": "Project intake: Minecraft Clone"
+      },
+      {
+        "key": "prd",
+        "id": "21998cb4-f1d9-4ab7-b343-d6e9acf88bc1",
+        "identifier": "HEL-95",
+        "url": "https://linear.app/heliagents/issue/HEL-95/prd-and-success-criteria-minecraft-clone",
+        "title": "PRD and success criteria: Minecraft Clone"
+      },
+      {
+        "key": "harness",
+        "id": "dd7f39ef-99ed-4618-9934-0f91166aa996",
+        "identifier": "HEL-96",
+        "url": "https://linear.app/heliagents/issue/HEL-96/engineering-harness-minecraft-clone",
+        "title": "Engineering harness: Minecraft Clone"
+      },
+      {
+        "key": "inputs",
+        "id": "c0a1e27c-bf2b-47d3-b13d-9be3380c7429",
+        "identifier": "HEL-97",
+        "url": "https://linear.app/heliagents/issue/HEL-97/input-contract-and-readiness-minecraft-clone",
+        "title": "Input contract and readiness: Minecraft Clone"
+      },
+      {
+        "key": "backlog",
+        "id": "1735efb8-1907-4fda-a2c2-9c3ecaa9e31b",
+        "identifier": "HEL-98",
+        "url": "https://linear.app/heliagents/issue/HEL-98/backlog-decomposition-minecraft-clone",
+        "title": "Backlog decomposition: Minecraft Clone"
+      },
+      {
+        "key": "deploy",
+        "id": "b5dfde46-70bf-4c16-83d6-ffb593119021",
+        "identifier": "HEL-99",
+        "url": "https://linear.app/heliagents/issue/HEL-99/deployment-setup-minecraft-clone",
+        "title": "Deployment setup: Minecraft Clone"
+      }
+    ]
+  },
+  "telegram": {
+    "chat_id": "-1003774956386",
+    "topic_id": "1499",
+    "topic_name": "Minecraft Clone"
+  },
+  "deploy": {
+    "profile": "static-web"
+  },
+  "execution": {
+    "strategy": "host"
+  },
+  "symphony": {
+    "unit_name": "symphony@minecraft-clone.service",
+    "launcher_path": "/home/helionaut/srv/symphony/minecraft-clone.sh",
+    "log_path": "/home/helionaut/srv/symphony/logs/minecraft-clone.log"
+  }
+}

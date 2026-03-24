@@ -33,7 +33,8 @@ rather than a static demo.
 ## Primary User Flow
 
 1. The player opens the deployed web app.
-2. The player enters an interactive voxel world within one short loading path.
+2. The player enters an interactive voxel world after at most one explicit
+   start or focus-capture action.
 3. The player can look around, move, jump, and collide with terrain.
 4. The player can target a block, remove it, and place a block into a valid
    adjacent space.
@@ -45,6 +46,8 @@ rather than a static demo.
 ### Core Gameplay Loop
 
 - load a small locally generated voxel world in the browser
+- generate that world entirely from checked-in code and data that ship with the
+  static build
 - control a first-person or over-the-shoulder player camera with clear aiming
 - move forward, backward, left, and right
 - jump with gravity
@@ -57,6 +60,8 @@ rather than a static demo.
 ### UX And Shell
 
 - startable from a static web deployment
+- one explicit start path from page load into play, even if desktop gameplay
+  requires pointer lock
 - minimal onboarding or prompt text needed to begin play
 - clear indication that the app is interactive, such as a start button,
   crosshair, or short controls hint
@@ -68,6 +73,8 @@ rather than a static demo.
 - deterministic world generation or deterministic reset path
 - no required backend services
 - no required external art, audio, or content downloads for the first slice
+- no required runtime dependence on third-party asset CDNs, authenticated APIs,
+  or remote save endpoints
 
 ## Non-Goals For V1
 
@@ -98,6 +105,8 @@ rather than a static demo.
 
 - The initial world must be finite and small enough to load quickly on a normal
   desktop browser session.
+- A hard refresh with no saved local world state must always produce a playable
+  spawn and a valid starter world.
 - The terrain layout and starter block palette must be deterministic for a given
   build.
 - The implementation must choose one of these v1 contracts and document it in
@@ -124,8 +133,9 @@ review.
 - App boot:
   - Given a fresh page load, the main route renders a visible start or play
     entry point without console-blocking runtime errors.
-  - After starting play, the scene shows a voxel world, player camera, and a
-    visible aiming aid or equivalent interaction cue.
+  - After the player performs the required start action, the scene shows a voxel
+    world, player camera, and a visible aiming aid or equivalent interaction cue
+    without requiring a second navigation step.
 - World generation:
   - Given the same build and no saved local world state, the generated world
     layout is identical across two refreshes.
@@ -164,6 +174,22 @@ review.
   load, enter world, move, jump, collide, remove block, place block, refresh,
   and verify the chosen refresh contract.
 
+### Testability Mapping
+
+- Pure logic tests should cover:
+  - deterministic world generation and reset behavior from identical inputs
+  - collision outcomes for grounded movement, jumping, and blocked movement
+  - block removal and placement state transitions, including rejection of
+    invalid placement into occupied player space
+- Browser-level validation should cover:
+  - the single start path from load into the playable scene
+  - the visible interaction cue and successful block edit feedback
+  - the selected refresh contract after a page reload
+- Review artifacts should include:
+  - desktop screenshots for pre-play and in-world states
+  - one mobile shell screenshot plus a short note describing whether gameplay is
+    shell-only or interactive on mobile in v1
+
 ### Desktop And Mobile Shell Review Evidence
 
 - Desktop evidence must include at least:
@@ -171,6 +197,8 @@ review.
   - one screenshot of the in-world gameplay state with the world visible
   - a short review note confirming that the start affordance and the active
     interaction cue are both visible in the checked screenshots
+  - a short review note confirming whether pointer lock or keyboard capture was
+    required and whether that requirement was communicated in the UI
 - Mobile evidence must include at least:
   - one screenshot of the shell in a phone-sized viewport
   - confirmation that text, buttons, and framing are readable without overlap or
@@ -221,6 +249,8 @@ The first slice is successful when all of the following are true.
   checked into the repository.
 - A production build must load the first playable slice without depending on
   environment-specific secrets.
+- The v1 slice must not require remote texture packs, audio packs, or other
+  mandatory user-visible assets outside the deployed static bundle.
 
 ## Technical Constraints
 
@@ -228,6 +258,9 @@ The first slice is successful when all of the following are true.
   deployment model.
 - V1 should avoid external required assets; prefer procedural colors, generated
   geometry, and checked-in placeholder resources.
+- Any optional persistence must rely on browser-local storage only; the baseline
+  experience must still function when persistence is unavailable and falls back
+  to deterministic reset behavior.
 - World logic should be deterministic and testable outside the render loop where
   feasible.
 - Core gameplay systems for world generation, collision rules, and block edits

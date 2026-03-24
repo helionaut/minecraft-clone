@@ -7,6 +7,15 @@ export default tseslint.config(
     ignores: ['dist', 'coverage', 'tmp'],
   },
   js.configs.recommended,
+  {
+    files: ['**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
   ...tseslint.configs.recommended,
   {
     files: ['**/*.ts'],

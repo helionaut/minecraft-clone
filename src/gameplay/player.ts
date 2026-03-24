@@ -16,6 +16,8 @@ export interface PlayerState {
   readonly yaw: number;
   readonly pitch: number;
   readonly grounded: boolean;
+  readonly inFluid: boolean;
+  readonly headInFluid: boolean;
 }
 
 export interface InputState {
@@ -45,6 +47,7 @@ export const DEFAULT_PLAYER_CONFIG: PlayerConfig = {
 };
 
 export type SolidBlockLookup = (x: number, y: number, z: number) => boolean;
+export type FluidBlockLookup = (x: number, y: number, z: number) => boolean;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -149,6 +152,8 @@ export function createPlayerState(spawn: Vector3Like): PlayerState {
     yaw: 0,
     pitch: -0.18,
     grounded: false,
+    inFluid: false,
+    headInFluid: false,
   };
 }
 
@@ -164,14 +169,70 @@ export function withLook(
   };
 }
 
+function intersectsBlockRange(
+  position: Vector3Like,
+  config: PlayerConfig,
+  isMatch: FluidBlockLookup,
+  minYOffset: number,
+  maxYOffset: number,
+): boolean {
+  const minX = Math.floor(position.x - config.radius);
+  const maxX = Math.floor(position.x + config.radius - 1e-6);
+  const minY = Math.floor(position.y + minYOffset);
+  const maxY = Math.floor(position.y + maxYOffset - 1e-6);
+  const minZ = Math.floor(position.z - config.radius);
+  const maxZ = Math.floor(position.z + config.radius - 1e-6);
+
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let z = minZ; z <= maxZ; z += 1) {
+        if (isMatch(x, y, z)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function getFluidState(
+  position: Vector3Like,
+  config: PlayerConfig,
+  isFluidBlock: FluidBlockLookup | undefined,
+): { readonly inFluid: boolean; readonly headInFluid: boolean } {
+  if (!isFluidBlock) {
+    return { inFluid: false, headInFluid: false };
+  }
+
+  const inFluid = intersectsBlockRange(
+    position,
+    config,
+    isFluidBlock,
+    0.05,
+    Math.min(config.height * 0.72, 1.28),
+  );
+  const headInFluid = intersectsBlockRange(
+    position,
+    config,
+    isFluidBlock,
+    config.eyeHeight - 0.12,
+    config.height,
+  );
+
+  return { inFluid, headInFluid };
+}
+
 export function stepPlayer(
   state: PlayerState,
   input: InputState,
   deltaTime: number,
   isSolidBlock: SolidBlockLookup,
   config: PlayerConfig = DEFAULT_PLAYER_CONFIG,
+  isFluidBlock?: FluidBlockLookup,
 ): PlayerState {
   const delta = Math.min(deltaTime, 0.05);
+  const fluidState = getFluidState(state.position, config, isFluidBlock);
   const localX =
     Number(input.right) -
     Number(input.left);
@@ -185,13 +246,30 @@ export function stepPlayer(
   const cosYaw = Math.cos(state.yaw);
   const worldX = moveX * cosYaw + moveZ * sinYaw;
   const worldZ = moveZ * cosYaw - moveX * sinYaw;
+  const moveSpeed = fluidState.inFluid
+    ? config.moveSpeed * (fluidState.headInFluid ? 0.42 : 0.58)
+    : config.moveSpeed;
+  const gravity = fluidState.inFluid
+    ? config.gravity * (fluidState.headInFluid ? 0.18 : 0.34)
+    : config.gravity;
   const nextVelocity: MutableVector3Like = {
-    x: worldX * config.moveSpeed,
-    y: state.velocity.y - config.gravity * delta,
-    z: worldZ * config.moveSpeed,
+    x: worldX * moveSpeed,
+    y: state.velocity.y - gravity * delta,
+    z: worldZ * moveSpeed,
   };
 
-  if (state.grounded && input.jump) {
+  if (fluidState.inFluid) {
+    nextVelocity.y *= fluidState.headInFluid ? 0.84 : 0.9;
+
+    if (input.jump) {
+      nextVelocity.y = Math.max(
+        nextVelocity.y,
+        fluidState.headInFluid ? 3.2 : 2.6,
+      );
+    } else {
+      nextVelocity.y = Math.max(nextVelocity.y, fluidState.headInFluid ? -1.6 : -2.3);
+    }
+  } else if (state.grounded && input.jump) {
     nextVelocity.y = config.jumpSpeed;
   }
 
@@ -240,5 +318,7 @@ export function stepPlayer(
     position,
     velocity: nextVelocity,
     grounded,
+    inFluid: fluidState.inFluid,
+    headInFluid: fluidState.headInFluid,
   };
 }

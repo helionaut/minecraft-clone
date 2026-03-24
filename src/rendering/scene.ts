@@ -19,11 +19,13 @@ import {
 } from 'three';
 import type { Intersection, Object3D } from 'three';
 
+import { createGameAudio } from '../audio/gameAudio.ts';
 import {
   BLOCK_DEFINITIONS,
   type HotbarBlockType,
   PLACEABLE_BLOCK_ORDER,
   type PlaceableBlockType,
+  isFluidBlock,
 } from '../gameplay/blocks.ts';
 import { computeVoxelLighting } from '../gameplay/lighting.ts';
 import {
@@ -43,7 +45,10 @@ import {
   parseWorldPersistence,
   type SolidBlockType,
 } from '../gameplay/world.ts';
-import { createBlockMaterialFactory } from './textures.ts';
+import {
+  createBlockMaterialFactory,
+  type FaceVisibilityMask,
+} from './textures.ts';
 
 export interface SandboxStatus {
   readonly locked: boolean;
@@ -64,9 +69,9 @@ export interface PlayableScene {
 
 export interface TouchUiControls {
   readonly root: HTMLElement;
+  readonly lookSurface: HTMLElement;
   readonly moveStick: HTMLElement;
   readonly moveThumb: HTMLElement;
-  readonly lookPad: HTMLElement;
   readonly jumpButton: HTMLButtonElement;
   readonly breakButton: HTMLButtonElement;
   readonly placeButton: HTMLButtonElement;
@@ -81,13 +86,13 @@ interface CellTarget {
   readonly type: SolidBlockType;
 }
 
-const CARDINAL_DIRECTIONS: ReadonlyArray<readonly [number, number, number]> = [
-  [1, 0, 0],
-  [-1, 0, 0],
-  [0, 1, 0],
-  [0, -1, 0],
-  [0, 0, 1],
-  [0, 0, -1],
+const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number, number, number]> = [
+  ['px', 1, 0, 0],
+  ['nx', -1, 0, 0],
+  ['py', 0, 1, 0],
+  ['ny', 0, -1, 0],
+  ['pz', 0, 0, 1],
+  ['nz', 0, 0, -1],
 ];
 
 function formatCoords(value: number): string {
@@ -102,6 +107,17 @@ function selectPlaceableBlock(
   const nextIndex =
     (index + offset + PLACEABLE_BLOCK_ORDER.length) % PLACEABLE_BLOCK_ORDER.length;
   return PLACEABLE_BLOCK_ORDER[nextIndex] ?? PLACEABLE_BLOCK_ORDER[0];
+}
+
+function createVisibleFaces(): FaceVisibilityMask {
+  return {
+    px: true,
+    nx: true,
+    py: true,
+    ny: true,
+    pz: true,
+    nz: true,
+  };
 }
 
 export function createPlayableScene(
@@ -143,10 +159,12 @@ export function createPlayableScene(
   scene.add(worldGroup);
 
   const blockGeometry = new BoxGeometry(1, 1, 1);
+  const waterGeometry = new BoxGeometry(1.002, 0.88, 1.002);
   const highlightGeometry = new EdgesGeometry(new BoxGeometry(1.02, 1.02, 1.02));
   const raycaster = new Raycaster();
   const center = new Vector2(0, 0);
   const blockMaterialFactory = createBlockMaterialFactory();
+  const audio = createGameAudio();
 
   const targetOutline = new LineSegments(
     highlightGeometry,
@@ -168,8 +186,11 @@ export function createPlayableScene(
 
   let selectedBlock: HotbarBlockType = 'grass';
   let locked = false;
-  const touchDevice =
-    'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const touchDevice = (
+    window.matchMedia('(pointer: coarse)').matches ||
+    'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0
+  );
   let currentTarget: CellTarget | null = null;
   let currentPlacement: { x: number; y: number; z: number } | null = null;
   let player = createPlayerState(world.getSpawnPoint());
@@ -214,19 +235,19 @@ export function createPlayableScene(
     );
 
     for (const block of world.toBlocks()) {
-      const hasVisibleFace = CARDINAL_DIRECTIONS.some(([dx, dy, dz]) => {
+      const visibleFaces = createVisibleFaces();
+      let hasVisibleFace = false;
+
+      for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
         const neighbor = world.getBlock(block.x + dx, block.y + dy, block.z + dz);
-
-        if (!neighbor) {
-          return true;
-        }
-
-        if (block.type === 'water' || block.type === 'lava') {
-          return neighbor !== block.type;
-        }
-
-        return !BLOCK_DEFINITIONS[neighbor].opaque;
-      });
+        const visible = !neighbor || (
+          block.type === 'water' || block.type === 'lava'
+            ? neighbor !== block.type
+            : !BLOCK_DEFINITIONS[neighbor].opaque
+        );
+        visibleFaces[face] = visible;
+        hasVisibleFace ||= visible;
+      }
 
       if (!hasVisibleFace) {
         continue;
@@ -234,10 +255,14 @@ export function createPlayableScene(
 
       const brightness = lighting.getBlockBrightness(block.x, block.y, block.z);
       const voxel = new Mesh(
-        blockGeometry,
-        blockMaterialFactory.getMaterials(block.type, brightness),
+        block.type === 'water' ? waterGeometry : blockGeometry,
+        blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
       );
-      voxel.position.set(block.x + 0.5, block.y + 0.5, block.z + 0.5);
+      voxel.position.set(
+        block.x + 0.5,
+        block.y + (block.type === 'water' ? 0.44 : 0.5),
+        block.z + 0.5,
+      );
       voxel.userData.cell = block;
       worldGroup.add(voxel);
     }
@@ -248,7 +273,7 @@ export function createPlayableScene(
     const prompt = locked
       ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch blocks, Esc unlock`
       : touchDevice
-        ? 'Use the left stick to move, drag the look pad to aim, tap Jump to hop, and use Mine or Place on the targeted block.'
+        ? 'Use the left thumbstick to move, drag anywhere to aim, tap Jump to swim upward, and use Mine or Place on the targeted block.'
         : 'Click the viewport to capture the mouse and enter the world.';
     const target = currentTarget
       ? `Break ${currentTarget.type} @ ${currentTarget.x}, ${currentTarget.y}, ${currentTarget.z}${
@@ -335,6 +360,7 @@ export function createPlayableScene(
 
     if (button === 0) {
       world.removeBlock(currentTarget.x, currentTarget.y, currentTarget.z);
+      audio.playMine();
       persistWorld();
       rebuildWorld();
       updateTargeting();
@@ -343,6 +369,7 @@ export function createPlayableScene(
 
     if (button === 2 && currentPlacement) {
       if (world.placeBlock(currentPlacement.x, currentPlacement.y, currentPlacement.z, selectedBlock)) {
+        audio.playPlace();
         persistWorld();
         rebuildWorld();
         updateTargeting();
@@ -351,6 +378,8 @@ export function createPlayableScene(
   };
 
   const requestPointerLock = () => {
+    audio.unlock();
+
     if (!touchDevice && document.pointerLockElement !== canvas) {
       canvas.requestPointerLock();
     }
@@ -412,6 +441,8 @@ export function createPlayableScene(
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    audio.unlock();
+
     if (event.code === 'Space') {
       event.preventDefault();
     }
@@ -447,6 +478,8 @@ export function createPlayableScene(
   };
 
   const onMouseDown = (event: MouseEvent) => {
+    audio.unlock();
+
     if (event.button === 0 && !locked) {
       requestPointerLock();
       return;
@@ -459,6 +492,7 @@ export function createPlayableScene(
   };
 
   const onWheel = (event: WheelEvent) => {
+    audio.unlock();
     event.preventDefault();
     selectedBlock = selectPlaceableBlock(selectedBlock, event.deltaY > 0 ? 1 : -1);
     updateTargeting();
@@ -498,6 +532,7 @@ export function createPlayableScene(
     }
 
     event.preventDefault();
+    audio.unlock();
     movePointerState.id = event.pointerId;
     movePointerState.originX = event.clientX;
     movePointerState.originY = event.clientY;
@@ -531,19 +566,20 @@ export function createPlayableScene(
     resetTouchMovement();
   };
 
-  const onLookPadPointerDown = (event: PointerEvent) => {
+  const onLookSurfacePointerDown = (event: PointerEvent) => {
     if (!touchControls || event.pointerType === 'mouse' || lookPointerState.id !== -1) {
       return;
     }
 
     event.preventDefault();
+    audio.unlock();
     lookPointerState.id = event.pointerId;
     lookPointerState.lastX = event.clientX;
     lookPointerState.lastY = event.clientY;
-    touchControls.lookPad.setPointerCapture(event.pointerId);
+    touchControls.lookSurface.setPointerCapture(event.pointerId);
   };
 
-  const onLookPadPointerMove = (event: PointerEvent) => {
+  const onLookSurfacePointerMove = (event: PointerEvent) => {
     if (!touchControls || event.pointerId !== lookPointerState.id) {
       return;
     }
@@ -563,7 +599,7 @@ export function createPlayableScene(
     }
 
     event.preventDefault();
-    touchControls.lookPad.releasePointerCapture(event.pointerId);
+    touchControls.lookSurface.releasePointerCapture(event.pointerId);
     lookPointerState.id = -1;
   };
 
@@ -573,6 +609,7 @@ export function createPlayableScene(
     }
 
     event.preventDefault();
+    audio.unlock();
     input.jump = true;
   };
 
@@ -591,6 +628,7 @@ export function createPlayableScene(
     }
 
     event.preventDefault();
+    audio.unlock();
     tryInteract(button);
   };
 
@@ -600,6 +638,7 @@ export function createPlayableScene(
     }
 
     event.preventDefault();
+    audio.unlock();
     selectedBlock = selectPlaceableBlock(selectedBlock, offset);
     updateTargeting();
   };
@@ -632,14 +671,14 @@ export function createPlayableScene(
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
   if (touchControls) {
+    touchControls.lookSurface.addEventListener('pointerdown', onLookSurfacePointerDown);
+    touchControls.lookSurface.addEventListener('pointermove', onLookSurfacePointerMove);
+    touchControls.lookSurface.addEventListener('pointerup', resetLookPointer);
+    touchControls.lookSurface.addEventListener('pointercancel', resetLookPointer);
     touchControls.moveStick.addEventListener('pointerdown', onMoveStickPointerDown);
     touchControls.moveStick.addEventListener('pointermove', onMoveStickPointerMove);
     touchControls.moveStick.addEventListener('pointerup', onMoveStickPointerEnd);
     touchControls.moveStick.addEventListener('pointercancel', onMoveStickPointerEnd);
-    touchControls.lookPad.addEventListener('pointerdown', onLookPadPointerDown);
-    touchControls.lookPad.addEventListener('pointermove', onLookPadPointerMove);
-    touchControls.lookPad.addEventListener('pointerup', resetLookPointer);
-    touchControls.lookPad.addEventListener('pointercancel', resetLookPointer);
     touchControls.jumpButton.addEventListener('pointerdown', onJumpPointerDown);
     touchControls.jumpButton.addEventListener('pointerup', onJumpPointerUp);
     touchControls.jumpButton.addEventListener('pointercancel', onJumpPointerUp);
@@ -655,13 +694,17 @@ export function createPlayableScene(
   const tick = (now: number) => {
     const delta = (now - previousTime) / 1000;
     previousTime = now;
+    const previousPlayer = player;
 
     player = stepPlayer(
       player,
       input,
       delta,
       (x, y, z) => world.isSolidBlock(x, y, z),
+      DEFAULT_PLAYER_CONFIG,
+      (x, y, z) => isFluidBlock(world.getBlock(x, y, z)),
     );
+    audio.update(previousPlayer, player, input, delta);
 
     camera.position.set(
       player.position.x,
@@ -696,14 +739,14 @@ export function createPlayableScene(
       window.removeEventListener('keyup', onKeyUp);
       canvas.removeEventListener('wheel', onWheel);
       if (touchControls) {
+        touchControls.lookSurface.removeEventListener('pointerdown', onLookSurfacePointerDown);
+        touchControls.lookSurface.removeEventListener('pointermove', onLookSurfacePointerMove);
+        touchControls.lookSurface.removeEventListener('pointerup', resetLookPointer);
+        touchControls.lookSurface.removeEventListener('pointercancel', resetLookPointer);
         touchControls.moveStick.removeEventListener('pointerdown', onMoveStickPointerDown);
         touchControls.moveStick.removeEventListener('pointermove', onMoveStickPointerMove);
         touchControls.moveStick.removeEventListener('pointerup', onMoveStickPointerEnd);
         touchControls.moveStick.removeEventListener('pointercancel', onMoveStickPointerEnd);
-        touchControls.lookPad.removeEventListener('pointerdown', onLookPadPointerDown);
-        touchControls.lookPad.removeEventListener('pointermove', onLookPadPointerMove);
-        touchControls.lookPad.removeEventListener('pointerup', resetLookPointer);
-        touchControls.lookPad.removeEventListener('pointercancel', resetLookPointer);
         touchControls.jumpButton.removeEventListener('pointerdown', onJumpPointerDown);
         touchControls.jumpButton.removeEventListener('pointerup', onJumpPointerUp);
         touchControls.jumpButton.removeEventListener('pointercancel', onJumpPointerUp);
@@ -714,8 +757,10 @@ export function createPlayableScene(
       }
       renderer.dispose();
       blockGeometry.dispose();
+      waterGeometry.dispose();
       highlightGeometry.dispose();
       blockMaterialFactory.dispose();
+      audio.dispose();
       (
         placementPreview.material as MeshStandardMaterial
       ).dispose();

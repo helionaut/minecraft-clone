@@ -31,6 +31,7 @@ export interface BlockDefinition {
   readonly type: BlockType;
   readonly color: number;
   readonly solid: boolean;
+  readonly fluid: boolean;
   readonly opaque: boolean;
   readonly lightAttenuation: number;
   readonly emittedLight: number;
@@ -47,6 +48,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'grass',
     color: 0x6aa84f,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -60,6 +62,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'dirt',
     color: 0x7a5536,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -69,6 +72,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'stone',
     color: 0x8f98a3,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -78,6 +82,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'sand',
     color: 0xd9c27f,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -87,6 +92,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'sandstone',
     color: 0xc9aa68,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -100,6 +106,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'snow',
     color: 0xf0f4fa,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -113,6 +120,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'oak-log',
     color: 0x8a633d,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -126,6 +134,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'oak-leaves',
     color: 0x5b9240,
     solid: true,
+    fluid: false,
     opaque: false,
     lightAttenuation: 3,
     emittedLight: 0,
@@ -135,6 +144,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'cactus',
     color: 0x4b8d39,
     solid: true,
+    fluid: false,
     opaque: true,
     lightAttenuation: 15,
     emittedLight: 0,
@@ -147,7 +157,8 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
   water: {
     type: 'water',
     color: 0x4f8fdb,
-    solid: true,
+    solid: false,
+    fluid: true,
     opaque: false,
     lightAttenuation: 1,
     emittedLight: 0,
@@ -156,7 +167,8 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
   lava: {
     type: 'lava',
     color: 0xff7433,
-    solid: true,
+    solid: false,
+    fluid: true,
     opaque: false,
     lightAttenuation: 1,
     emittedLight: 15,
@@ -166,6 +178,7 @@ export const BLOCK_DEFINITIONS: Record<BlockType, BlockDefinition> = {
     type: 'highlight',
     color: 0xe6b84a,
     solid: false,
+    fluid: false,
     opaque: false,
     lightAttenuation: 0,
     emittedLight: 0,
@@ -179,4 +192,8 @@ export function isOpaqueBlock(type: WorldBlockType | null): boolean {
 
 export function isSolidBlock(type: WorldBlockType | null): boolean {
   return type ? BLOCK_DEFINITIONS[type].solid : false;
+}
+
+export function isFluidBlock(type: WorldBlockType | null): boolean {
+  return type ? BLOCK_DEFINITIONS[type].fluid : false;
 }

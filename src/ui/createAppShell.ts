@@ -41,9 +41,12 @@ export function createAppShell(root: HTMLDivElement): void {
                   </div>
                 </div>
               </details>
-            </div>
+          </div>
 
-            <div class="crosshair" aria-hidden="true"></div>
+          <div class="crosshair" aria-hidden="true"></div>
+          <div class="touch-look-surface" data-look-surface aria-hidden="true">
+            <span class="touch-look-hint">Drag anywhere to look</span>
+          </div>
 
             <div class="touch-ui" data-touch-ui aria-label="Mobile gameplay controls">
               <div class="touch-cluster touch-move">
@@ -52,13 +55,10 @@ export function createAppShell(root: HTMLDivElement): void {
                   <div class="touch-stick-thumb" data-move-thumb></div>
                 </div>
               </div>
-              <div class="touch-cluster touch-look">
-                <p class="touch-label">Look</p>
-                <div class="touch-lookpad" data-look-pad>
-                  <span>Drag</span>
-                </div>
+              <div class="touch-cluster touch-actions-panel">
+                <p class="touch-label">Actions</p>
                 <div class="touch-actions">
-                  <button class="touch-button" type="button" data-jump>Jump</button>
+                  <button class="touch-button touch-button-primary" type="button" data-jump>Jump</button>
                   <button class="touch-button" type="button" data-break>Mine</button>
                   <button class="touch-button" type="button" data-place>Place</button>
                 </div>
@@ -107,9 +107,9 @@ export function createAppShell(root: HTMLDivElement): void {
   const mobileStatus = root.querySelector<HTMLElement>('[data-mobile-status]');
   const mobileCoords = root.querySelector<HTMLElement>('[data-mobile-coords]');
   const touchUi = root.querySelector<HTMLElement>('[data-touch-ui]');
+  const lookSurface = root.querySelector<HTMLElement>('[data-look-surface]');
   const moveStick = root.querySelector<HTMLElement>('[data-move-stick]');
   const moveThumb = root.querySelector<HTMLElement>('[data-move-thumb]');
-  const lookPad = root.querySelector<HTMLElement>('[data-look-pad]');
   const jumpButton = root.querySelector<HTMLButtonElement>('[data-jump]');
   const breakButton = root.querySelector<HTMLButtonElement>('[data-break]');
   const placeButton = root.querySelector<HTMLButtonElement>('[data-place]');
@@ -134,9 +134,9 @@ export function createAppShell(root: HTMLDivElement): void {
 
   if (
     !touchUi ||
+    !lookSurface ||
     !moveStick ||
     !moveThumb ||
-    !lookPad ||
     !jumpButton ||
     !breakButton ||
     !placeButton ||
@@ -160,11 +160,17 @@ export function createAppShell(root: HTMLDivElement): void {
     ...palette.querySelectorAll<HTMLButtonElement>('[data-block-type]'),
   ];
   const compactHudQuery = window.matchMedia('(max-width: 700px)');
+  const compactLandscapeQuery = window.matchMedia(
+    '(max-height: 560px)',
+  );
   let touchMode = false;
   let compactHudActive = false;
 
   const updateCompactHud = () => {
-    const nextCompactHud = touchMode && compactHudQuery.matches;
+    const nextCompactHud = touchMode && (
+      compactHudQuery.matches ||
+      compactLandscapeQuery.matches
+    );
 
     if (nextCompactHud === compactHudActive) {
       return;
@@ -182,12 +188,13 @@ export function createAppShell(root: HTMLDivElement): void {
     coords.textContent = status.coords;
     target.textContent = status.target;
     mobileStatus.textContent = status.touchDevice
-      ? 'Move, drag to aim, then tap Mine or Place.'
+      ? 'Move left, drag anywhere, jump/swim, mine/place.'
       : 'Click to enter the world.';
     mobileCoords.textContent = status.coords;
     touchUi.classList.toggle('active', status.touchDevice);
+    lookSurface.classList.toggle('active', status.touchDevice);
     deviceNote.textContent = status.touchDevice
-      ? 'Mobile supports drag-look, thumbstick movement, jump, mining, placing, and block switching.'
+      ? 'Mobile supports full-screen drag-look, thumbstick movement, jump/swim, mining, placing, and fast block switching.'
       : 'Desktop supports pointer-lock mining and placement.';
 
     for (const button of paletteButtons) {
@@ -199,12 +206,13 @@ export function createAppShell(root: HTMLDivElement): void {
   };
 
   compactHudQuery.addEventListener('change', updateCompactHud);
+  compactLandscapeQuery.addEventListener('change', updateCompactHud);
 
   const touchControls: TouchUiControls = {
     root: touchUi,
+    lookSurface,
     moveStick,
     moveThumb,
-    lookPad,
     jumpButton,
     breakButton,
     placeButton,

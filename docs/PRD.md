@@ -136,6 +136,8 @@ review.
   - After the player performs the required start action, the scene shows a voxel
     world, player camera, and a visible aiming aid or equivalent interaction cue
     without requiring a second navigation step.
+  - The path from initial page load to active play uses only the shipped static
+    client bundle and does not depend on a runtime backend request succeeding.
 - World generation:
   - Given the same build and no saved local world state, the generated world
     layout is identical across two refreshes.
@@ -160,6 +162,8 @@ review.
     after refresh in the same browser.
   - If deterministic reset is chosen, the edited world returns to the baseline
     seed state after refresh.
+  - In either contract, a refresh never leaves the player without a valid spawn,
+    a visible world, or at least one reachable editable block.
 
 ### Validation Requirements
 
@@ -258,9 +262,14 @@ The first slice is successful when all of the following are true.
   deployment model.
 - V1 should avoid external required assets; prefer procedural colors, generated
   geometry, and checked-in placeholder resources.
+- Gameplay-critical world generation, collision, and block-edit rules must run
+  fully client-side after the initial static bundle loads.
 - Any optional persistence must rely on browser-local storage only; the baseline
   experience must still function when persistence is unavailable and falls back
   to deterministic reset behavior.
+- The baseline world seed, block palette, and spawn contract should be defined
+  in checked-in code or configuration so tests and future issues can reference a
+  stable source of truth.
 - World logic should be deterministic and testable outside the render loop where
   feasible.
 - Core gameplay systems for world generation, collision rules, and block edits
@@ -268,6 +277,8 @@ The first slice is successful when all of the following are true.
 - Save behavior, if included, must be local-only and browser-compatible.
 - Performance optimization is only required enough to keep the small starter
   world playable; chunk streaming and large-world scaling are deferred.
+- Desktop is the primary gameplay target for v1. Mobile support is required for
+  shell review and readable framing, not for full control parity.
 
 ## Open Product Decisions For Implementation
 

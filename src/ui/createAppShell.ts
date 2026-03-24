@@ -19,17 +19,28 @@ export function createAppShell(root: HTMLDivElement): void {
           <div class="viewport" data-viewport></div>
           <div class="hud" aria-live="polite">
             <div class="hud-top">
-              <div class="panel panel-title">
-                <p class="eyebrow">Minecraft Clone</p>
-                <h1>Playable voxel sandbox</h1>
-                <p class="hint" data-prompt></p>
-              </div>
-              <div class="panel panel-readout">
-                <p class="label">Coordinates</p>
-                <p class="value" data-coords></p>
-                <p class="label">Target</p>
-                <p class="value small" data-target></p>
-              </div>
+              <details class="hud-drawer" data-hud-drawer open>
+                <summary class="hud-summary">
+                  <div class="hud-summary-copy">
+                    <p class="eyebrow">Minecraft Clone</p>
+                    <p class="hud-summary-status" data-mobile-status></p>
+                  </div>
+                  <p class="hud-summary-coords" data-mobile-coords></p>
+                </summary>
+                <div class="hud-drawer-panels">
+                  <div class="panel panel-title">
+                    <p class="eyebrow">Minecraft Clone</p>
+                    <h1>Playable voxel sandbox</h1>
+                    <p class="hint" data-prompt></p>
+                  </div>
+                  <div class="panel panel-readout">
+                    <p class="label">Coordinates</p>
+                    <p class="value" data-coords></p>
+                    <p class="label">Target</p>
+                    <p class="value small" data-target></p>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div class="crosshair" aria-hidden="true"></div>
@@ -91,6 +102,10 @@ export function createAppShell(root: HTMLDivElement): void {
   const target = root.querySelector<HTMLElement>('[data-target]');
   const resetButton = root.querySelector<HTMLButtonElement>('[data-reset]');
   const deviceNote = root.querySelector<HTMLElement>('[data-device-note]');
+  const hud = root.querySelector<HTMLElement>('.hud');
+  const hudDrawer = root.querySelector<HTMLDetailsElement>('[data-hud-drawer]');
+  const mobileStatus = root.querySelector<HTMLElement>('[data-mobile-status]');
+  const mobileCoords = root.querySelector<HTMLElement>('[data-mobile-coords]');
   const touchUi = root.querySelector<HTMLElement>('[data-touch-ui]');
   const moveStick = root.querySelector<HTMLElement>('[data-move-stick]');
   const moveThumb = root.querySelector<HTMLElement>('[data-move-thumb]');
@@ -101,7 +116,19 @@ export function createAppShell(root: HTMLDivElement): void {
   const hotbarPrevButton = root.querySelector<HTMLButtonElement>('[data-hotbar-prev]');
   const hotbarNextButton = root.querySelector<HTMLButtonElement>('[data-hotbar-next]');
 
-  if (!viewport || !palette || !prompt || !coords || !target || !resetButton || !deviceNote) {
+  if (
+    !viewport ||
+    !palette ||
+    !prompt ||
+    !coords ||
+    !target ||
+    !resetButton ||
+    !deviceNote ||
+    !hud ||
+    !hudDrawer ||
+    !mobileStatus ||
+    !mobileCoords
+  ) {
     throw new Error('Missing sandbox UI node.');
   }
 
@@ -132,11 +159,32 @@ export function createAppShell(root: HTMLDivElement): void {
   const paletteButtons = [
     ...palette.querySelectorAll<HTMLButtonElement>('[data-block-type]'),
   ];
+  const compactHudQuery = window.matchMedia('(max-width: 700px)');
+  let touchMode = false;
+  let compactHudActive = false;
+
+  const updateCompactHud = () => {
+    const nextCompactHud = touchMode && compactHudQuery.matches;
+
+    if (nextCompactHud === compactHudActive) {
+      return;
+    }
+
+    compactHudActive = nextCompactHud;
+    hud.classList.toggle('compact-touch-hud', compactHudActive);
+    hudDrawer.open = !compactHudActive;
+  };
 
   const applyStatus = (status: SandboxStatus) => {
+    touchMode = status.touchDevice;
+    updateCompactHud();
     prompt.textContent = status.prompt;
     coords.textContent = status.coords;
     target.textContent = status.target;
+    mobileStatus.textContent = status.touchDevice
+      ? 'Move, drag to aim, then tap Mine or Place.'
+      : 'Click to enter the world.';
+    mobileCoords.textContent = status.coords;
     touchUi.classList.toggle('active', status.touchDevice);
     deviceNote.textContent = status.touchDevice
       ? 'Mobile supports drag-look, thumbstick movement, jump, mining, placing, and block switching.'
@@ -149,6 +197,8 @@ export function createAppShell(root: HTMLDivElement): void {
       );
     }
   };
+
+  compactHudQuery.addEventListener('change', updateCompactHud);
 
   const touchControls: TouchUiControls = {
     root: touchUi,

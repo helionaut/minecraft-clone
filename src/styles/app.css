@@ -90,8 +90,26 @@ button {
   gap: 1rem;
 }
 
+.hud-top {
+  align-items: flex-start;
+}
+
 .hud-bottom {
   align-items: end;
+}
+
+.hud-drawer {
+  width: 100%;
+}
+
+.hud-drawer[open] .hud-summary {
+  display: none;
+}
+
+.hud-drawer-panels {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .panel {
@@ -112,6 +130,47 @@ button {
 .panel-readout,
 .panel-actions {
   margin-left: auto;
+}
+
+.hud-summary {
+  display: none;
+  pointer-events: auto;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.72rem 0.82rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: rgba(9, 17, 24, 0.72);
+  box-shadow: var(--panel-shadow);
+  backdrop-filter: blur(8px);
+}
+
+.hud-summary::-webkit-details-marker {
+  display: none;
+}
+
+.hud-summary-copy {
+  min-width: 0;
+}
+
+.hud-summary-status,
+.hud-summary-coords {
+  margin: 0.2rem 0 0;
+  color: #fff9e7;
+}
+
+.hud-summary-status {
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.hud-summary-coords {
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 0.84rem;
+  line-height: 1.2;
 }
 
 .palette {
@@ -397,6 +456,10 @@ button {
     flex-direction: column;
   }
 
+  .hud-drawer-panels {
+    flex-direction: column;
+  }
+
   .hud-bottom {
     margin-top: auto;
   }
@@ -429,6 +492,10 @@ button {
     padding: 0.55rem;
   }
 
+  .compact-touch-hud {
+    gap: 0.55rem;
+  }
+
   .panel {
     padding: 0.72rem 0.78rem;
     border-radius: 14px;
@@ -453,6 +520,51 @@ button {
     gap: 0.55rem;
   }
 
+  .compact-touch-hud .hud-top {
+    align-items: stretch;
+  }
+
+  .compact-touch-hud .hud-drawer[open] .hud-summary {
+    display: flex;
+  }
+
+  .compact-touch-hud .hud-drawer:not([open]) .hud-summary {
+    display: flex;
+  }
+
+  .compact-touch-hud .hud-drawer {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .compact-touch-hud .hud-drawer-panels {
+    gap: 0.45rem;
+  }
+
+  .compact-touch-hud .panel-title h1 {
+    font-size: 1.05rem;
+  }
+
+  .compact-touch-hud .panel-title .hint {
+    margin-top: 0.22rem;
+    font-size: 0.78rem;
+    line-height: 1.28;
+  }
+
+  .compact-touch-hud .panel-readout .label,
+  .compact-touch-hud .panel-readout .value {
+    display: inline;
+  }
+
+  .compact-touch-hud .panel-readout .label + .value {
+    margin-left: 0.42rem;
+  }
+
+  .compact-touch-hud .panel-readout .value.small {
+    display: block;
+    margin-top: 0.3rem;
+  }
+
   .panel-title h1 {
     margin-top: 0.18rem;
     font-size: 1.25rem;
@@ -468,15 +580,53 @@ button {
     padding-bottom: 0.2rem;
   }
 
+  .compact-touch-hud .hud-bottom {
+    gap: 0.55rem;
+    padding-bottom: 10rem;
+  }
+
+  .compact-touch-hud .palette {
+    width: min(100%, 19rem);
+    margin: 0 auto;
+    padding: 0.45rem 0.5rem 0.3rem;
+    border-radius: 18px;
+    box-shadow: var(--panel-shadow);
+  }
+
+  .compact-touch-hud .palette .label,
+  .compact-touch-hud .palette .note,
+  .compact-touch-hud .swatch-name,
+  .compact-touch-hud .swatch-key {
+    display: none;
+  }
+
   .palette-row {
     gap: 0.35rem;
     margin-top: 0.5rem;
+  }
+
+  .compact-touch-hud .palette-row {
+    justify-content: center;
+    margin-top: 0;
+    overflow: visible;
   }
 
   .swatch {
     flex-basis: 3.65rem;
     min-height: 4.5rem;
     padding: 0.68rem 0.38rem 0.45rem;
+  }
+
+  .compact-touch-hud .swatch {
+    flex-basis: 2.7rem;
+    min-height: 2.9rem;
+    padding: 0.38rem;
+    border-radius: 12px;
+  }
+
+  .compact-touch-hud .swatch-chip {
+    width: 1.28rem;
+    height: 1.28rem;
   }
 
   .swatch-name {
@@ -489,6 +639,21 @@ button {
     padding: 0 0.55rem;
   }
 
+  .compact-touch-hud .touch-ui {
+    inset: auto 0 0.4rem 0;
+    gap: 0.45rem;
+    padding: 0 0.4rem;
+  }
+
+  .compact-touch-hud .touch-cluster {
+    gap: 0.3rem;
+  }
+
+  .compact-touch-hud .touch-label {
+    padding: 0;
+    font-size: 0.62rem;
+  }
+
   .touch-stick,
   .touch-lookpad {
     width: min(34vw, 8rem);
@@ -496,13 +661,38 @@ button {
     border-radius: 24px;
   }
 
+  .compact-touch-hud .touch-stick,
+  .compact-touch-hud .touch-lookpad {
+    width: min(26vw, 5.8rem);
+    height: min(26vw, 5.8rem);
+    border-radius: 20px;
+  }
+
+  .compact-touch-hud .touch-stick-thumb {
+    border-radius: 18px;
+  }
+
   .touch-lookpad {
     font-size: 0.8rem;
+  }
+
+  .compact-touch-hud .touch-lookpad {
+    font-size: 0.66rem;
   }
 
   .touch-actions,
   .touch-hotbar-cycle {
     gap: 0.35rem;
+  }
+
+  .compact-touch-hud .touch-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: min(46vw, 10rem);
+  }
+
+  .compact-touch-hud .touch-hotbar-cycle {
+    justify-content: end;
   }
 
   .touch-button,
@@ -513,9 +703,41 @@ button {
     font-size: 0.88rem;
   }
 
+  .compact-touch-hud .touch-button,
+  .compact-touch-hud .touch-cycle,
+  .compact-touch-hud .reset-button {
+    min-height: 2.1rem;
+    padding: 0.42rem 0.55rem;
+    font-size: 0.74rem;
+  }
+
   .panel-actions {
     display: grid;
     gap: 0.35rem;
+  }
+
+  .compact-touch-hud .panel-actions {
+    position: absolute;
+    top: 0.1rem;
+    right: 0;
+    width: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    justify-items: end;
+    z-index: 4;
+  }
+
+  .compact-touch-hud .panel-actions .note {
+    display: none;
+  }
+
+  .compact-touch-hud .reset-button {
+    border-radius: 999px;
+    background: rgba(9, 17, 24, 0.72);
+    box-shadow: var(--panel-shadow);
   }
 }
 

@@ -34,6 +34,10 @@ import {
   withLook,
 } from '../gameplay/player.ts';
 import {
+  movementInputFromTouchVector,
+  normalizeStickVector,
+} from '../gameplay/touchControls.ts';
+import {
   DEFAULT_WORLD_CONFIG,
   VoxelWorld,
   parseWorldPersistence,
@@ -56,6 +60,18 @@ export interface PlayableScene {
   readonly setSelectedBlock: (type: HotbarBlockType) => void;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
+}
+
+export interface TouchUiControls {
+  readonly root: HTMLElement;
+  readonly moveStick: HTMLElement;
+  readonly moveThumb: HTMLElement;
+  readonly lookPad: HTMLElement;
+  readonly jumpButton: HTMLButtonElement;
+  readonly breakButton: HTMLButtonElement;
+  readonly placeButton: HTMLButtonElement;
+  readonly hotbarPrevButton: HTMLButtonElement;
+  readonly hotbarNextButton: HTMLButtonElement;
 }
 
 interface CellTarget {
@@ -91,6 +107,7 @@ function selectPlaceableBlock(
 export function createPlayableScene(
   container: HTMLElement,
   onStatusChange: (status: SandboxStatus) => void,
+  touchControls?: TouchUiControls,
 ): PlayableScene {
   const canvas = document.createElement('canvas');
   canvas.setAttribute('aria-label', 'Minecraft clone sandbox viewport');
@@ -231,7 +248,7 @@ export function createPlayableScene(
     const prompt = locked
       ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch blocks, Esc unlock`
       : touchDevice
-        ? 'Desktop controls use pointer lock. Mobile is view-only for this slice.'
+        ? 'Use the left stick to move, drag the look pad to aim, tap Jump to hop, and use Mine or Place on the targeted block.'
         : 'Click the viewport to capture the mouse and enter the world.';
     const target = currentTarget
       ? `Break ${currentTarget.type} @ ${currentTarget.x}, ${currentTarget.y}, ${currentTarget.z}${
@@ -312,7 +329,7 @@ export function createPlayableScene(
   };
 
   const tryInteract = (button: number) => {
-    if (!locked || !currentTarget) {
+    if ((!locked && !touchDevice) || !currentTarget) {
       return;
     }
 
@@ -337,6 +354,16 @@ export function createPlayableScene(
     if (!touchDevice && document.pointerLockElement !== canvas) {
       canvas.requestPointerLock();
     }
+  };
+
+  const applyTouchLook = (deltaX: number, deltaY: number) => {
+    const lookSensitivity = 0.0074;
+    player = withLook(
+      player,
+      player.yaw - deltaX * lookSensitivity,
+      player.pitch - deltaY * lookSensitivity,
+    );
+    updateStatus();
   };
 
   const onPointerLockChange = () => {
@@ -437,6 +464,150 @@ export function createPlayableScene(
     updateTargeting();
   };
 
+  const movePointerState = {
+    id: -1,
+    originX: 0,
+    originY: 0,
+  };
+  const lookPointerState = {
+    id: -1,
+    lastX: 0,
+    lastY: 0,
+  };
+
+  const setMovementFromVector = (x: number, y: number) => {
+    const movement = movementInputFromTouchVector({ x, y });
+    input.forward = movement.forward;
+    input.backward = movement.backward;
+    input.left = movement.left;
+    input.right = movement.right;
+  };
+
+  const resetTouchMovement = () => {
+    movePointerState.id = -1;
+    setMovementFromVector(0, 0);
+
+    if (touchControls) {
+      touchControls.moveThumb.style.transform = 'translate(-50%, -50%)';
+    }
+  };
+
+  const onMoveStickPointerDown = (event: PointerEvent) => {
+    if (!touchControls || event.pointerType === 'mouse' || movePointerState.id !== -1) {
+      return;
+    }
+
+    event.preventDefault();
+    movePointerState.id = event.pointerId;
+    movePointerState.originX = event.clientX;
+    movePointerState.originY = event.clientY;
+    touchControls.moveStick.setPointerCapture(event.pointerId);
+  };
+
+  const onMoveStickPointerMove = (event: PointerEvent) => {
+    if (!touchControls || event.pointerId !== movePointerState.id) {
+      return;
+    }
+
+    event.preventDefault();
+    const radius = touchControls.moveStick.clientWidth * 0.32;
+    const vector = normalizeStickVector(
+      { x: movePointerState.originX, y: movePointerState.originY },
+      { x: event.clientX, y: event.clientY },
+      radius,
+    );
+
+    setMovementFromVector(vector.x, vector.y);
+    touchControls.moveThumb.style.transform = `translate(calc(-50% + ${vector.x * radius}px), calc(-50% + ${vector.y * radius}px))`;
+  };
+
+  const onMoveStickPointerEnd = (event: PointerEvent) => {
+    if (!touchControls || event.pointerId !== movePointerState.id) {
+      return;
+    }
+
+    event.preventDefault();
+    touchControls.moveStick.releasePointerCapture(event.pointerId);
+    resetTouchMovement();
+  };
+
+  const onLookPadPointerDown = (event: PointerEvent) => {
+    if (!touchControls || event.pointerType === 'mouse' || lookPointerState.id !== -1) {
+      return;
+    }
+
+    event.preventDefault();
+    lookPointerState.id = event.pointerId;
+    lookPointerState.lastX = event.clientX;
+    lookPointerState.lastY = event.clientY;
+    touchControls.lookPad.setPointerCapture(event.pointerId);
+  };
+
+  const onLookPadPointerMove = (event: PointerEvent) => {
+    if (!touchControls || event.pointerId !== lookPointerState.id) {
+      return;
+    }
+
+    event.preventDefault();
+    applyTouchLook(
+      event.clientX - lookPointerState.lastX,
+      event.clientY - lookPointerState.lastY,
+    );
+    lookPointerState.lastX = event.clientX;
+    lookPointerState.lastY = event.clientY;
+  };
+
+  const resetLookPointer = (event: PointerEvent) => {
+    if (!touchControls || event.pointerId !== lookPointerState.id) {
+      return;
+    }
+
+    event.preventDefault();
+    touchControls.lookPad.releasePointerCapture(event.pointerId);
+    lookPointerState.id = -1;
+  };
+
+  const onJumpPointerDown = (event: PointerEvent) => {
+    if (event.pointerType === 'mouse') {
+      return;
+    }
+
+    event.preventDefault();
+    input.jump = true;
+  };
+
+  const onJumpPointerUp = (event: PointerEvent) => {
+    if (event.pointerType === 'mouse') {
+      return;
+    }
+
+    event.preventDefault();
+    input.jump = false;
+  };
+
+  const onTouchActionClick = (button: 0 | 2) => (event: PointerEvent) => {
+    if (event.pointerType === 'mouse') {
+      return;
+    }
+
+    event.preventDefault();
+    tryInteract(button);
+  };
+
+  const onHotbarCycleClick = (offset: number) => (event: PointerEvent) => {
+    if (event.pointerType === 'mouse') {
+      return;
+    }
+
+    event.preventDefault();
+    selectedBlock = selectPlaceableBlock(selectedBlock, offset);
+    updateTargeting();
+  };
+  const onBreakPointerDown = onTouchActionClick(0);
+  const onPlacePointerDown = onTouchActionClick(2);
+  const onHotbarPrevPointerDown = onHotbarCycleClick(-1);
+  const onHotbarNextPointerDown = onHotbarCycleClick(1);
+
   const resetWorld = () => {
     world.reset();
     window.localStorage.removeItem(world.storageKey);
@@ -459,6 +630,24 @@ export function createPlayableScene(
   canvas.addEventListener('mousedown', onMouseDown);
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  if (touchControls) {
+    touchControls.moveStick.addEventListener('pointerdown', onMoveStickPointerDown);
+    touchControls.moveStick.addEventListener('pointermove', onMoveStickPointerMove);
+    touchControls.moveStick.addEventListener('pointerup', onMoveStickPointerEnd);
+    touchControls.moveStick.addEventListener('pointercancel', onMoveStickPointerEnd);
+    touchControls.lookPad.addEventListener('pointerdown', onLookPadPointerDown);
+    touchControls.lookPad.addEventListener('pointermove', onLookPadPointerMove);
+    touchControls.lookPad.addEventListener('pointerup', resetLookPointer);
+    touchControls.lookPad.addEventListener('pointercancel', resetLookPointer);
+    touchControls.jumpButton.addEventListener('pointerdown', onJumpPointerDown);
+    touchControls.jumpButton.addEventListener('pointerup', onJumpPointerUp);
+    touchControls.jumpButton.addEventListener('pointercancel', onJumpPointerUp);
+    touchControls.breakButton.addEventListener('pointerdown', onBreakPointerDown);
+    touchControls.placeButton.addEventListener('pointerdown', onPlacePointerDown);
+    touchControls.hotbarPrevButton.addEventListener('pointerdown', onHotbarPrevPointerDown);
+    touchControls.hotbarNextButton.addEventListener('pointerdown', onHotbarNextPointerDown);
+  }
 
   let frameId = 0;
   let previousTime = performance.now();
@@ -506,6 +695,23 @@ export function createPlayableScene(
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       canvas.removeEventListener('wheel', onWheel);
+      if (touchControls) {
+        touchControls.moveStick.removeEventListener('pointerdown', onMoveStickPointerDown);
+        touchControls.moveStick.removeEventListener('pointermove', onMoveStickPointerMove);
+        touchControls.moveStick.removeEventListener('pointerup', onMoveStickPointerEnd);
+        touchControls.moveStick.removeEventListener('pointercancel', onMoveStickPointerEnd);
+        touchControls.lookPad.removeEventListener('pointerdown', onLookPadPointerDown);
+        touchControls.lookPad.removeEventListener('pointermove', onLookPadPointerMove);
+        touchControls.lookPad.removeEventListener('pointerup', resetLookPointer);
+        touchControls.lookPad.removeEventListener('pointercancel', resetLookPointer);
+        touchControls.jumpButton.removeEventListener('pointerdown', onJumpPointerDown);
+        touchControls.jumpButton.removeEventListener('pointerup', onJumpPointerUp);
+        touchControls.jumpButton.removeEventListener('pointercancel', onJumpPointerUp);
+        touchControls.breakButton.removeEventListener('pointerdown', onBreakPointerDown);
+        touchControls.placeButton.removeEventListener('pointerdown', onPlacePointerDown);
+        touchControls.hotbarPrevButton.removeEventListener('pointerdown', onHotbarPrevPointerDown);
+        touchControls.hotbarNextButton.removeEventListener('pointerdown', onHotbarNextPointerDown);
+      }
       renderer.dispose();
       blockGeometry.dispose();
       highlightGeometry.dispose();

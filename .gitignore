@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.vite/
+reports/out/
+
+# Temporary local scaffolding
+tmp/

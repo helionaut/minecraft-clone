@@ -1,0 +1,256 @@
+:root {
+  color: #f3efe2;
+  background:
+    radial-gradient(circle at top, rgba(240, 196, 25, 0.16), transparent 24rem),
+    linear-gradient(180deg, #17313f 0%, #0f1d28 45%, #0a131b 100%);
+  font-family: 'Trebuchet MS', 'Avenir Next', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --panel: rgba(8, 12, 17, 0.68);
+  --panel-border: rgba(243, 239, 226, 0.15);
+  --accent: #e6b84a;
+  --accent-soft: rgba(230, 184, 74, 0.18);
+  --muted: #b7c0c8;
+  --shadow: 0 22px 40px rgba(0, 0, 0, 0.28);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.experience {
+  width: min(1120px, 100%);
+  min-height: min(90vh, 860px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 28px;
+  background: rgba(4, 7, 10, 0.28);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.viewport {
+  position: relative;
+  min-height: 560px;
+  background: linear-gradient(180deg, rgba(64, 130, 170, 0.2), rgba(12, 18, 24, 0.2));
+}
+
+.viewport canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crosshair {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  opacity: 0.88;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(248, 244, 234, 0.9);
+  border-radius: 999px;
+}
+
+.crosshair::before {
+  top: 13px;
+  left: 0;
+  width: 28px;
+  height: 2px;
+}
+
+.crosshair::after {
+  top: 0;
+  left: 13px;
+  width: 2px;
+  height: 28px;
+}
+
+.status-chip,
+.status-note {
+  position: absolute;
+  left: 1rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(243, 239, 226, 0.12);
+  background: rgba(7, 10, 15, 0.62);
+  color: var(--muted);
+  backdrop-filter: blur(8px);
+}
+
+.status-chip {
+  top: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+
+.status-note {
+  bottom: 1rem;
+  max-width: min(540px, calc(100% - 2rem));
+  border-radius: 18px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background:
+    linear-gradient(180deg, rgba(12, 17, 23, 0.88), rgba(5, 8, 11, 0.96)),
+    linear-gradient(120deg, rgba(230, 184, 74, 0.08), transparent 35%);
+}
+
+.eyebrow {
+  margin: 0 0 0.8rem;
+  color: var(--accent);
+  font-size: 0.82rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(2.4rem, 4vw, 3.6rem);
+  line-height: 0.92;
+}
+
+.lede,
+.stack-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.panel {
+  padding: 1rem;
+  border: 1px solid rgba(243, 239, 226, 0.12);
+  border-radius: 20px;
+  background: var(--panel);
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.checklist,
+.stack {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist li,
+.stack li {
+  margin: 0;
+}
+
+.checklist li + li,
+.stack li + li {
+  margin-top: 0.75rem;
+}
+
+.checklist strong,
+.stack strong {
+  display: block;
+  color: #fff7df;
+  margin-bottom: 0.2rem;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.pill {
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: #f9edc2;
+  border: 1px solid rgba(230, 184, 74, 0.25);
+  font-size: 0.9rem;
+}
+
+.code {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff7df;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 920px) {
+  .experience {
+    grid-template-columns: 1fr;
+  }
+
+  .viewport {
+    min-height: 58vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 0.75rem;
+  }
+
+  .experience {
+    border-radius: 20px;
+  }
+
+  .sidebar,
+  .panel {
+    padding: 1rem;
+  }
+
+  .status-note {
+    font-size: 0.84rem;
+  }
+}

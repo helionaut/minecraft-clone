@@ -23,7 +23,11 @@ function createItemIcon(type: InventoryItemType, count?: number): string {
   const icon = getInventoryIcon(type);
 
   return `
-    <span class="item-icon item-icon-${type}" aria-hidden="true"></span>
+    <span
+      class="item-icon item-icon-${type}"
+      style="--item-icon-image: url('${icon.assetPath}');"
+      aria-hidden="true"
+    ></span>
     <span class="sr-only">${icon.label}</span>
     ${typeof count === 'number' ? `<span class="item-count">${count}</span>` : ''}
   `;

@@ -646,6 +646,24 @@ button {
   background: var(--inventory-slot-fill);
 }
 
+.inventory-slot-button {
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
+.inventory-slot-button.selected {
+  outline: 2px solid rgba(91, 166, 255, 0.96);
+  outline-offset: -2px;
+}
+
+.inventory-slot-button.dragging {
+  opacity: 0.45;
+}
+
 .inventory-slot .item-icon {
   width: 1.42rem;
   height: 1.42rem;
@@ -675,6 +693,7 @@ button {
   opacity: 0.72;
 }
 
+.inventory-slot-button.active,
 .inventory-hotbar-slot.active {
   outline: 2px solid rgba(246, 211, 109, 0.95);
   outline-offset: -2px;
@@ -830,12 +849,30 @@ button {
 }
 
 @media (max-width: 900px) {
+  .menu-panel {
+    grid-template-rows: auto auto;
+    overflow: auto;
+  }
+
   .menu-body {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .inventory-window,
+  .inventory-sidebar {
+    min-height: max-content;
+    align-content: start;
   }
 
   .inventory-sidebar {
     grid-template-rows: auto auto;
+  }
+
+  .recipe-book {
+    max-height: 18rem;
   }
 }
 

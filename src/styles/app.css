@@ -39,6 +39,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -127,11 +131,19 @@ button {
   top: calc(0.85rem + var(--viewport-safe-top));
   left: calc(0.85rem + var(--viewport-safe-left));
   right: calc(0.85rem + var(--viewport-safe-right));
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 0.75rem;
   z-index: 5;
+}
+
+.hud-topbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .hud-status-pill,
@@ -149,8 +161,9 @@ button {
 .hud-status-pill {
   display: grid;
   gap: 0.3rem;
-  min-width: min(100%, 31rem);
-  max-width: 34rem;
+  min-width: 0;
+  width: 100%;
+  max-width: min(100%, 34rem);
   padding: 0.72rem 0.9rem;
   border-radius: 18px;
 }
@@ -195,6 +208,19 @@ button {
   background:
     linear-gradient(180deg, rgba(246, 211, 109, 0.28), rgba(246, 211, 109, 0.1)),
     var(--hud-panel);
+}
+
+.hud-help-toggle,
+.hud-help-dismiss {
+  border: 1px solid var(--hud-border);
+  border-radius: 14px;
+  color: var(--hud-text);
+  padding: 0.58rem 0.82rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    var(--hud-panel);
+  box-shadow: var(--hud-shadow);
+  backdrop-filter: blur(10px);
 }
 
 .crosshair {
@@ -888,6 +914,10 @@ button {
     border-radius: 14px;
   }
 
+  .hud-topbar-actions {
+    gap: 0.38rem;
+  }
+
   .hud-prompt {
     font-size: 0.78rem;
   }
@@ -968,6 +998,8 @@ button {
 
   .touch-button,
   .touch-cycle,
+  .hud-help-toggle,
+  .hud-help-dismiss,
   .menu-toggle,
   .menu-close,
   .reset-button {
@@ -1061,7 +1093,6 @@ button {
   }
 
   .hud-status-pill {
-    max-width: 22rem;
     padding: 0.46rem 0.6rem;
   }
 
@@ -1123,6 +1154,14 @@ button {
 }
 
 @media (max-width: 520px) {
+  .hud-topbar {
+    gap: 0.45rem;
+  }
+
+  .hud-topbar-actions {
+    gap: 0.28rem;
+  }
+
   .menu-panel {
     inset:
       calc(3.4rem + var(--viewport-safe-top))
@@ -1157,6 +1196,8 @@ button {
   }
 
   .menu-close,
+  .hud-help-toggle,
+  .hud-help-dismiss,
   .reset-button {
     min-height: 1.9rem;
     padding: 0.24rem 0.46rem;

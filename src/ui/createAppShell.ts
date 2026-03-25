@@ -14,6 +14,15 @@ import {
 import { getInventoryIcon } from './inventoryIcons.ts';
 
 const BLOCK_ORDER: readonly PlaceableBlockType[] = PLACEABLE_BLOCK_ORDER;
+const STORAGE_SLOT_COUNT = 27;
+const HOTBAR_SLOT_COUNT = 9;
+const TOTAL_INVENTORY_SLOT_COUNT = STORAGE_SLOT_COUNT + HOTBAR_SLOT_COUNT;
+const INVENTORY_LAYOUT_STORAGE_KEY = 'minecraft-clone:inventory-layout:v1';
+
+interface InventoryLayoutSlot {
+  readonly type: InventoryItemType;
+  readonly count: number;
+}
 
 function inventoryItemTypeFrom(value: string): InventoryItemType {
   return value as InventoryItemType;
@@ -33,42 +42,190 @@ function createItemIcon(type: InventoryItemType, count?: number): string {
   `;
 }
 
-function renderStorageSlots(entries: readonly InventoryStatusEntry[]): string {
-  return Array.from({ length: 27 }, (_unused, index) => {
-    const entry = entries[index];
+function isHotbarSelectableItem(type: InventoryItemType): type is HotbarBlockType {
+  return BLOCK_ORDER.includes(type as HotbarBlockType);
+}
 
-    if (!entry) {
-      return '<div class="inventory-slot inventory-slot-empty" aria-hidden="true"></div>';
+function createEmptyInventoryLayout(): Array<InventoryLayoutSlot | null> {
+  return Array.from({ length: TOTAL_INVENTORY_SLOT_COUNT }, () => null);
+}
+
+function loadInventoryLayout(): Array<InventoryLayoutSlot | null> {
+  try {
+    const rawValue = window.localStorage.getItem(INVENTORY_LAYOUT_STORAGE_KEY);
+
+    if (!rawValue) {
+      return createEmptyInventoryLayout();
     }
 
-    const type = inventoryItemTypeFrom(entry.type);
-    const icon = getInventoryIcon(type);
+    const parsed = JSON.parse(rawValue);
 
+    if (!Array.isArray(parsed)) {
+      return createEmptyInventoryLayout();
+    }
+
+    return Array.from({ length: TOTAL_INVENTORY_SLOT_COUNT }, (_unused, index) => {
+      const slot = parsed[index];
+
+      if (
+        !slot ||
+        typeof slot !== 'object' ||
+        typeof slot.type !== 'string' ||
+        typeof slot.count !== 'number' ||
+        slot.count <= 0
+      ) {
+        return null;
+      }
+
+      return {
+        type: inventoryItemTypeFrom(slot.type),
+        count: slot.count,
+      };
+    });
+  } catch {
+    return createEmptyInventoryLayout();
+  }
+}
+
+function persistInventoryLayout(slots: readonly (InventoryLayoutSlot | null)[]): void {
+  if (slots.every((slot) => slot === null)) {
+    window.localStorage.removeItem(INVENTORY_LAYOUT_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(INVENTORY_LAYOUT_STORAGE_KEY, JSON.stringify(slots));
+}
+
+function findNextOpenInventorySlot(slots: readonly (InventoryLayoutSlot | null)[]): number {
+  for (let index = 0; index < STORAGE_SLOT_COUNT; index += 1) {
+    if (!slots[index]) {
+      return index;
+    }
+  }
+
+  for (let index = STORAGE_SLOT_COUNT; index < TOTAL_INVENTORY_SLOT_COUNT; index += 1) {
+    if (!slots[index]) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function reconcileInventoryLayout(
+  currentSlots: readonly (InventoryLayoutSlot | null)[],
+  entries: readonly InventoryStatusEntry[],
+): Array<InventoryLayoutSlot | null> {
+  const nextSlots = createEmptyInventoryLayout();
+  const countsByType = new Map(entries.map((entry) => [entry.type, entry.count]));
+  const assignedTypes = new Set<string>();
+
+  for (let index = 0; index < TOTAL_INVENTORY_SLOT_COUNT; index += 1) {
+    const slot = currentSlots[index];
+
+    if (!slot || assignedTypes.has(slot.type)) {
+      continue;
+    }
+
+    const count = countsByType.get(slot.type);
+
+    if (!count || count <= 0) {
+      continue;
+    }
+
+    nextSlots[index] = {
+      type: inventoryItemTypeFrom(slot.type),
+      count,
+    };
+    assignedTypes.add(slot.type);
+  }
+
+  for (const entry of entries) {
+    if (assignedTypes.has(entry.type)) {
+      continue;
+    }
+
+    const nextIndex = findNextOpenInventorySlot(nextSlots);
+
+    if (nextIndex === -1) {
+      break;
+    }
+
+    nextSlots[nextIndex] = {
+      type: inventoryItemTypeFrom(entry.type),
+      count: entry.count,
+    };
+    assignedTypes.add(entry.type);
+  }
+
+  return nextSlots;
+}
+
+function renderInventorySlot(
+  slot: InventoryLayoutSlot | null,
+  slotIndex: number,
+  options: {
+    readonly selected: boolean;
+    readonly active: boolean;
+    readonly dragging: boolean;
+  },
+): string {
+  if (!slot) {
     return `
-      <div class="inventory-slot" data-item-type="${entry.type}" aria-label="${icon.label} x${entry.count}">
-        ${createItemIcon(type, entry.count)}
-      </div>
+      <button
+        class="inventory-slot inventory-slot-button inventory-slot-empty"
+        type="button"
+        data-slot-index="${slotIndex}"
+        aria-label="Empty inventory slot"
+      ></button>
     `;
+  }
+
+  const icon = getInventoryIcon(slot.type);
+
+  return `
+    <button
+      class="inventory-slot inventory-slot-button${options.selected ? ' selected' : ''}${options.active ? ' active' : ''}${options.dragging ? ' dragging' : ''}"
+      type="button"
+      data-slot-index="${slotIndex}"
+      data-item-type="${slot.type}"
+      aria-label="${icon.label} x${slot.count}"
+      draggable="true"
+    >
+      ${createItemIcon(slot.type, slot.count)}
+    </button>
+  `;
+}
+
+function renderStorageSlots(
+  slots: readonly (InventoryLayoutSlot | null)[],
+  selectedSlotIndex: number | null,
+  draggedSlotIndex: number | null,
+): string {
+  return slots.slice(0, STORAGE_SLOT_COUNT).map((slot, index) => {
+    return renderInventorySlot(slot, index, {
+      selected: selectedSlotIndex === index,
+      active: false,
+      dragging: draggedSlotIndex === index,
+    });
   }).join('');
 }
 
 function renderMenuHotbar(
+  slots: readonly (InventoryLayoutSlot | null)[],
+  selectedSlotIndex: number | null,
   selectedBlock: PlaceableBlockType,
-  placeableCounts: SandboxStatus['placeableCounts'],
+  draggedSlotIndex: number | null,
 ): string {
-  return BLOCK_ORDER.map((type) => {
-    const icon = getInventoryIcon(type);
-    const count = placeableCounts[type] ?? 0;
+  return slots.slice(STORAGE_SLOT_COUNT).map((slot, offset) => {
+    const slotIndex = STORAGE_SLOT_COUNT + offset;
+    const active = Boolean(slot && isHotbarSelectableItem(slot.type) && slot.type === selectedBlock);
 
-    return `
-      <div
-        class="inventory-slot inventory-hotbar-slot${selectedBlock === type ? ' active' : ''}"
-        data-hotbar-slot="${type}"
-        aria-label="${icon.label} hotbar slot"
-      >
-        ${createItemIcon(type, count)}
-      </div>
-    `;
+    return renderInventorySlot(slot, slotIndex, {
+      selected: selectedSlotIndex === slotIndex,
+      active,
+      dragging: draggedSlotIndex === slotIndex,
+    });
   }).join('');
 }
 
@@ -328,6 +485,10 @@ export function createAppShell(root: HTMLDivElement): void {
   const safeMobileCoords = mobileCoords;
   const safeTouchUi = touchUi;
   const safeLookSurface = lookSurface;
+  let inventoryLayout = loadInventoryLayout();
+  let selectedInventorySlotIndex: number | null = null;
+  let draggedInventorySlotIndex: number | null = null;
+  let lastStatus: SandboxStatus | null = null;
 
   const setMenuOpen = (open: boolean) => {
     menuModal.hidden = !open;
@@ -357,9 +518,167 @@ export function createAppShell(root: HTMLDivElement): void {
     hotbarNextButton,
   };
 
-  const sandbox = createPlayableScene(viewport, applyStatus, touchControls);
+  const syncSelectedInventorySlot = (status: SandboxStatus) => {
+    if (selectedInventorySlotIndex !== null && inventoryLayout[selectedInventorySlotIndex]) {
+      return;
+    }
+
+    const selectedHotbarIndex = inventoryLayout.findIndex((slot, index) => {
+      return index >= STORAGE_SLOT_COUNT && Boolean(
+        slot &&
+        isHotbarSelectableItem(slot.type) &&
+        slot.type === status.selectedBlock,
+      );
+    });
+
+    selectedInventorySlotIndex = selectedHotbarIndex >= 0 ? selectedHotbarIndex : null;
+  };
+
+  const renderInventoryPanels = (status: SandboxStatus) => {
+    safeInventory.innerHTML = renderStorageSlots(
+      inventoryLayout,
+      selectedInventorySlotIndex,
+      draggedInventorySlotIndex,
+    );
+    safeMenuHotbar.innerHTML = renderMenuHotbar(
+      inventoryLayout,
+      selectedInventorySlotIndex,
+      status.selectedBlock,
+      draggedInventorySlotIndex,
+    );
+  };
+
+  const selectInventorySlot = (slotIndex: number | null) => {
+    selectedInventorySlotIndex = slotIndex;
+
+    if (lastStatus) {
+      renderInventoryPanels(lastStatus);
+      bindInventorySlotInteractions();
+    }
+  };
+
+  const syncSelectedBlockFromSlot = (slotIndex: number | null) => {
+    if (slotIndex === null || slotIndex < STORAGE_SLOT_COUNT) {
+      return;
+    }
+
+    const slot = inventoryLayout[slotIndex];
+
+    if (slot && isHotbarSelectableItem(slot.type)) {
+      sandbox.setSelectedBlock(slot.type);
+    }
+  };
+
+  const moveInventorySlot = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || !inventoryLayout[fromIndex]) {
+      return;
+    }
+
+    const nextLayout = [...inventoryLayout];
+    const sourceSlot = nextLayout[fromIndex];
+    nextLayout[fromIndex] = nextLayout[toIndex];
+    nextLayout[toIndex] = sourceSlot;
+    inventoryLayout = nextLayout;
+    selectedInventorySlotIndex = toIndex;
+    persistInventoryLayout(inventoryLayout);
+    syncSelectedBlockFromSlot(toIndex);
+
+    if (lastStatus) {
+      renderInventoryPanels(lastStatus);
+      bindInventorySlotInteractions();
+    }
+  };
+
+  function bindInventorySlotInteractions(): void {
+    const slotButtons = [
+      ...safeInventory.querySelectorAll<HTMLButtonElement>('[data-slot-index]'),
+      ...safeMenuHotbar.querySelectorAll<HTMLButtonElement>('[data-slot-index]'),
+    ];
+
+    for (const button of slotButtons) {
+      const slotIndex = Number(button.dataset.slotIndex);
+
+      button.addEventListener('click', () => {
+        const hasItem = Boolean(inventoryLayout[slotIndex]);
+
+        if (selectedInventorySlotIndex === null) {
+          if (hasItem) {
+            selectInventorySlot(slotIndex);
+            syncSelectedBlockFromSlot(slotIndex);
+          }
+
+          return;
+        }
+
+        if (selectedInventorySlotIndex === slotIndex) {
+          selectInventorySlot(null);
+          return;
+        }
+
+        moveInventorySlot(selectedInventorySlotIndex, slotIndex);
+      });
+
+      button.addEventListener('dragstart', (event) => {
+        if (!inventoryLayout[slotIndex]) {
+          event.preventDefault();
+          return;
+        }
+
+        draggedInventorySlotIndex = slotIndex;
+        event.dataTransfer?.setData('text/plain', String(slotIndex));
+        event.dataTransfer?.setDragImage(button, button.clientWidth / 2, button.clientHeight / 2);
+        event.dataTransfer!.effectAllowed = 'move';
+        renderInventoryPanels(lastStatus ?? {
+          locked: false,
+          selectedBlock: 'grass',
+          coords: '',
+          target: '',
+          prompt: '',
+          touchDevice: false,
+          selectedTool: '',
+          stations: '',
+          renderer: '',
+          inventory: [],
+          recipes: [],
+          placeableCounts: {},
+        });
+        bindInventorySlotInteractions();
+      });
+
+      button.addEventListener('dragover', (event) => {
+        if (draggedInventorySlotIndex === null) {
+          return;
+        }
+
+        event.preventDefault();
+        event.dataTransfer!.dropEffect = 'move';
+      });
+
+      button.addEventListener('drop', (event) => {
+        event.preventDefault();
+
+        if (draggedInventorySlotIndex === null) {
+          return;
+        }
+
+        const sourceIndex = Number(event.dataTransfer?.getData('text/plain') ?? draggedInventorySlotIndex);
+        draggedInventorySlotIndex = null;
+        moveInventorySlot(sourceIndex, slotIndex);
+      });
+
+      button.addEventListener('dragend', () => {
+        draggedInventorySlotIndex = null;
+
+        if (lastStatus) {
+          renderInventoryPanels(lastStatus);
+          bindInventorySlotInteractions();
+        }
+      });
+    }
+  }
 
   function applyStatus(status: SandboxStatus): void {
+    lastStatus = status;
     safePrompt.textContent = status.prompt;
     safeCoords.textContent = status.coords;
     safeTarget.textContent = status.target;
@@ -376,9 +695,12 @@ export function createAppShell(root: HTMLDivElement): void {
       ? 'Mobile keeps the world visible for movement and look, then opens inventory as an overlay.'
       : 'Desktop keeps gameplay clean and moves inventory management into the overlay window.';
 
-    safeInventory.innerHTML = renderStorageSlots(status.inventory);
-    safeMenuHotbar.innerHTML = renderMenuHotbar(status.selectedBlock, status.placeableCounts);
+    inventoryLayout = reconcileInventoryLayout(inventoryLayout, status.inventory);
+    persistInventoryLayout(inventoryLayout);
+    syncSelectedInventorySlot(status);
+    renderInventoryPanels(status);
     safeCrafting.innerHTML = renderRecipes(status.recipes);
+    bindInventorySlotInteractions();
 
     for (const button of safeCrafting.querySelectorAll<HTMLButtonElement>('[data-recipe-id]')) {
       button.addEventListener('click', () => {
@@ -400,6 +722,8 @@ export function createAppShell(root: HTMLDivElement): void {
       }
     }
   }
+
+  const sandbox = createPlayableScene(viewport, applyStatus, touchControls);
 
   for (const button of paletteButtons) {
     button.addEventListener('click', () => {

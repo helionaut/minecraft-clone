@@ -26,6 +26,7 @@ vi.mock('../../src/rendering/scene.ts', () => ({
 describe('createAppShell', () => {
   beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div>';
+    window.localStorage.clear();
     statusListener = null;
     sandboxStub.setSelectedBlock.mockReset();
     sandboxStub.craftRecipe.mockReset();
@@ -72,6 +73,7 @@ describe('createAppShell', () => {
     expect(root.querySelector('.inventory-storage-grid')).not.toBeNull();
     expect(root.querySelector('.inventory-hotbar-grid')).not.toBeNull();
     expect(root.querySelector('.recipe-book')).not.toBeNull();
+    expect(root.querySelector<HTMLElement>('[data-slot-index="0"] .item-icon')?.getAttribute('style')).toContain('/textures/inventory/oak-log.svg');
     expect(root.querySelector('.menu-modal')?.hasAttribute('hidden')).toBe(true);
     expect(root.querySelector('.touch-ui')?.classList.contains('active')).toBe(true);
     expect(root.querySelector('[data-look-surface]')?.classList.contains('active')).toBe(true);
@@ -85,7 +87,7 @@ describe('createAppShell', () => {
     expect(root.textContent).toContain('crafting table');
     expect(root.textContent).toContain('Oak Log');
     expect(root.textContent).toContain('Renderer: WebGL 2 | software fallback | SwiftShader');
-    expect(root.querySelector('[data-hotbar-slot="grass"]')).not.toBeNull();
+    expect(root.querySelector('[data-slot-index="27"]')).not.toBeNull();
 
     root.querySelector<HTMLButtonElement>('[data-recipe-id="crafting-table"]')?.click();
 
@@ -130,5 +132,75 @@ describe('createAppShell', () => {
     expect(root.textContent).toContain('Best tool: stone-pickaxe');
     expect(root.textContent).toContain('Stations: crafting-table');
     expect(sandboxStub.resetWorld).toHaveBeenCalledTimes(1);
+  });
+
+  it('supports selecting and moving inventory items between storage and hotbar slots', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    createAppShell(root);
+
+    if (!statusListener) {
+      throw new Error('Expected scene status listener.');
+    }
+
+    statusListener({
+      locked: false,
+      selectedBlock: 'grass',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'oak-log', count: 3 },
+        { type: 'cobblestone', count: 8 },
+        { type: 'stone-pickaxe', count: 1 },
+      ],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    const storageOakLogSlot = root.querySelector<HTMLButtonElement>('[data-slot-index="0"]');
+    const emptyHotbarSlot = root.querySelector<HTMLButtonElement>('[data-slot-index="27"]');
+
+    storageOakLogSlot?.click();
+    expect(root.querySelector<HTMLButtonElement>('[data-slot-index="0"]')?.classList.contains('selected')).toBe(true);
+
+    emptyHotbarSlot?.click();
+
+    const movedHotbarSlot = root.querySelector<HTMLButtonElement>('[data-slot-index="27"]');
+    expect(movedHotbarSlot?.dataset.itemType).toBe('oak-log');
+    expect(movedHotbarSlot?.classList.contains('selected')).toBe(true);
+    expect(sandboxStub.setSelectedBlock).toHaveBeenCalledWith('oak-log');
+
+    statusListener({
+      locked: false,
+      selectedBlock: 'oak-log',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'oak-log', count: 5 },
+        { type: 'cobblestone', count: 8 },
+        { type: 'stone-pickaxe', count: 1 },
+      ],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 5, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    const refreshedHotbarSlot = root.querySelector<HTMLButtonElement>('[data-slot-index="27"]');
+    expect(refreshedHotbarSlot?.dataset.itemType).toBe('oak-log');
+    expect(refreshedHotbarSlot?.textContent).toContain('5');
+    expect(refreshedHotbarSlot?.classList.contains('active')).toBe(true);
   });
 });

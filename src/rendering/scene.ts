@@ -429,7 +429,7 @@ export function createPlayableScene(
       selectedTool: selectedTool ? getReadableName(selectedTool) : 'hand',
       stations: nearbyStations.length > 0 ? nearbyStations.map(getReadableName).join(', ') : 'none nearby',
       renderer: rendererDiagnostics.summary,
-      inventory: inventoryEntries.slice(0, 12),
+      inventory: inventoryEntries,
       recipes: RECIPES.map((recipe) => ({
         id: recipe.id,
         label: getReadableName(recipe.id),

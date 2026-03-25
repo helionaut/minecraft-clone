@@ -966,6 +966,40 @@ export class VoxelWorld {
     return sortedBlocksFromMap(blocks, bounds);
   }
 
+  forEachLoadedBlockInBounds(
+    bounds: Bounds3D,
+    visit: (block: Block) => void,
+  ): void {
+    const { minChunkX, maxChunkX, minChunkZ, maxChunkZ } = boundsToChunkRange(bounds, this.config.chunkSize);
+
+    for (let chunkX = minChunkX; chunkX <= maxChunkX; chunkX += 1) {
+      for (let chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ += 1) {
+        const chunk = this.#chunks.get(createChunkKey(chunkX, chunkZ));
+
+        if (!chunk) {
+          continue;
+        }
+
+        for (const [key, type] of chunk.currentBlocks) {
+          const [x, y, z] = splitBlockKey(key);
+
+          if (
+            x < bounds.minX ||
+            x > bounds.maxX ||
+            y < bounds.minY ||
+            y > bounds.maxY ||
+            z < bounds.minZ ||
+            z > bounds.maxZ
+          ) {
+            continue;
+          }
+
+          visit({ x, y, z, type });
+        }
+      }
+    }
+  }
+
   toBlocks(): Block[] {
     const blocks: BlockMap = new Map();
 

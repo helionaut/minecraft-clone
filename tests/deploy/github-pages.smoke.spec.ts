@@ -6,15 +6,14 @@ test('the deployed sandbox shell loads', async ({ page }) => {
   await expect(async () => {
     await page.goto('./', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByRole('button', { name: 'Pack' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Inventory' })).toBeVisible();
     await expect(page.locator('canvas[aria-label="Minecraft clone sandbox viewport"]')).toBeVisible();
     await expect(page.locator('[data-prompt]')).toContainText('Click the viewport');
 
-    await page.getByRole('button', { name: 'Pack' }).click();
+    await page.getByRole('button', { name: 'Inventory' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Backpack' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Crafting' })).toBeVisible();
-    await page.getByRole('button', { name: 'World' }).click();
+    await expect(page.getByRole('heading', { name: 'Inventory' })).toBeVisible();
+    await expect(page.getByText('Recipe Book', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Reset world' })).toBeVisible();
   }).toPass({
     timeout: 90_000,

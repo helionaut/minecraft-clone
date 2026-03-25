@@ -18,6 +18,10 @@ declare global {
     __minecraftCloneQa?: {
       readonly craftRecipe: (recipeId: string) => void;
       readonly setSelectedBlock: (type: HotbarBlockType) => void;
+      readonly mineBlockAt: (x: number, y: number, z: number) => {
+        readonly success: boolean;
+        readonly drop: InventoryItemType | null;
+      };
       readonly placeSelectedBlockOnNearestSurface: () => {
         readonly placed: boolean;
         readonly position: { readonly x: number; readonly y: number; readonly z: number } | null;
@@ -810,6 +814,7 @@ export function createAppShell(root: HTMLDivElement): void {
       setSelectedBlock: (type: HotbarBlockType) => {
         sandbox.setSelectedBlock(type);
       },
+      mineBlockAt: (x: number, y: number, z: number) => sandbox.mineBlockAt(x, y, z),
       placeSelectedBlockOnNearestSurface: () => sandbox.placeSelectedBlockOnNearestSurface(),
       getBlockAt: (x: number, y: number, z: number) => sandbox.getBlockAt(x, y, z),
       getStatus: () => sandbox.getStatusSnapshot(),

@@ -210,11 +210,7 @@ export class Inventory {
       return false;
     }
 
-    if (
-      recipe.station &&
-      !this.hasItem(recipe.station) &&
-      !nearbyStations.includes(recipe.station)
-    ) {
+    if (recipe.station && !nearbyStations.includes(recipe.station)) {
       return false;
     }
 

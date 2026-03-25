@@ -15,9 +15,6 @@ const sandboxStub = {
 };
 
 let statusListener: StatusListener | null = null;
-let viewportWidth = 390;
-let viewportHeight = 844;
-const mediaQueryListeners = new Set<() => void>();
 
 vi.mock('../../src/rendering/scene.ts', () => ({
   createPlayableScene: vi.fn((_container: HTMLElement, onStatusChange: StatusListener) => {
@@ -26,68 +23,17 @@ vi.mock('../../src/rendering/scene.ts', () => ({
   }),
 }));
 
-function installMatchMediaMock(): void {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => {
-      const mediaQuery = {
-        media: query,
-        onchange: null,
-        get matches() {
-          if (query === '(max-width: 700px)') {
-            return viewportWidth <= 700;
-          }
-
-          if (query === '(max-height: 560px)') {
-            return viewportHeight <= 560;
-          }
-
-          return false;
-        },
-        addEventListener: (_event: string, listener: () => void) => {
-          mediaQueryListeners.add(listener);
-        },
-        removeEventListener: (_event: string, listener: () => void) => {
-          mediaQueryListeners.delete(listener);
-        },
-        dispatchEvent: () => true,
-        addListener: (listener: () => void) => {
-          mediaQueryListeners.add(listener);
-        },
-        removeListener: (listener: () => void) => {
-          mediaQueryListeners.delete(listener);
-        },
-      };
-
-      return mediaQuery;
-    },
-  });
-}
-
-function emitViewportChange(width: number, height = viewportHeight): void {
-  viewportWidth = width;
-  viewportHeight = height;
-
-  for (const listener of mediaQueryListeners) {
-    listener();
-  }
-}
-
 describe('createAppShell', () => {
   beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div>';
     statusListener = null;
-    viewportWidth = 390;
-    viewportHeight = 844;
-    mediaQueryListeners.clear();
-    installMatchMediaMock();
     sandboxStub.setSelectedBlock.mockReset();
     sandboxStub.craftRecipe.mockReset();
     sandboxStub.resetWorld.mockReset();
     sandboxStub.dispose.mockReset();
   });
 
-  it('collapses secondary HUD panels into a compact drawer on narrow touch screens', () => {
+  it('keeps gameplay HUD minimal and opens inventory/crafting as a modal menu', () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -104,35 +50,43 @@ describe('createAppShell', () => {
       locked: false,
       selectedBlock: 'grass',
       coords: 'X 4.0 Y 10.0 Z -2.0',
-      target: 'Aim at a nearby block to mine or place.',
-      prompt: 'Use the left stick to move, drag the look pad to aim, tap Jump to hop, and use Mine or Place on the targeted block.',
+      target: 'Target grass @ 4, 8, -2 | Place grass @ 4, 9, -2',
+      prompt: 'Use the left thumbstick to move, drag anywhere to aim, mine blocks for drops, and craft tools or stations from the drawer.',
       touchDevice: true,
       selectedTool: 'hand',
       stations: 'none nearby',
-      inventory: [],
-      recipes: [],
-      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+      inventory: [{ type: 'oak-log', count: 3 }, { type: 'cobblestone', count: 8 }],
+      recipes: [{
+        id: 'crafting-table',
+        label: 'crafting table',
+        station: null,
+        available: true,
+        inputs: [{ type: 'oak-planks', count: 4 }],
+        outputs: [{ type: 'crafting-table', count: 1 }],
+      }],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
     });
 
-    const hud = root.querySelector<HTMLElement>('.hud');
-    const drawer = root.querySelector<HTMLDetailsElement>('[data-hud-drawer]');
-    const mobileStatus = root.querySelector<HTMLElement>('[data-mobile-status]');
-    const mobileCoords = root.querySelector<HTMLElement>('[data-mobile-coords]');
-    const lookSurface = root.querySelector<HTMLElement>('[data-look-surface]');
+    expect(root.querySelector('.inventory-grid')).not.toBeNull();
+    expect(root.querySelector('.crafting-grid')).not.toBeNull();
+    expect(root.querySelector('.menu-modal')?.hasAttribute('hidden')).toBe(true);
+    expect(root.querySelector('.touch-ui')?.classList.contains('active')).toBe(true);
+    expect(root.querySelector('[data-look-surface]')?.classList.contains('active')).toBe(true);
 
-    expect(hud?.classList.contains('compact-touch-hud')).toBe(true);
-    expect(drawer?.open).toBe(false);
-    expect(mobileStatus?.textContent).toContain('craft from the drawer');
-    expect(mobileCoords?.textContent).toBe('X 4.0 Y 10.0 Z -2.0');
-    expect(lookSurface?.classList.contains('active')).toBe(true);
+    root.querySelector<HTMLButtonElement>('[data-open-menu]')?.click();
 
-    emitViewportChange(900);
+    expect(root.querySelector('.menu-modal')?.hasAttribute('hidden')).toBe(false);
+    expect(root.classList.contains('menu-open')).toBe(true);
+    expect(root.querySelector('[data-menu-view="crafting"]')?.classList.contains('active')).toBe(true);
+    expect(root.textContent).toContain('crafting table');
+    expect(root.textContent).toContain('oak log');
 
-    expect(hud?.classList.contains('compact-touch-hud')).toBe(false);
-    expect(drawer?.open).toBe(true);
+    root.querySelector<HTMLButtonElement>('[data-recipe-id="crafting-table"]')?.click();
+
+    expect(sandboxStub.craftRecipe).toHaveBeenCalledWith('crafting-table');
   });
 
-  it('switches into the compact HUD in mobile landscape even when width is large', () => {
+  it('updates hotbar selection and keeps reset inside the world tab menu', () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -145,25 +99,29 @@ describe('createAppShell', () => {
       throw new Error('Expected scene status listener.');
     }
 
-    emitViewportChange(932, 430);
     statusListener({
-      locked: false,
-      selectedBlock: 'grass',
+      locked: true,
+      selectedBlock: 'stone',
       coords: 'X 0.0 Y 5.0 Z 0.0',
-      target: 'Aim at a nearby block to mine or place.',
-      prompt: 'Use the left stick to move, drag anywhere to aim, tap Jump to swim upward, and use Mine or Place on the targeted block.',
-      touchDevice: true,
-      selectedTool: 'hand',
-      stations: 'none nearby',
-      inventory: [],
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'stone-pickaxe',
+      stations: 'crafting-table',
+      inventory: [{ type: 'stone-pickaxe', count: 1 }],
       recipes: [],
-      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+      placeableCounts: { grass: 0, dirt: 0, stone: 5, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
     });
 
-    const hud = root.querySelector<HTMLElement>('.hud');
-    const drawer = root.querySelector<HTMLDetailsElement>('[data-hud-drawer]');
+    root.querySelector<HTMLButtonElement>('[data-block-type="stone"]')?.click();
 
-    expect(hud?.classList.contains('compact-touch-hud')).toBe(true);
-    expect(drawer?.open).toBe(false);
+    expect(sandboxStub.setSelectedBlock).toHaveBeenCalledWith('stone');
+
+    root.querySelector<HTMLButtonElement>('[data-open-menu]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-menu-tab="world"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-reset]')?.click();
+
+    expect(root.querySelector('[data-menu-view="world"]')?.classList.contains('active')).toBe(true);
+    expect(sandboxStub.resetWorld).toHaveBeenCalledTimes(1);
   });
 });

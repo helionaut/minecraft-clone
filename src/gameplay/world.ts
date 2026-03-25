@@ -724,15 +724,30 @@ export class VoxelWorld {
     this.#mutations.set(key, current);
   }
 
-  loadChunksAround(x: number, z: number, radius: number): void {
+  loadChunksAround(x: number, z: number, radius: number, maxChunks = Number.POSITIVE_INFINITY): void {
     const centerChunkX = floorDiv(x, this.config.chunkSize);
     const centerChunkZ = floorDiv(z, this.config.chunkSize);
+    const candidates: Array<{ readonly chunkX: number; readonly chunkZ: number; readonly distance: number }> = [];
 
     for (let chunkX = centerChunkX - radius; chunkX <= centerChunkX + radius; chunkX += 1) {
       for (let chunkZ = centerChunkZ - radius; chunkZ <= centerChunkZ + radius; chunkZ += 1) {
-        this.#ensureChunk(chunkX, chunkZ);
+        candidates.push({
+          chunkX,
+          chunkZ,
+          distance: Math.abs(chunkX - centerChunkX) + Math.abs(chunkZ - centerChunkZ),
+        });
       }
     }
+
+    candidates
+      .sort((left, right) =>
+        left.distance - right.distance ||
+        left.chunkX - right.chunkX ||
+        left.chunkZ - right.chunkZ)
+      .slice(0, Math.max(1, Math.floor(maxChunks)))
+      .forEach(({ chunkX, chunkZ }) => {
+        this.#ensureChunk(chunkX, chunkZ);
+      });
   }
 
   pruneLoadedChunks(x: number, z: number, radius: number): void {
@@ -751,6 +766,10 @@ export class VoxelWorld {
 
   getLoadedChunkKeys(): string[] {
     return [...this.#chunks.keys()].sort();
+  }
+
+  getLoadedChunkCount(): number {
+    return this.#chunks.size;
   }
 
   getChunk(chunkX: number, chunkZ: number): GeneratedChunk {
@@ -780,6 +799,14 @@ export class VoxelWorld {
     }
 
     return this.#getChunkForBlock(x, z).currentBlocks.get(createBlockKey(x, y, z)) ?? null;
+  }
+
+  getLoadedBlock(x: number, y: number, z: number): SolidBlockType | null {
+    if (!blockWithinBounds(y, this.config)) {
+      return null;
+    }
+
+    return this.#peekBlock(x, y, z);
   }
 
   isSolidBlock(x: number, y: number, z: number): boolean {

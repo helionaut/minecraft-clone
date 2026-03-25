@@ -92,6 +92,25 @@ describe('VoxelWorld', () => {
       .toBe('bedrock');
   });
 
+  it('caps chunk streaming to the requested active chunk budget', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+
+    world.loadChunksAround(0, 0, 2, 9);
+
+    expect(world.getLoadedChunkCount()).toBe(9);
+    expect(world.getLoadedChunkKeys()).toContain('0,0');
+  });
+
+  it('can inspect only loaded chunks without expanding the active set', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+
+    world.loadChunksAround(0, 0, 1, 9);
+    const before = world.getLoadedChunkCount();
+
+    expect(world.getLoadedBlock(DEFAULT_WORLD_CONFIG.chunkSize * 3, DEFAULT_WORLD_CONFIG.minY, 0)).toBeNull();
+    expect(world.getLoadedChunkCount()).toBe(before);
+  });
+
   it('finds a deterministic spawn above non-fluid terrain', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
     const spawn = world.getSpawnPoint();

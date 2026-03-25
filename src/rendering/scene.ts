@@ -69,6 +69,8 @@ export interface RecipeStatusEntry {
   readonly label: string;
   readonly station: string | null;
   readonly available: boolean;
+  readonly inputs: readonly InventoryStatusEntry[];
+  readonly outputs: readonly InventoryStatusEntry[];
 }
 
 export interface SandboxStatus {
@@ -122,8 +124,26 @@ const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number,
   ['nz', 0, 0, -1],
 ];
 
-const WORLD_RENDER_CHUNK_RADIUS = 1;
-const WORLD_KEEP_LOADED_CHUNK_RADIUS = 2;
+interface StreamingProfile {
+  readonly renderChunkRadius: number;
+  readonly keepLoadedChunkRadius: number;
+  readonly maxLoadedChunks: number;
+  readonly pixelRatioCap: number;
+}
+
+const DESKTOP_STREAMING_PROFILE: StreamingProfile = {
+  renderChunkRadius: 1,
+  keepLoadedChunkRadius: 2,
+  maxLoadedChunks: 25,
+  pixelRatioCap: 2,
+};
+
+const MOBILE_STREAMING_PROFILE: StreamingProfile = {
+  renderChunkRadius: 1,
+  keepLoadedChunkRadius: 1,
+  maxLoadedChunks: 9,
+  pixelRatioCap: 1.25,
+};
 
 function formatCoords(value: number): string {
   return value.toFixed(1);
@@ -155,6 +175,14 @@ function getBestTool(inventory: Inventory): ToolItemType | null {
 
 function getReadableName(value: string): string {
   return value.replaceAll('-', ' ');
+}
+
+function statusEntriesFromCounts(
+  counts: Readonly<Partial<Record<InventoryItemType, number>>>,
+): InventoryStatusEntry[] {
+  return Object.entries(counts)
+    .flatMap(([type, count]) => (count && count > 0 ? [{ type, count }] : []))
+    .sort((left, right) => left.type.localeCompare(right.type));
 }
 
 function getNearbyStations(world: VoxelWorld, x: number, y: number, z: number): StationItemType[] {
@@ -194,7 +222,6 @@ export function createPlayableScene(
     alpha: true,
     canvas,
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   const scene = new Scene();
   scene.background = new Color(0x9ecff2);
@@ -250,6 +277,8 @@ export function createPlayableScene(
     'ontouchstart' in window ||
     navigator.maxTouchPoints > 0
   );
+  const streamingProfile = touchDevice ? MOBILE_STREAMING_PROFILE : DESKTOP_STREAMING_PROFILE;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, streamingProfile.pixelRatioCap));
   let currentTarget: CellTarget | null = null;
   let currentPlacement: { x: number; y: number; z: number } | null = null;
   let player = createPlayerState(world.getSpawnPoint());
@@ -296,10 +325,10 @@ export function createPlayableScene(
     const chunkSize = world.config.chunkSize;
     const centerChunkX = Math.floor(player.position.x / chunkSize);
     const centerChunkZ = Math.floor(player.position.z / chunkSize);
-    const minChunkX = centerChunkX - WORLD_RENDER_CHUNK_RADIUS;
-    const maxChunkX = centerChunkX + WORLD_RENDER_CHUNK_RADIUS;
-    const minChunkZ = centerChunkZ - WORLD_RENDER_CHUNK_RADIUS;
-    const maxChunkZ = centerChunkZ + WORLD_RENDER_CHUNK_RADIUS;
+    const minChunkX = centerChunkX - streamingProfile.renderChunkRadius;
+    const maxChunkX = centerChunkX + streamingProfile.renderChunkRadius;
+    const minChunkZ = centerChunkZ - streamingProfile.renderChunkRadius;
+    const maxChunkZ = centerChunkZ + streamingProfile.renderChunkRadius;
 
     return {
       minX: minChunkX * chunkSize,
@@ -315,25 +344,26 @@ export function createPlayableScene(
     world.loadChunksAround(
       Math.floor(player.position.x),
       Math.floor(player.position.z),
-      WORLD_RENDER_CHUNK_RADIUS,
+      streamingProfile.renderChunkRadius,
+      streamingProfile.maxLoadedChunks,
     );
     world.pruneLoadedChunks(
       Math.floor(player.position.x),
       Math.floor(player.position.z),
-      WORLD_KEEP_LOADED_CHUNK_RADIUS,
+      streamingProfile.keepLoadedChunkRadius,
     );
 
     const bounds = getVisibleBounds();
     const visibleBlocks = world.getBlocksInBounds(bounds);
     worldGroup.clear();
-    const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z));
+    const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getLoadedBlock(x, y, z));
 
     for (const block of visibleBlocks) {
       const visibleFaces = createVisibleFaces();
       let hasVisibleFace = false;
 
       for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
-        const neighbor = world.getBlock(block.x + dx, block.y + dy, block.z + dz);
+        const neighbor = world.getLoadedBlock(block.x + dx, block.y + dy, block.z + dz);
         const visible = !neighbor || (
           block.type === 'water' || block.type === 'lava'
             ? neighbor !== block.type
@@ -405,6 +435,8 @@ export function createPlayableScene(
         label: getReadableName(recipe.id),
         station: recipe.station ? getReadableName(recipe.station) : null,
         available: recipeAvailable(recipe, inventory, nearbyStations),
+        inputs: statusEntriesFromCounts(recipe.inputs),
+        outputs: statusEntriesFromCounts(recipe.outputs),
       })),
       placeableCounts,
     });

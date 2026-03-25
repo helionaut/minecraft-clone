@@ -50,6 +50,7 @@ import {
   parseWorldPersistence,
 } from '../gameplay/world.ts';
 import { getVisibleBoundsForPlayer } from './renderBounds.ts';
+import { buildRendererDiagnostics, shouldPublishSandboxStatus } from './sandboxStatus.ts';
 import {
   createBlockMaterialFactory,
   type FaceVisibilityMask,
@@ -79,6 +80,7 @@ export interface SandboxStatus {
   readonly touchDevice: boolean;
   readonly selectedTool: string;
   readonly stations: string;
+  readonly renderer: string;
   readonly inventory: readonly InventoryStatusEntry[];
   readonly recipes: readonly RecipeStatusEntry[];
   readonly placeableCounts: Readonly<Record<string, number>>;
@@ -239,6 +241,17 @@ export function createPlayableScene(
   sun.position.set(18, 28, 10);
   const playerLantern = new PointLight(0xffd6a0, 1.6, 14, 2);
   scene.add(ambient, sun, playerLantern);
+  const gl = renderer.getContext();
+  const debugRendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  const rendererDiagnostics = buildRendererDiagnostics({
+    version: typeof gl.getParameter === 'function' ? String(gl.getParameter(gl.VERSION)) : null,
+    vendor: typeof gl.getParameter === 'function'
+      ? String(gl.getParameter(debugRendererInfo ? debugRendererInfo.UNMASKED_VENDOR_WEBGL : gl.VENDOR))
+      : null,
+    renderer: typeof gl.getParameter === 'function'
+      ? String(gl.getParameter(debugRendererInfo ? debugRendererInfo.UNMASKED_RENDERER_WEBGL : gl.RENDERER))
+      : null,
+  });
 
   const storedWorld = parseWorldPersistence(window.localStorage.getItem(
     `minecraft-clone:world:v2:${DEFAULT_WORLD_CONFIG.seed}:${DEFAULT_WORLD_CONFIG.chunkSize}`,
@@ -287,6 +300,7 @@ export function createPlayableScene(
   let worldDirty = true;
   let activeChunkKey = '';
   let fluidAccumulator = 0;
+  let lastPublishedStatus: SandboxStatus | null = null;
   const input = {
     forward: false,
     backward: false,
@@ -405,7 +419,7 @@ export function createPlayableScene(
       PLACEABLE_BLOCK_ORDER.map((type) => [type, inventory.getCount(type as InventoryItemType)]),
     );
 
-    onStatusChange({
+    const status: SandboxStatus = {
       locked,
       selectedBlock,
       coords: `X ${formatCoords(player.position.x)} Y ${formatCoords(eyeY)} Z ${formatCoords(player.position.z)}`,
@@ -414,6 +428,7 @@ export function createPlayableScene(
       touchDevice,
       selectedTool: selectedTool ? getReadableName(selectedTool) : 'hand',
       stations: nearbyStations.length > 0 ? nearbyStations.map(getReadableName).join(', ') : 'none nearby',
+      renderer: rendererDiagnostics.summary,
       inventory: inventoryEntries.slice(0, 12),
       recipes: RECIPES.map((recipe) => ({
         id: recipe.id,
@@ -424,7 +439,14 @@ export function createPlayableScene(
         outputs: statusEntriesFromCounts(recipe.outputs),
       })),
       placeableCounts,
-    });
+    };
+
+    if (!shouldPublishSandboxStatus(lastPublishedStatus, status)) {
+      return;
+    }
+
+    lastPublishedStatus = status;
+    onStatusChange(status);
   };
 
   const updateTargeting = () => {

@@ -55,6 +55,7 @@ describe('createAppShell', () => {
       touchDevice: true,
       selectedTool: 'hand',
       stations: 'none nearby',
+      renderer: 'WebGL 2 | software fallback | SwiftShader',
       inventory: [{ type: 'oak-log', count: 3 }, { type: 'cobblestone', count: 8 }],
       recipes: [{
         id: 'crafting-table',
@@ -83,6 +84,7 @@ describe('createAppShell', () => {
     expect(root.textContent).toContain('Recipe Book');
     expect(root.textContent).toContain('crafting table');
     expect(root.textContent).toContain('Oak Log');
+    expect(root.textContent).toContain('Renderer: WebGL 2 | software fallback | SwiftShader');
     expect(root.querySelector('[data-hotbar-slot="grass"]')).not.toBeNull();
 
     root.querySelector<HTMLButtonElement>('[data-recipe-id="crafting-table"]')?.click();
@@ -112,6 +114,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'stone-pickaxe',
       stations: 'crafting-table',
+      renderer: 'WebGL 2 | hardware accelerated | ANGLE (NVIDIA, NVIDIA GeForce RTX 3070, OpenGL 4.6)',
       inventory: [{ type: 'stone-pickaxe', count: 1 }],
       recipes: [],
       placeableCounts: { grass: 0, dirt: 0, stone: 5, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },

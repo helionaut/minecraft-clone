@@ -45,7 +45,7 @@ export function getLookDirection(yaw: number, pitch: number): Vector3Like {
 
   return {
     x: -Math.sin(yaw) * cosPitch,
-    y: -Math.sin(pitch),
+    y: Math.sin(pitch),
     z: -Math.cos(yaw) * cosPitch,
   };
 }

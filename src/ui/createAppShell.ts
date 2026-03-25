@@ -236,6 +236,7 @@ export function createAppShell(root: HTMLDivElement): void {
                       <p class="world-panel-copy" data-mobile-coords></p>
                       <p class="world-panel-copy" data-tool></p>
                       <p class="world-panel-copy" data-stations></p>
+                      <p class="world-panel-copy" data-renderer></p>
                       <p class="world-panel-copy" data-device-note></p>
                       <button class="reset-button" type="button" data-reset>Reset world</button>
                     </section>
@@ -256,6 +257,7 @@ export function createAppShell(root: HTMLDivElement): void {
   const target = root.querySelector<HTMLElement>('[data-target]');
   const tool = root.querySelector<HTMLElement>('[data-tool]');
   const stations = root.querySelector<HTMLElement>('[data-stations]');
+  const renderer = root.querySelector<HTMLElement>('[data-renderer]');
   const inventory = root.querySelector<HTMLElement>('[data-inventory]');
   const crafting = root.querySelector<HTMLElement>('[data-crafting]');
   const menuHotbar = root.querySelector<HTMLElement>('[data-menu-hotbar]');
@@ -284,6 +286,7 @@ export function createAppShell(root: HTMLDivElement): void {
     !target ||
     !tool ||
     !stations ||
+    !renderer ||
     !inventory ||
     !crafting ||
     !menuHotbar ||
@@ -311,6 +314,7 @@ export function createAppShell(root: HTMLDivElement): void {
   const safeTarget = target;
   const safeTool = tool;
   const safeStations = stations;
+  const safeRenderer = renderer;
   const safeInventory = inventory;
   const safeCrafting = crafting;
   const safeMenuHotbar = menuHotbar;
@@ -357,6 +361,7 @@ export function createAppShell(root: HTMLDivElement): void {
     safeTarget.textContent = status.target;
     safeTool.textContent = `Best tool: ${status.selectedTool}`;
     safeStations.textContent = `Stations: ${status.stations}`;
+    safeRenderer.textContent = `Renderer: ${status.renderer}`;
     safeMobileStatus.textContent = status.touchDevice
       ? 'Pocket-style play outside, full inventory window inside.'
       : 'Minecraft-style inventory window with recipe book and quickbar overview.';

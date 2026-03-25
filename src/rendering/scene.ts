@@ -22,6 +22,7 @@ import {
   type HotbarBlockType,
   PLACEABLE_BLOCK_ORDER,
   type PlaceableBlockType,
+  type WorldBlockType,
   isFluidBlock,
 } from '../gameplay/blocks.ts';
 import {
@@ -91,6 +92,12 @@ export interface PlayableScene {
   readonly renderer: WebGLRenderer;
   readonly setSelectedBlock: (type: HotbarBlockType) => void;
   readonly craftRecipe: (recipeId: string) => void;
+  readonly placeSelectedBlockOnNearestSurface: () => {
+    readonly placed: boolean;
+    readonly position: { readonly x: number; readonly y: number; readonly z: number } | null;
+  };
+  readonly getBlockAt: (x: number, y: number, z: number) => WorldBlockType | null;
+  readonly getStatusSnapshot: () => SandboxStatus | null;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
 }
@@ -212,6 +219,47 @@ function getNearbyStations(world: VoxelWorld, x: number, y: number, z: number): 
 function recipeAvailable(recipe: Recipe, inventory: Inventory, nearbyStations: readonly StationItemType[]): boolean {
   const probe = Inventory.fromJSON(JSON.stringify(inventory.toJSON()));
   return probe.craft(recipe.id, nearbyStations);
+}
+
+function findNearestPlacementCell(
+  world: VoxelWorld,
+  playerPosition: { readonly x: number; readonly y: number; readonly z: number },
+): { readonly x: number; readonly y: number; readonly z: number } | null {
+  const originX = Math.floor(playerPosition.x);
+  const originY = Math.floor(playerPosition.y);
+  const originZ = Math.floor(playerPosition.z);
+  let bestCell: { readonly x: number; readonly y: number; readonly z: number } | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let offsetY = -2; offsetY <= 2; offsetY += 1) {
+    for (let offsetX = -3; offsetX <= 3; offsetX += 1) {
+      for (let offsetZ = -3; offsetZ <= 3; offsetZ += 1) {
+        const x = originX + offsetX;
+        const supportY = originY + offsetY;
+        const z = originZ + offsetZ;
+        const y = supportY + 1;
+
+        if (
+          y < world.config.minY ||
+          y > world.config.maxY + 1 ||
+          !world.hasBlock(x, supportY, z) ||
+          world.hasBlock(x, y, z) ||
+          playerIntersectsBlock(playerPosition, x, y, z)
+        ) {
+          continue;
+        }
+
+        const distance = Math.hypot(offsetX, offsetY, offsetZ);
+
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestCell = { x, y, z };
+        }
+      }
+    }
+  }
+
+  return bestCell;
 }
 
 export function createPlayableScene(
@@ -520,18 +568,35 @@ export function createPlayableScene(
       return;
     }
 
-    if (button === 2 && currentPlacement && inventory.getCount(selectedBlock) > 0) {
-      if (world.placeBlock(currentPlacement.x, currentPlacement.y, currentPlacement.z, selectedBlock)) {
-        inventory.removeItem(selectedBlock);
-        persistInventory();
-        audio.playPlace();
-        world.tickFluids(2);
-        persistWorld();
-        worldDirty = true;
-        rebuildWorld();
-        updateTargeting();
-      }
+    if (button === 2 && currentPlacement) {
+      placeSelectedBlock(currentPlacement.x, currentPlacement.y, currentPlacement.z);
     }
+  };
+
+  const placeSelectedBlock = (x: number, y: number, z: number) => {
+    if (
+      y < world.config.minY ||
+      y > world.config.maxY + 1 ||
+      world.hasBlock(x, y, z) ||
+      playerIntersectsBlock(player.position, x, y, z) ||
+      inventory.getCount(selectedBlock) <= 0
+    ) {
+      return false;
+    }
+
+    if (!world.placeBlock(x, y, z, selectedBlock)) {
+      return false;
+    }
+
+    inventory.removeItem(selectedBlock);
+    persistInventory();
+    audio.playPlace();
+    world.tickFluids(2);
+    persistWorld();
+    worldDirty = true;
+    rebuildWorld();
+    updateTargeting();
+    return true;
   };
 
   const requestPointerLock = () => {
@@ -557,6 +622,22 @@ export function createPlayableScene(
 
     persistInventory();
     updateStatus();
+  };
+
+  const placeSelectedBlockOnNearestSurface = () => {
+    const placement = findNearestPlacementCell(world, player.position);
+
+    if (!placement) {
+      return {
+        placed: false,
+        position: null,
+      };
+    }
+
+    return {
+      placed: placeSelectedBlock(placement.x, placement.y, placement.z),
+      position: placement,
+    };
   };
 
   const applyTouchLook = (deltaX: number, deltaY: number) => {
@@ -915,6 +996,9 @@ export function createPlayableScene(
       updateTargeting();
     },
     craftRecipe,
+    placeSelectedBlockOnNearestSurface,
+    getBlockAt: (x: number, y: number, z: number) => world.getBlock(x, y, z),
+    getStatusSnapshot: () => lastPublishedStatus,
     resetWorld,
     dispose: () => {
       window.cancelAnimationFrame(frameId);

@@ -13,6 +13,23 @@ import {
 } from '../rendering/scene.ts';
 import { getInventoryIcon } from './inventoryIcons.ts';
 
+declare global {
+  interface Window {
+    __minecraftCloneQa?: {
+      readonly craftRecipe: (recipeId: string) => void;
+      readonly setSelectedBlock: (type: HotbarBlockType) => void;
+      readonly placeSelectedBlockOnNearestSurface: () => {
+        readonly placed: boolean;
+        readonly position: { readonly x: number; readonly y: number; readonly z: number } | null;
+      };
+      readonly getBlockAt: (x: number, y: number, z: number) => string | null;
+      readonly getStatus: () => SandboxStatus | null;
+      readonly moveInventorySlot: (fromIndex: number, toIndex: number) => void;
+      readonly setMenuOpen: (open: boolean) => void;
+    };
+  }
+}
+
 const BLOCK_ORDER: readonly PlaceableBlockType[] = PLACEABLE_BLOCK_ORDER;
 const STORAGE_SLOT_COUNT = 27;
 const HOTBAR_SLOT_COUNT = 9;
@@ -289,7 +306,7 @@ export function createAppShell(root: HTMLDivElement): void {
           <div class="viewport" data-viewport></div>
           <div class="hud" aria-live="polite">
             <header class="hud-topbar">
-              <div class="hud-status-pill">
+              <div class="hud-status-pill" data-hud-status>
                 <div class="hud-status-copy">
                   <p class="eyebrow">Minecraft Clone</p>
                   <p class="hud-prompt" data-prompt></p>
@@ -299,7 +316,11 @@ export function createAppShell(root: HTMLDivElement): void {
                   <p class="hud-inline" data-coords></p>
                 </div>
               </div>
-              <button class="menu-toggle" type="button" data-open-menu>Inventory</button>
+              <div class="hud-topbar-actions">
+                <button class="hud-help-toggle" type="button" data-open-help hidden>Help</button>
+                <button class="hud-help-dismiss" type="button" data-dismiss-help hidden>Hide help</button>
+                <button class="menu-toggle" type="button" data-open-menu>Inventory</button>
+              </div>
             </header>
 
             <div class="crosshair" aria-hidden="true"></div>
@@ -412,6 +433,7 @@ export function createAppShell(root: HTMLDivElement): void {
   `;
 
   const viewport = root.querySelector<HTMLElement>('[data-viewport]');
+  const hudStatus = root.querySelector<HTMLElement>('[data-hud-status]');
   const palette = root.querySelector<HTMLElement>('[data-palette]');
   const prompt = root.querySelector<HTMLElement>('[data-prompt]');
   const coords = root.querySelector<HTMLElement>('[data-coords]');
@@ -437,10 +459,13 @@ export function createAppShell(root: HTMLDivElement): void {
   const hotbarNextButton = root.querySelector<HTMLButtonElement>('[data-hotbar-next]');
   const menuModal = root.querySelector<HTMLElement>('[data-menu-modal]');
   const openMenuButton = root.querySelector<HTMLButtonElement>('[data-open-menu]');
+  const openHelpButton = root.querySelector<HTMLButtonElement>('[data-open-help]');
+  const dismissHelpButton = root.querySelector<HTMLButtonElement>('[data-dismiss-help]');
   const closeMenuButtons = [...root.querySelectorAll<HTMLElement>('[data-close-menu]')];
 
   if (
     !viewport ||
+    !hudStatus ||
     !palette ||
     !prompt ||
     !coords ||
@@ -465,11 +490,15 @@ export function createAppShell(root: HTMLDivElement): void {
     !hotbarPrevButton ||
     !hotbarNextButton ||
     !menuModal ||
-    !openMenuButton
+    !openMenuButton ||
+    !openHelpButton ||
+    !dismissHelpButton
   ) {
     throw new Error('Missing sandbox UI node.');
   }
 
+  const TOUCH_HELP_AUTO_HIDE_DELAY_MS = 2400;
+  const safeHudStatus = hudStatus;
   const safePrompt = prompt;
   const safeCoords = coords;
   const safeTarget = target;
@@ -485,10 +514,44 @@ export function createAppShell(root: HTMLDivElement): void {
   const safeMobileCoords = mobileCoords;
   const safeTouchUi = touchUi;
   const safeLookSurface = lookSurface;
+  const safeOpenHelpButton = openHelpButton;
+  const safeDismissHelpButton = dismissHelpButton;
   let inventoryLayout = loadInventoryLayout();
   let selectedInventorySlotIndex: number | null = null;
   let draggedInventorySlotIndex: number | null = null;
   let lastStatus: SandboxStatus | null = null;
+  let touchHelpVisible = false;
+  let touchHelpInitialized = false;
+  let touchHelpTimer = 0;
+
+  const clearTouchHelpTimer = () => {
+    if (touchHelpTimer) {
+      window.clearTimeout(touchHelpTimer);
+      touchHelpTimer = 0;
+    }
+  };
+
+  const applyTouchHelpVisibility = () => {
+    const touchDevice = lastStatus?.touchDevice ?? false;
+    const showHudStatus = !touchDevice || touchHelpVisible;
+
+    safeHudStatus.hidden = !showHudStatus;
+    safeOpenHelpButton.hidden = !touchDevice || touchHelpVisible;
+    safeDismissHelpButton.hidden = !touchDevice || !touchHelpVisible;
+  };
+
+  const scheduleTouchHelpAutoHide = () => {
+    clearTouchHelpTimer();
+
+    if (!(lastStatus?.touchDevice) || !touchHelpVisible) {
+      return;
+    }
+
+    touchHelpTimer = window.setTimeout(() => {
+      touchHelpVisible = false;
+      applyTouchHelpVisibility();
+    }, TOUCH_HELP_AUTO_HIDE_DELAY_MS);
+  };
 
   const setMenuOpen = (open: boolean) => {
     menuModal.hidden = !open;
@@ -679,6 +742,19 @@ export function createAppShell(root: HTMLDivElement): void {
 
   function applyStatus(status: SandboxStatus): void {
     lastStatus = status;
+    if (status.touchDevice) {
+      if (!touchHelpInitialized) {
+        touchHelpVisible = true;
+        touchHelpInitialized = true;
+        scheduleTouchHelpAutoHide();
+      }
+    } else {
+      touchHelpInitialized = false;
+      touchHelpVisible = false;
+      clearTouchHelpTimer();
+    }
+
+    applyTouchHelpVisibility();
     safePrompt.textContent = status.prompt;
     safeCoords.textContent = status.coords;
     safeTarget.textContent = status.target;
@@ -724,6 +800,25 @@ export function createAppShell(root: HTMLDivElement): void {
   }
 
   const sandbox = createPlayableScene(viewport, applyStatus, touchControls);
+  const exposeQaHarness = new URLSearchParams(window.location.search).has('qaHarness');
+
+  if (exposeQaHarness) {
+    window.__minecraftCloneQa = {
+      craftRecipe: (recipeId: string) => {
+        sandbox.craftRecipe(recipeId);
+      },
+      setSelectedBlock: (type: HotbarBlockType) => {
+        sandbox.setSelectedBlock(type);
+      },
+      placeSelectedBlockOnNearestSurface: () => sandbox.placeSelectedBlockOnNearestSurface(),
+      getBlockAt: (x: number, y: number, z: number) => sandbox.getBlockAt(x, y, z),
+      getStatus: () => sandbox.getStatusSnapshot(),
+      moveInventorySlot: (fromIndex: number, toIndex: number) => {
+        moveInventorySlot(fromIndex, toIndex);
+      },
+      setMenuOpen,
+    };
+  }
 
   for (const button of paletteButtons) {
     button.addEventListener('click', () => {
@@ -734,6 +829,18 @@ export function createAppShell(root: HTMLDivElement): void {
 
   openMenuButton.addEventListener('click', () => {
     setMenuOpen(true);
+  });
+
+  safeOpenHelpButton.addEventListener('click', () => {
+    touchHelpVisible = true;
+    applyTouchHelpVisibility();
+    scheduleTouchHelpAutoHide();
+  });
+
+  safeDismissHelpButton.addEventListener('click', () => {
+    touchHelpVisible = false;
+    clearTouchHelpTimer();
+    applyTouchHelpVisibility();
   });
 
   for (const button of closeMenuButtons) {

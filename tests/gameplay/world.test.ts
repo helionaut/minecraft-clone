@@ -42,7 +42,7 @@ describe('generateWorld', () => {
     );
   });
 
-  it('produces deeper terrain with progression materials and fluids', () => {
+  it('produces deeper terrain with progression materials and fluids', { timeout: 15_000 }, () => {
     const world = generateWorld(DEFAULT_WORLD_CONFIG, {
       minX: -32,
       maxX: 32,

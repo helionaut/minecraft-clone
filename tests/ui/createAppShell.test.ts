@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SandboxStatus } from '../../src/rendering/scene.ts';
 import { createAppShell } from '../../src/ui/createAppShell.ts';
@@ -10,6 +10,9 @@ type StatusListener = (status: SandboxStatus) => void;
 const sandboxStub = {
   setSelectedBlock: vi.fn(),
   craftRecipe: vi.fn(),
+  placeSelectedBlockOnNearestSurface: vi.fn(),
+  getBlockAt: vi.fn(),
+  getStatusSnapshot: vi.fn(),
   resetWorld: vi.fn(),
   dispose: vi.fn(),
 };
@@ -25,13 +28,21 @@ vi.mock('../../src/rendering/scene.ts', () => ({
 
 describe('createAppShell', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
     statusListener = null;
     sandboxStub.setSelectedBlock.mockReset();
     sandboxStub.craftRecipe.mockReset();
+    sandboxStub.placeSelectedBlockOnNearestSurface.mockReset();
+    sandboxStub.getBlockAt.mockReset();
+    sandboxStub.getStatusSnapshot.mockReset();
     sandboxStub.resetWorld.mockReset();
     sandboxStub.dispose.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('opens a Minecraft-style inventory window with storage grid, hotbar row, and recipe book', () => {
@@ -202,5 +213,57 @@ describe('createAppShell', () => {
     expect(refreshedHotbarSlot?.dataset.itemType).toBe('oak-log');
     expect(refreshedHotbarSlot?.textContent).toContain('5');
     expect(refreshedHotbarSlot?.classList.contains('active')).toBe(true);
+  });
+
+  it('auto-collapses touch help while keeping a reopen control available on mobile', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    createAppShell(root);
+
+    if (!statusListener) {
+      throw new Error('Expected scene status listener.');
+    }
+
+    statusListener({
+      locked: false,
+      selectedBlock: 'grass',
+      coords: 'X 4.0 Y 10.0 Z -2.0',
+      target: 'Target grass @ 4, 8, -2 | Place grass @ 4, 9, -2',
+      prompt: 'Use the left thumbstick to move, drag anywhere to aim, mine blocks for drops, and craft tools or stations from the drawer.',
+      touchDevice: true,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | software fallback | SwiftShader',
+      inventory: [],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    const hudStatus = root.querySelector<HTMLElement>('[data-hud-status]');
+    const openHelpButton = root.querySelector<HTMLButtonElement>('[data-open-help]');
+    const dismissHelpButton = root.querySelector<HTMLButtonElement>('[data-dismiss-help]');
+
+    expect(hudStatus?.hidden).toBe(false);
+    expect(openHelpButton?.hidden).toBe(true);
+    expect(dismissHelpButton?.hidden).toBe(false);
+
+    vi.advanceTimersByTime(2400);
+
+    expect(hudStatus?.hidden).toBe(true);
+    expect(openHelpButton?.hidden).toBe(false);
+    expect(dismissHelpButton?.hidden).toBe(true);
+
+    openHelpButton?.click();
+    expect(hudStatus?.hidden).toBe(false);
+    expect(openHelpButton?.hidden).toBe(true);
+    expect(dismissHelpButton?.hidden).toBe(false);
+
+    dismissHelpButton?.click();
+    expect(hudStatus?.hidden).toBe(true);
+    expect(openHelpButton?.hidden).toBe(false);
   });
 });

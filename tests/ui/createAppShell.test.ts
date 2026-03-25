@@ -33,7 +33,7 @@ describe('createAppShell', () => {
     sandboxStub.dispose.mockReset();
   });
 
-  it('keeps gameplay HUD minimal and opens inventory/crafting as a modal menu', () => {
+  it('opens a Minecraft-style inventory window with storage grid, hotbar row, and recipe book', () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -67,8 +67,10 @@ describe('createAppShell', () => {
       placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
     });
 
-    expect(root.querySelector('.inventory-grid')).not.toBeNull();
-    expect(root.querySelector('.crafting-grid')).not.toBeNull();
+    expect(root.querySelector('.inventory-window')).not.toBeNull();
+    expect(root.querySelector('.inventory-storage-grid')).not.toBeNull();
+    expect(root.querySelector('.inventory-hotbar-grid')).not.toBeNull();
+    expect(root.querySelector('.recipe-book')).not.toBeNull();
     expect(root.querySelector('.menu-modal')?.hasAttribute('hidden')).toBe(true);
     expect(root.querySelector('.touch-ui')?.classList.contains('active')).toBe(true);
     expect(root.querySelector('[data-look-surface]')?.classList.contains('active')).toBe(true);
@@ -77,16 +79,18 @@ describe('createAppShell', () => {
 
     expect(root.querySelector('.menu-modal')?.hasAttribute('hidden')).toBe(false);
     expect(root.classList.contains('menu-open')).toBe(true);
-    expect(root.querySelector('[data-menu-view="crafting"]')?.classList.contains('active')).toBe(true);
+    expect(root.textContent).toContain('Inventory');
+    expect(root.textContent).toContain('Recipe Book');
     expect(root.textContent).toContain('crafting table');
-    expect(root.textContent).toContain('oak log');
+    expect(root.textContent).toContain('Oak Log');
+    expect(root.querySelector('[data-hotbar-slot="grass"]')).not.toBeNull();
 
     root.querySelector<HTMLButtonElement>('[data-recipe-id="crafting-table"]')?.click();
 
     expect(sandboxStub.craftRecipe).toHaveBeenCalledWith('crafting-table');
   });
 
-  it('updates hotbar selection and keeps reset inside the world tab menu', () => {
+  it('updates hotbar selection and keeps reset inside the inventory overlay', () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -118,10 +122,10 @@ describe('createAppShell', () => {
     expect(sandboxStub.setSelectedBlock).toHaveBeenCalledWith('stone');
 
     root.querySelector<HTMLButtonElement>('[data-open-menu]')?.click();
-    root.querySelector<HTMLButtonElement>('[data-menu-tab="world"]')?.click();
     root.querySelector<HTMLButtonElement>('[data-reset]')?.click();
 
-    expect(root.querySelector('[data-menu-view="world"]')?.classList.contains('active')).toBe(true);
+    expect(root.textContent).toContain('Best tool: stone-pickaxe');
+    expect(root.textContent).toContain('Stations: crafting-table');
     expect(sandboxStub.resetWorld).toHaveBeenCalledTimes(1);
   });
 });

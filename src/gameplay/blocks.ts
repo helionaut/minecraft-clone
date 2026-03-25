@@ -25,10 +25,25 @@ export type BlockType =
 
 export type WorldBlockType = Exclude<BlockType, 'highlight'>;
 export type NonFluidWorldBlockType = Exclude<WorldBlockType, 'water' | 'lava'>;
-export type PlaceableBlockType = Exclude<
-  WorldBlockType,
-  'water' | 'lava' | 'bedrock' | 'coal-ore' | 'iron-ore' | 'gold-ore' | 'diamond-ore'
->;
+export const PLACEABLE_BLOCK_TYPES = [
+  'grass',
+  'dirt',
+  'stone',
+  'cobblestone',
+  'sand',
+  'sandstone',
+  'gravel',
+  'snow',
+  'oak-log',
+  'oak-planks',
+  'oak-leaves',
+  'cactus',
+  'deepslate',
+  'crafting-table',
+  'furnace',
+] as const;
+
+export type PlaceableBlockType = (typeof PLACEABLE_BLOCK_TYPES)[number];
 
 export const PLACEABLE_BLOCK_ORDER = [
   'grass',

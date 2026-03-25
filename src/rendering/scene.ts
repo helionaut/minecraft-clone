@@ -12,12 +12,9 @@ import {
   MeshStandardMaterial,
   PerspectiveCamera,
   PointLight,
-  Raycaster,
   Scene,
-  Vector2,
   WebGLRenderer,
 } from 'three';
-import type { Intersection, Object3D } from 'three';
 
 import { createGameAudio } from '../audio/gameAudio.ts';
 import {
@@ -27,7 +24,6 @@ import {
   type PlaceableBlockType,
   isFluidBlock,
 } from '../gameplay/blocks.ts';
-import { computeVoxelLighting } from '../gameplay/lighting.ts';
 import {
   DEFAULT_PLAYER_CONFIG,
   createPlayerState,
@@ -52,12 +48,13 @@ import {
   DEFAULT_WORLD_CONFIG,
   VoxelWorld,
   parseWorldPersistence,
-  type SolidBlockType,
 } from '../gameplay/world.ts';
+import { getVisibleBoundsForPlayer } from './renderBounds.ts';
 import {
   createBlockMaterialFactory,
   type FaceVisibilityMask,
 } from './textures.ts';
+import { type CellTarget, getLookDirection, traceVoxelTarget } from './voxelRaycast.ts';
 
 export interface InventoryStatusEntry {
   readonly type: string;
@@ -108,13 +105,6 @@ export interface TouchUiControls {
   readonly hotbarNextButton: HTMLButtonElement;
 }
 
-interface CellTarget {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-  readonly type: SolidBlockType;
-}
-
 const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number, number, number]> = [
   ['px', 1, 0, 0],
   ['nx', -1, 0, 0],
@@ -123,6 +113,8 @@ const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number,
   ['pz', 0, 0, 1],
   ['nz', 0, 0, -1],
 ];
+
+const TARGET_REACH = 6;
 
 interface StreamingProfile {
   readonly renderChunkRadius: number;
@@ -157,6 +149,18 @@ function selectPlaceableBlock(current: HotbarBlockType, offset: number): HotbarB
 
 function createVisibleFaces(): FaceVisibilityMask {
   return { px: true, nx: true, py: true, ny: true, pz: true, nz: true };
+}
+
+function getRenderBrightness(block: CellTarget, bounds: ReturnType<typeof getVisibleBoundsForPlayer>): number {
+  const emittedLight = BLOCK_DEFINITIONS[block.type].emittedLight;
+
+  if (emittedLight > 0) {
+    return 1;
+  }
+
+  const verticalSpan = Math.max(1, bounds.maxY - bounds.minY);
+  const heightFactor = (block.y - bounds.minY) / verticalSpan;
+  return 0.55 + heightFactor * 0.3;
 }
 
 function inventoryStorageKey(): string {
@@ -247,8 +251,6 @@ export function createPlayableScene(
   const blockGeometry = new BoxGeometry(1, 1, 1);
   const waterGeometry = new BoxGeometry(1.002, 0.88, 1.002);
   const highlightGeometry = new EdgesGeometry(new BoxGeometry(1.02, 1.02, 1.02));
-  const raycaster = new Raycaster();
-  const center = new Vector2(0, 0);
   const blockMaterialFactory = createBlockMaterialFactory();
   const audio = createGameAudio();
 
@@ -322,22 +324,7 @@ export function createPlayableScene(
   };
 
   const getVisibleBounds = () => {
-    const chunkSize = world.config.chunkSize;
-    const centerChunkX = Math.floor(player.position.x / chunkSize);
-    const centerChunkZ = Math.floor(player.position.z / chunkSize);
-    const minChunkX = centerChunkX - streamingProfile.renderChunkRadius;
-    const maxChunkX = centerChunkX + streamingProfile.renderChunkRadius;
-    const minChunkZ = centerChunkZ - streamingProfile.renderChunkRadius;
-    const maxChunkZ = centerChunkZ + streamingProfile.renderChunkRadius;
-
-    return {
-      minX: minChunkX * chunkSize,
-      maxX: (maxChunkX + 1) * chunkSize - 1,
-      minY: world.config.minY,
-      maxY: world.config.maxY + 1,
-      minZ: minChunkZ * chunkSize,
-      maxZ: (maxChunkZ + 1) * chunkSize - 1,
-    };
+    return getVisibleBoundsForPlayer(player.position, world.config, streamingProfile.renderChunkRadius);
   };
 
   const rebuildWorld = () => {
@@ -354,11 +341,9 @@ export function createPlayableScene(
     );
 
     const bounds = getVisibleBounds();
-    const visibleBlocks = world.getBlocksInBounds(bounds);
     worldGroup.clear();
-    const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getLoadedBlock(x, y, z));
 
-    for (const block of visibleBlocks) {
+    world.forEachLoadedBlockInBounds(bounds, (block) => {
       const visibleFaces = createVisibleFaces();
       let hasVisibleFace = false;
 
@@ -374,10 +359,10 @@ export function createPlayableScene(
       }
 
       if (!hasVisibleFace) {
-        continue;
+        return;
       }
 
-      const brightness = lighting.getBlockBrightness(block.x, block.y, block.z);
+      const brightness = getRenderBrightness(block, bounds);
       const voxel = new Mesh(
         block.type === 'water' ? waterGeometry : blockGeometry,
         blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
@@ -389,7 +374,7 @@ export function createPlayableScene(
       );
       voxel.userData.cell = block;
       worldGroup.add(voxel);
-    }
+    });
 
     worldDirty = false;
   };
@@ -443,11 +428,15 @@ export function createPlayableScene(
   };
 
   const updateTargeting = () => {
-    raycaster.setFromCamera(center, camera);
-    const intersections = raycaster.intersectObjects(worldGroup.children, false) as Array<Intersection<Object3D>>;
-    const hit = intersections.find((entry) => entry.object instanceof Mesh && entry.object.userData.cell);
+    const eyeY = player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight;
+    const { target, placement } = traceVoxelTarget(
+      { x: player.position.x, y: eyeY, z: player.position.z },
+      getLookDirection(player.yaw, player.pitch),
+      TARGET_REACH,
+      (x, y, z) => world.getBlock(x, y, z),
+    );
 
-    if (!hit || !(hit.object instanceof Mesh) || !hit.face) {
+    if (!target) {
       currentTarget = null;
       currentPlacement = null;
       targetOutline.visible = false;
@@ -456,24 +445,16 @@ export function createPlayableScene(
       return;
     }
 
-    const block = hit.object.userData.cell as CellTarget;
-    currentTarget = block;
+    currentTarget = target;
     targetOutline.visible = true;
-    targetOutline.position.set(block.x + 0.5, block.y + 0.5, block.z + 0.5);
-
-    const normal = hit.face.normal;
-    const placement = {
-      x: block.x + Math.round(normal.x),
-      y: block.y + Math.round(normal.y),
-      z: block.z + Math.round(normal.z),
-    };
-    const blockedByPlayer = playerIntersectsBlock(player.position, placement.x, placement.y, placement.z);
+    targetOutline.position.set(target.x + 0.5, target.y + 0.5, target.z + 0.5);
 
     if (
+      placement &&
       placement.y >= world.config.minY &&
       placement.y <= world.config.maxY + 1 &&
       !world.hasBlock(placement.x, placement.y, placement.z) &&
-      !blockedByPlayer
+      !playerIntersectsBlock(player.position, placement.x, placement.y, placement.z)
     ) {
       currentPlacement = placement;
       placementPreview.visible = true;

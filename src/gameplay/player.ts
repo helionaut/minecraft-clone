@@ -150,7 +150,7 @@ export function createPlayerState(spawn: Vector3Like): PlayerState {
     position: spawn,
     velocity: { x: 0, y: 0, z: 0 },
     yaw: 0,
-    pitch: -0.18,
+    pitch: 0.12,
     grounded: false,
     inFluid: false,
     headInFluid: false,

@@ -1,26 +1,34 @@
 import type { PlaceableBlockType, WorldBlockType } from './blocks.ts';
 
-export type ToolItemType =
-  | 'wooden-pickaxe'
-  | 'stone-pickaxe'
-  | 'iron-pickaxe'
-  | 'wooden-sword'
-  | 'stone-sword'
-  | 'iron-sword';
+export const TOOL_ITEM_TYPES = [
+  'wooden-pickaxe',
+  'stone-pickaxe',
+  'iron-pickaxe',
+  'wooden-sword',
+  'stone-sword',
+  'iron-sword',
+] as const;
 
-export type MaterialItemType =
-  | 'oak-log'
-  | 'oak-planks'
-  | 'stick'
-  | 'cobblestone'
-  | 'coal'
-  | 'iron-ore'
-  | 'iron-ingot'
-  | 'gold-ore'
-  | 'gold-ingot'
-  | 'diamond';
+export type ToolItemType = (typeof TOOL_ITEM_TYPES)[number];
 
-export type StationItemType = 'crafting-table' | 'furnace';
+export const MATERIAL_ITEM_TYPES = [
+  'oak-log',
+  'oak-planks',
+  'stick',
+  'cobblestone',
+  'coal',
+  'iron-ore',
+  'iron-ingot',
+  'gold-ore',
+  'gold-ingot',
+  'diamond',
+] as const;
+
+export type MaterialItemType = (typeof MATERIAL_ITEM_TYPES)[number];
+
+export const STATION_ITEM_TYPES = ['crafting-table', 'furnace'] as const;
+
+export type StationItemType = (typeof STATION_ITEM_TYPES)[number];
 export type InventoryItemType = PlaceableBlockType | MaterialItemType | ToolItemType | StationItemType;
 
 export interface Recipe {

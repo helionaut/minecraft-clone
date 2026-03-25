@@ -20,6 +20,8 @@ Current baseline in this repository:
   `src/gameplay/world.ts`
 - block materials: procedural colors from checked-in definitions in
   `src/gameplay/blocks.ts`
+- inventory icon pack: repo-authored SVG assets generated from
+  `scripts/generateInventoryIcons.mjs` into `public/textures/inventory/`
 - placeholder textures: not required for the first slice
 - fixtures/manifests: optional and only needed if a later change introduces them
 - audio: omitted from the first slice

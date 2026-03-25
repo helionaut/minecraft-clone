@@ -297,6 +297,9 @@ button {
   width: 1.4rem;
   height: 1.4rem;
   border-radius: 0.14rem;
+}
+
+.swatch-chip {
   box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.16);
 }
 
@@ -447,6 +450,7 @@ button {
     var(--inventory-panel);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
   color: var(--inventory-copy);
+  overflow: auto;
 }
 
 .menu-header {
@@ -628,6 +632,17 @@ button {
   height: 1.42rem;
 }
 
+.item-icon {
+  background-image: var(--item-icon-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.32));
+  image-rendering: pixelated;
+}
+
 .inventory-slot-small {
   width: 3rem;
   min-width: 3rem;
@@ -763,114 +778,36 @@ button {
   opacity: 0.2;
 }
 
-.item-icon-grass,
 .swatch-grass {
   background: #5f9d3a;
 }
 
-.item-icon-dirt,
 .swatch-dirt {
   background: #6f4a2f;
 }
 
-.item-icon-stone,
 .swatch-stone {
   background: #8a8f98;
 }
 
-.item-icon-cobblestone {
-  background: #7d838b;
-}
-
-.item-icon-sand,
 .swatch-sand {
   background: #d9c27f;
 }
 
-.item-icon-sandstone {
-  background: #c9aa68;
-}
-
-.item-icon-gravel {
-  background: #8d8b87;
-}
-
-.item-icon-snow {
-  background: #f0f4fa;
-}
-
-.item-icon-oak-log,
 .swatch-oak-log {
   background: linear-gradient(180deg, #c89c68 0 34%, #8a633d 34% 100%);
 }
 
-.item-icon-oak-planks,
 .swatch-oak-planks {
   background: #ba9158;
 }
 
-.item-icon-oak-leaves {
-  background: #5b9240;
-}
-
-.item-icon-cactus {
-  background: linear-gradient(90deg, #4b8d39, #79b85e, #4b8d39);
-}
-
-.item-icon-deepslate {
-  background: #4c5058;
-}
-
-.item-icon-coal,
-.item-icon-coal-ore {
-  background: linear-gradient(135deg, #6c737d, #34383f);
-}
-
-.item-icon-iron-ore {
-  background: linear-gradient(135deg, #8f98a3, #c18b62);
-}
-
-.item-icon-gold-ore,
-.item-icon-gold-ingot {
-  background: linear-gradient(135deg, #ffe08b, #d5b24d);
-}
-
-.item-icon-iron-ingot {
-  background: linear-gradient(135deg, #dce4eb, #a6b3bf);
-}
-
-.item-icon-diamond,
-.item-icon-diamond-ore {
-  background: linear-gradient(135deg, #9ef6ff, #4cc7da);
-}
-
-.item-icon-stick {
-  background: linear-gradient(90deg, #8a633d, #c89c68, #8a633d);
-}
-
-.item-icon-crafting-table,
 .swatch-crafting-table {
   background: linear-gradient(180deg, #c78c55 0 28%, #8c5b35 28% 100%);
 }
 
-.item-icon-furnace,
 .swatch-furnace {
   background: linear-gradient(180deg, #90959c 0 20%, #676d75 20% 100%);
-}
-
-.item-icon-wooden-pickaxe,
-.item-icon-wooden-sword {
-  background: linear-gradient(135deg, #ba9158, #6f4a2f);
-}
-
-.item-icon-stone-pickaxe,
-.item-icon-stone-sword {
-  background: linear-gradient(135deg, #9aa0a8, #555b64);
-}
-
-.item-icon-iron-pickaxe,
-.item-icon-iron-sword {
-  background: linear-gradient(135deg, #ebf0f4, #8c98a5);
 }
 
 @media (max-width: 900px) {
@@ -993,6 +930,61 @@ button {
   .touch-look-hint {
     font-size: 0.56rem;
   }
+
+  .menu-panel {
+    inset: 3.7rem 0.55rem 0.55rem;
+    gap: 0.7rem;
+    padding: 0.72rem;
+  }
+
+  .menu-header {
+    align-items: start;
+  }
+
+  .menu-header h1 {
+    font-size: 1.12rem;
+  }
+
+  .menu-body,
+  .inventory-window,
+  .inventory-window-top,
+  .inventory-sidebar {
+    gap: 0.6rem;
+  }
+
+  .inventory-window-top {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-preview-panel,
+  .inventory-crafting-panel,
+  .recipe-book-panel,
+  .world-panel {
+    padding: 0.58rem;
+  }
+
+  .inventory-player-preview,
+  .inventory-crafting-preview {
+    min-height: auto;
+    height: auto;
+  }
+
+  .inventory-player-preview {
+    height: 9rem;
+  }
+
+  .inventory-crafting-preview {
+    grid-template-columns: repeat(2, 2.65rem) 0.9rem 2.65rem;
+  }
+
+  .recipe-row {
+    gap: 0.38rem;
+    padding: 0.38rem;
+  }
+
+  .recipe-row-output {
+    gap: 0.38rem;
+  }
 }
 
 @media (max-height: 560px) {
@@ -1059,6 +1051,30 @@ button {
 }
 
 @media (max-width: 520px) {
+  .menu-panel {
+    inset: 3.4rem 0.42rem 0.42rem;
+    gap: 0.55rem;
+    padding: 0.58rem;
+  }
+
+  .menu-header {
+    gap: 0.45rem;
+  }
+
+  .menu-header h1 {
+    margin-top: 0.12rem;
+    font-size: 1rem;
+  }
+
+  .menu-subtitle,
+  .inventory-window-note,
+  .recipe-book-note,
+  .world-panel-copy,
+  .recipe-row-meta,
+  .recipe-book-empty p {
+    font-size: 0.82rem;
+  }
+
   .hotbar-shell {
     left: 0.75rem;
     right: 0.75rem;
@@ -1076,6 +1092,14 @@ button {
   }
 
   .inventory-slot {
+    border-width: 2px;
+  }
+
+  .inventory-crafting-preview {
+    grid-template-columns: repeat(2, minmax(2.25rem, 1fr)) 0.8rem minmax(2.25rem, 1fr);
+  }
+
+  .recipe-row {
     border-width: 2px;
   }
 }

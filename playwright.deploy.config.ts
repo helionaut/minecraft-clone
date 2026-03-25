@@ -11,9 +11,14 @@ export default defineConfig({
   timeout: 30_000,
   retries: 1,
   workers: 1,
+  outputDir: 'reports/deploy-smoke/test-results',
   use: {
     baseURL,
     trace: 'on-first-retry',
   },
-  reporter: [['list']],
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'reports/deploy-smoke/html-report', open: 'never' }],
+    ['json', { outputFile: 'reports/deploy-smoke/results.json' }],
+  ],
 });

@@ -57,7 +57,8 @@ The deploy workflow enforces these checks before a release is considered healthy
 
 1. `npm run check` on the exact commit being published
 2. `actions/deploy-pages` returning a production `page_url`
-3. a Playwright smoke test against the deployed site URL
+3. a Playwright smoke test against the deployed site URL, with a published
+   `deploy-smoke-evidence` artifact bundle
 
 The smoke test verifies:
 
@@ -65,7 +66,10 @@ The smoke test verifies:
 - the `Reset world` control is visible
 - the WebGL viewport canvas is attached
 - the desktop entry prompt renders after page load
-- desktop and mobile release screenshots are captured as Playwright artifacts
+- desktop and mobile release screenshots are captured in the
+  `deploy-smoke-evidence` artifact bundle
+- a static HTML Playwright report and JSON result summary are included in the
+  same artifact bundle for inspection
 - mobile touch controls remain visible in portrait and landscape review states
 
 ## Manual verification
@@ -75,19 +79,20 @@ After the workflow finishes:
 1. Open the production URL from the deploy job output or deployment metadata
    artifact.
 2. Confirm the page title panel and viewport load without a blank screen.
-3. Review the Playwright screenshot artifacts for at least:
+3. Download the `deploy-smoke-evidence` artifact from the `verify` job.
+4. Review the Playwright screenshot artifacts for at least:
    `desktop-shell.png`, `desktop-inventory.png`, `mobile-shell-390x844.png`,
    `mobile-inventory-390x844.png`, and `mobile-shell-844x390.png`.
-4. Verify the full gameplay UI remains visible in those screenshots:
+5. Verify the full gameplay UI remains visible in those screenshots:
    top HUD, inventory button, hotbar, move stick, action buttons, and inventory
    overlay controls must all stay inside the visible frame without clipping.
-5. On desktop, click the viewport and verify the prompt changes after pointer
+6. On desktop, click the viewport and verify the prompt changes after pointer
    lock engages.
-6. Move with `WASD`, jump with `Space`, and verify the crosshair/target readout
+7. Move with `WASD`, jump with `Space`, and verify the crosshair/target readout
    respond near blocks.
-7. In a mobile browser context, confirm controls remain visible with browser UI
+8. In a mobile browser context, confirm controls remain visible with browser UI
    bars present and after rotating once between portrait and landscape.
-8. Mine with left click, place with right click, refresh once, and confirm the
+9. Mine with left click, place with right click, refresh once, and confirm the
    local-persistence behavior still matches the current game contract.
 
 ## Reporting the production URL

@@ -18,16 +18,21 @@ describe('Inventory', () => {
     expect(inventory.getCount('crafting-table')).toBe(1);
   });
 
-  it('requires a crafting table for advanced tools and weapons', () => {
+  it('requires nearby crafting stations for advanced tools and smelting', () => {
     const inventory = new Inventory();
     inventory.addItem('stick', 4);
     inventory.addItem('cobblestone', 3);
+    inventory.addItem('crafting-table', 1);
+    inventory.addItem('iron-ore', 1);
+    inventory.addItem('coal', 1);
 
     expect(inventory.craft('stone-pickaxe')).toBe(false);
+    expect(inventory.craft('iron-ingot')).toBe(false);
 
-    inventory.addItem('crafting-table', 1);
-    expect(inventory.craft('stone-pickaxe')).toBe(true);
+    expect(inventory.craft('stone-pickaxe', ['crafting-table'])).toBe(true);
     expect(inventory.getCount('stone-pickaxe')).toBe(1);
+    expect(inventory.craft('iron-ingot', ['furnace'])).toBe(true);
+    expect(inventory.getCount('iron-ingot')).toBe(1);
   });
 });
 

@@ -10,6 +10,7 @@ export default defineConfig({
   testDir: './tests/deploy',
   timeout: 30_000,
   retries: 1,
+  workers: 1,
   use: {
     baseURL,
     trace: 'on-first-retry',

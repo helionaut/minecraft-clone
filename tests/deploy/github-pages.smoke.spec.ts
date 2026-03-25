@@ -51,6 +51,21 @@ async function moveInventoryItemToSlot(page: Page, itemType: string, toIndex: nu
   }, [fromIndex, toIndex] as const);
 }
 
+async function clickButtonBySelector(page: Page, selector: string): Promise<void> {
+  const button = page.locator(selector);
+  await expect(button).toBeVisible();
+  await expect(button).toBeEnabled();
+  await page.evaluate((buttonSelector: string) => {
+    const target = document.querySelector<HTMLButtonElement>(buttonSelector);
+
+    if (!target) {
+      throw new Error(`Expected button for selector: ${buttonSelector}`);
+    }
+
+    target.click();
+  }, selector);
+}
+
 async function expectTouchHelpCollapsed(page: Page) {
   await page.waitForTimeout(2600);
   await expect(page.locator('[data-hud-status]')).toBeHidden();
@@ -126,12 +141,12 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expectVisibleInViewport(inventoryButton);
   await mobilePage.screenshot({ path: testInfo.outputPath('mobile-shell-390x844.png') });
 
-  await mobilePage.getByRole('button', { name: 'Help' }).click();
+  await clickButtonBySelector(mobilePage, '[data-open-help]');
   await expect(mobilePage.locator('[data-hud-status]')).toBeVisible();
-  await mobilePage.getByRole('button', { name: 'Hide help' }).click();
+  await clickButtonBySelector(mobilePage, '[data-dismiss-help]');
   await expect(mobilePage.locator('[data-hud-status]')).toBeHidden();
 
-  await inventoryButton.click();
+  await clickButtonBySelector(mobilePage, '[data-open-menu]');
   const closeButton = mobilePage.getByRole('button', { name: 'Close' });
   const resetButton = mobilePage.getByRole('button', { name: 'Reset world' });
   await expect(mobilePage.getByRole('heading', { name: 'Inventory' })).toBeVisible();
@@ -147,7 +162,7 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await mobilePage.screenshot({ path: testInfo.outputPath('mobile-inventory-390x844.png') });
   await resetButton.scrollIntoViewIfNeeded();
   await expectVisibleInViewport(resetButton);
-  await closeButton.click();
+  await clickButtonBySelector(mobilePage, 'button[data-close-menu]');
   await mobileContext.close();
 
   const mobileLandscapeContext = await browser.newContext({

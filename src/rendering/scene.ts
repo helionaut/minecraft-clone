@@ -92,6 +92,10 @@ export interface PlayableScene {
   readonly renderer: WebGLRenderer;
   readonly setSelectedBlock: (type: HotbarBlockType) => void;
   readonly craftRecipe: (recipeId: string) => void;
+  readonly mineBlockAt: (x: number, y: number, z: number) => {
+    readonly success: boolean;
+    readonly drop: InventoryItemType | null;
+  };
   readonly placeSelectedBlockOnNearestSurface: () => {
     readonly placed: boolean;
     readonly position: { readonly x: number; readonly y: number; readonly z: number } | null;
@@ -544,26 +548,7 @@ export function createPlayableScene(
     }
 
     if (button === 0) {
-      const outcome = resolveMiningOutcome(currentTarget.type, getBestTool(inventory));
-
-      if (!outcome.success) {
-        updateStatus();
-        return;
-      }
-
-      if (world.removeBlock(currentTarget.x, currentTarget.y, currentTarget.z)) {
-        if (outcome.drop) {
-          inventory.addItem(outcome.drop);
-          persistInventory();
-        }
-
-        audio.playMine();
-        world.tickFluids(4);
-        persistWorld();
-        worldDirty = true;
-        rebuildWorld();
-        updateTargeting();
-      }
+      mineBlockAt(currentTarget.x, currentTarget.y, currentTarget.z);
 
       return;
     }
@@ -597,6 +582,41 @@ export function createPlayableScene(
     rebuildWorld();
     updateTargeting();
     return true;
+  };
+
+  const mineBlockAt = (x: number, y: number, z: number) => {
+    const block = world.getBlock(x, y, z);
+
+    if (!block) {
+      updateStatus();
+      return {
+        success: false,
+        drop: null,
+      };
+    }
+
+    const outcome = resolveMiningOutcome(block, getBestTool(inventory));
+
+    if (!outcome.success || !world.removeBlock(x, y, z)) {
+      updateStatus();
+      return {
+        success: false,
+        drop: null,
+      };
+    }
+
+    if (outcome.drop) {
+      inventory.addItem(outcome.drop);
+      persistInventory();
+    }
+
+    audio.playMine();
+    world.tickFluids(4);
+    persistWorld();
+    worldDirty = true;
+    rebuildWorld();
+    updateTargeting();
+    return outcome;
   };
 
   const requestPointerLock = () => {
@@ -996,6 +1016,7 @@ export function createPlayableScene(
       updateTargeting();
     },
     craftRecipe,
+    mineBlockAt,
     placeSelectedBlockOnNearestSurface,
     getBlockAt: (x: number, y: number, z: number) => world.getBlock(x, y, z),
     getStatusSnapshot: () => lastPublishedStatus,

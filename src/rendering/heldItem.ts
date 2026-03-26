@@ -1,6 +1,7 @@
 import {
   BoxGeometry,
   Group,
+  type Material,
   Mesh,
   MeshStandardMaterial,
 } from 'three';
@@ -14,10 +15,15 @@ import {
   type InventoryItemType,
   type ToolItemType,
 } from '../gameplay/progression.ts';
-import {
-  createBlockMaterialFactory,
-  type FaceVisibilityMask,
-} from './textures.ts';
+import { type FaceVisibilityMask } from './textures.ts';
+
+interface BlockMaterialFactory {
+  readonly getMaterials: (
+    type: HotbarBlockType,
+    brightness: number,
+    visibleFaces?: FaceVisibilityMask,
+  ) => Material[];
+}
 
 export type HeldItemType = HotbarBlockType | ToolItemType;
 
@@ -152,7 +158,7 @@ function createSwordModel(type: ToolItemType): Group {
 
 export function createHeldItemModel(
   type: HeldItemType,
-  blockMaterialFactory: ReturnType<typeof createBlockMaterialFactory>,
+  blockMaterialFactory: BlockMaterialFactory,
 ): Group {
   if (isHotbarBlockType(type)) {
     const mesh = new Mesh(

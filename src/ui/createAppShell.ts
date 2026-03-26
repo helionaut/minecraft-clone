@@ -610,7 +610,7 @@ export function createAppShell(root: HTMLDivElement): void {
     hotbarNextButton,
   };
 
-  const syncSelectedInventorySlot = (status: SandboxStatus) => {
+  const syncSelectedInventorySlot = () => {
     if (selectedInventorySlotIndex !== null && inventoryLayout[selectedInventorySlotIndex]) {
       return;
     }
@@ -625,7 +625,7 @@ export function createAppShell(root: HTMLDivElement): void {
     selectedInventorySlotIndex = activeHotbarIndex >= 0 ? activeHotbarIndex : null;
   };
 
-  const renderInventoryPanels = (status: SandboxStatus) => {
+  const renderInventoryPanels = () => {
     safeInventory.innerHTML = renderStorageSlots(
       inventoryLayout,
       selectedInventorySlotIndex,
@@ -647,7 +647,7 @@ export function createAppShell(root: HTMLDivElement): void {
     selectedInventorySlotIndex = slotIndex;
 
     if (lastStatus) {
-      renderInventoryPanels(lastStatus);
+      renderInventoryPanels();
       renderHudHotbarPanel(lastStatus);
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
@@ -668,7 +668,7 @@ export function createAppShell(root: HTMLDivElement): void {
     }
 
     if (lastStatus) {
-      renderInventoryPanels(lastStatus);
+      renderInventoryPanels();
       renderHudHotbarPanel(lastStatus);
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
@@ -690,7 +690,7 @@ export function createAppShell(root: HTMLDivElement): void {
     syncActiveHotbarItemFromSlot(toIndex);
 
     if (lastStatus) {
-      renderInventoryPanels(lastStatus);
+      renderInventoryPanels();
       renderHudHotbarPanel(lastStatus);
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
@@ -749,21 +749,7 @@ export function createAppShell(root: HTMLDivElement): void {
         event.dataTransfer?.setData('text/plain', String(slotIndex));
         event.dataTransfer?.setDragImage(button, button.clientWidth / 2, button.clientHeight / 2);
         event.dataTransfer!.effectAllowed = 'move';
-        renderInventoryPanels(lastStatus ?? {
-          locked: false,
-          activeItem: 'grass',
-          selectedBlock: 'grass',
-          coords: '',
-          target: '',
-          prompt: '',
-          touchDevice: false,
-          selectedTool: '',
-          stations: '',
-          renderer: '',
-          inventory: [],
-          recipes: [],
-          placeableCounts: {},
-        });
+        renderInventoryPanels();
         bindInventorySlotInteractions();
       });
 
@@ -792,7 +778,7 @@ export function createAppShell(root: HTMLDivElement): void {
         draggedInventorySlotIndex = null;
 
         if (lastStatus) {
-          renderInventoryPanels(lastStatus);
+          renderInventoryPanels();
           bindInventorySlotInteractions();
         }
       });
@@ -837,9 +823,9 @@ export function createAppShell(root: HTMLDivElement): void {
     })
       ? activeHotbarItem
       : status.activeItem ?? status.selectedBlock;
-    syncSelectedInventorySlot(status);
+    syncSelectedInventorySlot();
     renderHudHotbarPanel(status);
-    renderInventoryPanels(status);
+    renderInventoryPanels();
     safeCrafting.innerHTML = renderRecipes(status.recipes);
     bindHudHotbarInteractions();
     bindInventorySlotInteractions();

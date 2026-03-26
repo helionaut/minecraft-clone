@@ -84,6 +84,30 @@ async function clickButtonBySelector(page: Page, selector: string): Promise<void
   }, selector);
 }
 
+async function moveInventoryItemToSlot(page: Page, itemType: string, toIndex: number) {
+  const sourceIndexRaw = await page.locator(`[data-item-type="${itemType}"]`).first().getAttribute('data-slot-index');
+
+  if (!sourceIndexRaw) {
+    throw new Error(`Expected inventory slot for ${itemType}.`);
+  }
+
+  const fromIndex = Number(sourceIndexRaw);
+
+  await page.evaluate(([from, to]) => {
+    const qa = (window as Window & {
+      __minecraftCloneQa?: {
+        moveInventorySlot: (sourceIndex: number, targetIndex: number) => void;
+      };
+    }).__minecraftCloneQa;
+
+    if (!qa) {
+      throw new Error('Expected QA harness.');
+    }
+
+    qa.moveInventorySlot(from, to);
+  }, [fromIndex, toIndex] as const);
+}
+
 test('the deployed sandbox supports a station-based gather and crafting loop with visible inventory icons', async ({ page }, testInfo) => {
   test.setTimeout(240_000);
   const { worldSeed, resourceCells } = buildProgressionWorldSeed();
@@ -259,6 +283,8 @@ test('the deployed sandbox supports a station-based gather and crafting loop wit
   await expect(stonePickaxeRecipe).toBeEnabled();
   await clickButtonBySelector(page, '[data-recipe-id="stone-pickaxe"]');
   await expect(page.locator('[data-item-type="stone-pickaxe"]').first()).toBeVisible();
+  await moveInventoryItemToSlot(page, 'furnace', 27);
+  await expect(page.locator('[data-slot-index="27"][data-item-type="furnace"]')).toBeVisible();
 
   const furnacePlacementProof = await page.evaluate(() => {
     const qa = (window as Window & {

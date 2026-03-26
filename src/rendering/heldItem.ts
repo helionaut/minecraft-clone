@@ -27,6 +27,42 @@ interface BlockMaterialFactory {
 
 export type HeldItemType = HotbarBlockType | ToolItemType;
 
+export interface HeldItemAnchorTransform {
+  readonly position: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  readonly rotation: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  readonly scale: number;
+}
+
+export interface HeldItemMotionInput {
+  readonly elapsedSeconds: number;
+  readonly movementStrength: number;
+  readonly equipStrength: number;
+  readonly swingStrength: number;
+  readonly touchDevice: boolean;
+  readonly type: HeldItemType;
+}
+
+export interface HeldItemMotion {
+  readonly position: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  readonly rotation: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+}
+
 const PICKAXE_TYPES = new Set<ToolItemType>([
   'wooden-pickaxe',
   'stone-pickaxe',
@@ -44,6 +80,59 @@ const VISIBLE_FACES: FaceVisibilityMask = {
   pz: true,
   nz: true,
 };
+
+function clamp01(value: number): number {
+  return Math.min(Math.max(value, 0), 1);
+}
+
+function easeOutCubic(value: number): number {
+  const t = 1 - clamp01(value);
+  return 1 - t ** 3;
+}
+
+export function getHeldItemAnchorTransform(touchDevice: boolean): HeldItemAnchorTransform {
+  return {
+    position: {
+      x: touchDevice ? 0.2 : 0.72,
+      y: touchDevice ? -0.1 : -0.72,
+      z: touchDevice ? -0.7 : -1.08,
+    },
+    rotation: {
+      x: touchDevice ? 0.08 : -0.18,
+      y: touchDevice ? 0.02 : -0.14,
+      z: 0.02,
+    },
+    scale: touchDevice ? 1.08 : 1,
+  };
+}
+
+export function getHeldItemMotion(input: HeldItemMotionInput): HeldItemMotion {
+  const movementStrength = clamp01(input.movementStrength);
+  const equipStrength = clamp01(input.equipStrength);
+  const swingStrength = clamp01(input.swingStrength);
+  const silhouetteWeight = isHeldToolType(input.type) ? 1 : 0.72;
+  const touchDamping = input.touchDevice ? 0.68 : 1;
+  const walkCycle = input.elapsedSeconds * 7.2;
+  const walkBob = Math.sin(walkCycle) * 0.028 * movementStrength * touchDamping;
+  const walkLift = Math.abs(Math.cos(walkCycle)) * 0.024 * movementStrength * touchDamping;
+  const idleSway = Math.sin(input.elapsedSeconds * 1.7) * 0.016 * touchDamping;
+  const idlePitch = Math.sin(input.elapsedSeconds * 1.25) * 0.02 * touchDamping;
+  const equipOffset = 1 - easeOutCubic(1 - equipStrength);
+  const swingArc = Math.sin((1 - swingStrength) * Math.PI) * silhouetteWeight;
+
+  return {
+    position: {
+      x: idleSway - equipOffset * 0.2 + swingArc * 0.048,
+      y: walkBob - walkLift - equipOffset * 0.18 - swingArc * 0.09,
+      z: -walkLift * 0.45 + equipOffset * 0.12 + swingArc * 0.12,
+    },
+    rotation: {
+      x: idlePitch + walkLift * 0.08 - swingArc * 0.96,
+      y: idleSway * 0.22 + swingArc * 0.24,
+      z: walkBob * 0.18 - equipOffset * 0.24 - swingArc * 0.34,
+    },
+  };
+}
 
 export function isHotbarBlockType(type: InventoryItemType | null): type is HotbarBlockType {
   return Boolean(type && HOTBAR_BLOCK_TYPES.has(type as HotbarBlockType));

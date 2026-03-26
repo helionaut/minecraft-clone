@@ -64,6 +64,8 @@ import {
   createHeldItemModel,
   disposeHeldItemModel,
   getActivePlaceableBlock,
+  getHeldItemAnchorTransform,
+  getHeldItemMotion,
   isHeldItemType,
   isHeldToolType,
   isHotbarBlockType,
@@ -153,6 +155,8 @@ const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number,
 ];
 
 const TARGET_REACH = 6;
+const HELD_ITEM_EQUIP_DURATION = 0.18;
+const HELD_ITEM_SWING_DURATION = 0.24;
 
 interface StreamingProfile {
   readonly renderChunkRadius: number;
@@ -330,10 +334,19 @@ export function createPlayableScene(
   const highlightGeometry = new EdgesGeometry(new BoxGeometry(1.02, 1.02, 1.02));
   const blockMaterialFactory = createBlockMaterialFactory();
   const audio = createGameAudio();
+  const heldItemAnchorBase = getHeldItemAnchorTransform(touchDevice);
   const heldItemAnchor = new Group();
-  heldItemAnchor.position.set(touchDevice ? 0.2 : 0.72, touchDevice ? -0.1 : -0.72, touchDevice ? -0.7 : -1.08);
-  heldItemAnchor.rotation.set(touchDevice ? 0.08 : -0.18, touchDevice ? 0.02 : -0.14, 0.02);
-  heldItemAnchor.scale.setScalar(touchDevice ? 1.08 : 1);
+  heldItemAnchor.position.set(
+    heldItemAnchorBase.position.x,
+    heldItemAnchorBase.position.y,
+    heldItemAnchorBase.position.z,
+  );
+  heldItemAnchor.rotation.set(
+    heldItemAnchorBase.rotation.x,
+    heldItemAnchorBase.rotation.y,
+    heldItemAnchorBase.rotation.z,
+  );
+  heldItemAnchor.scale.setScalar(heldItemAnchorBase.scale);
   camera.add(heldItemAnchor);
 
   const targetOutline = new LineSegments(
@@ -362,6 +375,9 @@ export function createPlayableScene(
   let activeHotbarItem: InventoryItemType | null = hotbarControls?.getActiveHotbarItem() ?? null;
   let activeHeldItemModel: Group | null = null;
   let activeHeldItemType: InventoryItemType | null = null;
+  let heldItemEquipTimer = 0;
+  let heldItemSwingTimer = 0;
+  let heldItemSwingIntensity = 0;
   let locked = false;
   const streamingProfile = touchDevice ? MOBILE_STREAMING_PROFILE : DESKTOP_STREAMING_PROFILE;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, streamingProfile.pixelRatioCap));
@@ -461,6 +477,7 @@ export function createPlayableScene(
     }
 
     activeHeldItemType = activeHotbarItem;
+    heldItemEquipTimer = isHeldItemType(activeHotbarItem) ? HELD_ITEM_EQUIP_DURATION : 0;
 
     if (!isHeldItemType(activeHotbarItem)) {
       return;
@@ -475,6 +492,15 @@ export function createPlayableScene(
     }
 
     heldItemAnchor.add(activeHeldItemModel);
+  };
+
+  const triggerHeldItemSwing = (intensity: number) => {
+    if (!isHeldItemType(activeHotbarItem)) {
+      return;
+    }
+
+    heldItemSwingTimer = HELD_ITEM_SWING_DURATION;
+    heldItemSwingIntensity = intensity;
   };
 
   const rebuildWorld = () => {
@@ -671,6 +697,7 @@ export function createPlayableScene(
     inventory.removeItem(placeableBlock);
     persistInventory();
     audio.playPlace();
+    triggerHeldItemSwing(0.65);
     world.tickFluids(2);
     persistWorld();
     worldDirty = true;
@@ -706,6 +733,7 @@ export function createPlayableScene(
     }
 
     audio.playMine();
+    triggerHeldItemSwing(1);
     world.tickFluids(4);
     persistWorld();
     worldDirty = true;
@@ -1128,6 +1156,34 @@ export function createPlayableScene(
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
     clouds.update(player.position.x, player.position.z, elapsedTime);
+    heldItemEquipTimer = Math.max(0, heldItemEquipTimer - delta);
+    heldItemSwingTimer = Math.max(0, heldItemSwingTimer - delta);
+
+    const horizontalSpeed = Math.hypot(
+      player.position.x - previousPlayer.position.x,
+      player.position.z - previousPlayer.position.z,
+    ) / Math.max(delta, 1 / 120);
+    const heldItemMotion = activeHeldItemType && isHeldItemType(activeHeldItemType)
+      ? getHeldItemMotion({
+        elapsedSeconds: elapsedTime,
+        movementStrength: horizontalSpeed / DEFAULT_PLAYER_CONFIG.moveSpeed,
+        equipStrength: heldItemEquipTimer / HELD_ITEM_EQUIP_DURATION,
+        swingStrength: (heldItemSwingTimer / HELD_ITEM_SWING_DURATION) * heldItemSwingIntensity,
+        touchDevice,
+        type: activeHeldItemType,
+      })
+      : null;
+
+    heldItemAnchor.position.set(
+      heldItemAnchorBase.position.x + (heldItemMotion?.position.x ?? 0),
+      heldItemAnchorBase.position.y + (heldItemMotion?.position.y ?? 0),
+      heldItemAnchorBase.position.z + (heldItemMotion?.position.z ?? 0),
+    );
+    heldItemAnchor.rotation.set(
+      heldItemAnchorBase.rotation.x + (heldItemMotion?.rotation.x ?? 0),
+      heldItemAnchorBase.rotation.y + (heldItemMotion?.rotation.y ?? 0),
+      heldItemAnchorBase.rotation.z + (heldItemMotion?.rotation.z ?? 0),
+    );
 
     updateTargeting();
     renderer.render(scene, camera);

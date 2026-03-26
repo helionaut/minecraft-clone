@@ -21,7 +21,7 @@ export function createMusicBar(step: number): readonly number[] {
   return MUSIC_PATTERN[step % MUSIC_PATTERN.length] ?? MUSIC_PATTERN[0];
 }
 
-export function createGameAudio(): {
+type GameAudio = {
   unlock: () => void;
   playJump: () => void;
   playMine: () => void;
@@ -33,8 +33,11 @@ export function createGameAudio(): {
     delta: number,
   ) => void;
   dispose: () => void;
-} {
-  const AudioContextCtor = window.AudioContext;
+};
+
+export function createGameAudio(
+  AudioContextCtor: typeof AudioContext | undefined = window.AudioContext,
+): GameAudio {
 
   if (!AudioContextCtor) {
     return {
@@ -55,8 +58,10 @@ export function createGameAudio(): {
   let lastMotionAccentAt = -Infinity;
 
   const playJump = () => {
-    pulse(392, { duration: 0.18, type: 'square', gain: 0.06 });
-    pulse(523.25, { duration: 0.12, type: 'triangle', gain: 0.035, attack: 0.005 });
+    // A layered pitch rise lands closer to a tactile "whoosh" than two fixed notes.
+    pulse(196, { duration: 0.2, type: 'triangle', gain: 0.055, attack: 0.008, endFrequency: 392 });
+    pulse(294, { duration: 0.14, type: 'sawtooth', gain: 0.018, attack: 0.003, endFrequency: 540 });
+    pulse(523.25, { duration: 0.22, type: 'sine', gain: 0.02, attack: 0.012, endFrequency: 392 });
   };
 
   const ensureContext = (): AudioContextLike => {
@@ -81,31 +86,38 @@ export function createGameAudio(): {
       type,
       gain,
       attack = 0.01,
-      destination = masterGain,
+      endFrequency,
+      destination,
     }: {
       duration: number;
       type: OscillatorType;
       gain: number;
       attack?: number;
+      endFrequency?: number;
       destination?: AudioNode | null;
     },
   ) => {
-    if (!destination) {
+    const activeContext = ensureContext();
+    const resolvedDestination = destination ?? masterGain;
+
+    if (!resolvedDestination) {
       return;
     }
 
-    const activeContext = ensureContext();
     const oscillator = activeContext.createOscillator();
     const amp = activeContext.createGain();
     const now = activeContext.currentTime;
 
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, now);
+    if (endFrequency !== undefined) {
+      oscillator.frequency.exponentialRampToValueAtTime(endFrequency, now + duration);
+    }
     amp.gain.setValueAtTime(0.0001, now);
     amp.gain.linearRampToValueAtTime(gain, now + attack);
     amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
     oscillator.connect(amp);
-    amp.connect(destination);
+    amp.connect(resolvedDestination);
     oscillator.start(now);
     oscillator.stop(now + duration + 0.02);
   };

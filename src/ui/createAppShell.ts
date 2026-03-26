@@ -236,12 +236,12 @@ function renderStorageSlots(
 function renderMenuHotbar(
   slots: readonly (InventoryLayoutSlot | null)[],
   selectedSlotIndex: number | null,
-  activeItem: InventoryItemType | null,
+  activeHotbarSlotIndex: number,
   draggedSlotIndex: number | null,
 ): string {
   return slots.slice(STORAGE_SLOT_COUNT).map((slot, offset) => {
     const slotIndex = STORAGE_SLOT_COUNT + offset;
-    const active = Boolean(slot && slot.type === activeItem);
+    const active = offset === activeHotbarSlotIndex;
 
     return renderInventorySlot(slot, slotIndex, {
       selected: selectedSlotIndex === slotIndex,
@@ -259,11 +259,11 @@ function getHudHotbarSlots(
 
 function renderHudHotbar(
   slots: readonly (InventoryLayoutSlot | null)[],
-  activeItem: InventoryItemType | null,
+  activeHotbarSlotIndex: number,
 ): string {
   return getHudHotbarSlots(slots).map((slot, index) => {
     const selectableType = slot && isHotbarSelectableItem(slot.type) ? slot.type : null;
-    const active = Boolean(slot && slot.type === activeItem);
+    const active = index === activeHotbarSlotIndex;
     const icon = slot
       ? createItemIcon(slot.type, slot.count)
       : '<span class="inventory-slot-empty" aria-hidden="true"></span>';
@@ -558,11 +558,31 @@ export function createAppShell(root: HTMLDivElement): void {
   let inventoryLayout = loadInventoryLayout();
   let selectedInventorySlotIndex: number | null = null;
   let draggedInventorySlotIndex: number | null = null;
-  let activeHotbarItem: InventoryItemType | null = null;
+  let selectedHotbarSlotIndex = 0;
+  let hotbarSelectionInitialized = false;
   let lastStatus: SandboxStatus | null = null;
   let touchHelpVisible = false;
   let touchHelpInitialized = false;
   let touchHelpTimer = 0;
+
+  const normalizeHotbarSlotIndex = (slotIndex: number) => {
+    return Math.min(Math.max(slotIndex, 0), HOTBAR_SLOT_COUNT - 1);
+  };
+
+  const getInventorySlotIndexForHotbar = (hotbarSlotIndex: number) => STORAGE_SLOT_COUNT + hotbarSlotIndex;
+
+  const getSelectedHotbarItem = (): InventoryItemType | null => {
+    return inventoryLayout[getInventorySlotIndexForHotbar(selectedHotbarSlotIndex)]?.type ?? null;
+  };
+
+  const findHotbarSlotIndexForItem = (type: InventoryItemType | null): number | null => {
+    if (!type) {
+      return null;
+    }
+
+    const hotbarIndex = getHudHotbarSlots(inventoryLayout).findIndex((slot) => slot?.type === type);
+    return hotbarIndex >= 0 ? hotbarIndex : null;
+  };
 
   const clearTouchHelpTimer = () => {
     if (touchHelpTimer) {
@@ -615,14 +635,7 @@ export function createAppShell(root: HTMLDivElement): void {
       return;
     }
 
-    const activeHotbarIndex = inventoryLayout.findIndex((slot, index) => {
-      return index >= STORAGE_SLOT_COUNT && Boolean(
-        slot &&
-        slot.type === activeHotbarItem,
-      );
-    });
-
-    selectedInventorySlotIndex = activeHotbarIndex >= 0 ? activeHotbarIndex : null;
+    selectedInventorySlotIndex = null;
   };
 
   const renderInventoryPanels = () => {
@@ -634,13 +647,13 @@ export function createAppShell(root: HTMLDivElement): void {
     safeMenuHotbar.innerHTML = renderMenuHotbar(
       inventoryLayout,
       selectedInventorySlotIndex,
-      activeHotbarItem,
+      selectedHotbarSlotIndex,
       draggedInventorySlotIndex,
     );
   };
 
-  const renderHudHotbarPanel = (status: SandboxStatus) => {
-    palette.innerHTML = renderHudHotbar(inventoryLayout, activeHotbarItem ?? status.activeItem ?? status.selectedBlock);
+  const renderHudHotbarPanel = () => {
+    palette.innerHTML = renderHudHotbar(inventoryLayout, selectedHotbarSlotIndex);
   };
 
   const selectInventorySlot = (slotIndex: number | null) => {
@@ -648,28 +661,24 @@ export function createAppShell(root: HTMLDivElement): void {
 
     if (lastStatus) {
       renderInventoryPanels();
-      renderHudHotbarPanel(lastStatus);
+      renderHudHotbarPanel();
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
     }
   };
 
-  const syncActiveHotbarItemFromSlot = (slotIndex: number | null) => {
-    if (slotIndex === null || slotIndex < STORAGE_SLOT_COUNT) {
-      return;
-    }
+  const syncSelectedHotbarSlot = (hotbarSlotIndex: number, syncSceneSelection: boolean) => {
+    selectedHotbarSlotIndex = normalizeHotbarSlotIndex(hotbarSlotIndex);
+    hotbarSelectionInitialized = true;
+    const selectedItem = getSelectedHotbarItem();
 
-    const slot = inventoryLayout[slotIndex];
-
-    activeHotbarItem = slot?.type ?? null;
-
-    if (slot && isHotbarSelectableItem(slot.type)) {
-      sandbox.setSelectedBlock(slot.type);
+    if (syncSceneSelection && selectedItem && isHotbarSelectableItem(selectedItem)) {
+      sandbox.setSelectedBlock(selectedItem);
     }
 
     if (lastStatus) {
       renderInventoryPanels();
-      renderHudHotbarPanel(lastStatus);
+      renderHudHotbarPanel();
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
     }
@@ -687,11 +696,14 @@ export function createAppShell(root: HTMLDivElement): void {
     inventoryLayout = nextLayout;
     selectedInventorySlotIndex = toIndex;
     persistInventoryLayout(inventoryLayout);
-    syncActiveHotbarItemFromSlot(toIndex);
+    if (toIndex >= STORAGE_SLOT_COUNT) {
+      syncSelectedHotbarSlot(toIndex - STORAGE_SLOT_COUNT, true);
+      return;
+    }
 
     if (lastStatus) {
       renderInventoryPanels();
-      renderHudHotbarPanel(lastStatus);
+      renderHudHotbarPanel();
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
     }
@@ -701,11 +713,10 @@ export function createAppShell(root: HTMLDivElement): void {
     const hotbarButtons = [...safePalette.querySelectorAll<HTMLButtonElement>('[data-hud-hotbar-slot]')];
 
     for (const button of hotbarButtons) {
-      const slotIndex = STORAGE_SLOT_COUNT + Number(button.dataset.hudHotbarSlot);
+      const hotbarSlotIndex = Number(button.dataset.hudHotbarSlot);
 
       button.addEventListener('click', () => {
-        selectInventorySlot(slotIndex);
-        syncActiveHotbarItemFromSlot(slotIndex);
+        syncSelectedHotbarSlot(hotbarSlotIndex, true);
       });
     }
   }
@@ -721,11 +732,15 @@ export function createAppShell(root: HTMLDivElement): void {
 
       button.addEventListener('click', () => {
         const hasItem = Boolean(inventoryLayout[slotIndex]);
+        const isHotbarSlot = slotIndex >= STORAGE_SLOT_COUNT;
 
         if (selectedInventorySlotIndex === null) {
+          if (isHotbarSlot) {
+            syncSelectedHotbarSlot(slotIndex - STORAGE_SLOT_COUNT, hasItem);
+          }
+
           if (hasItem) {
             selectInventorySlot(slotIndex);
-            syncActiveHotbarItemFromSlot(slotIndex);
           }
 
           return;
@@ -818,13 +833,20 @@ export function createAppShell(root: HTMLDivElement): void {
 
     inventoryLayout = reconcileInventoryLayout(inventoryLayout, status.inventory);
     persistInventoryLayout(inventoryLayout);
-    activeHotbarItem = inventoryLayout.some((slot, index) => {
-      return index >= STORAGE_SLOT_COUNT && Boolean(slot && slot.type === activeHotbarItem);
-    })
-      ? activeHotbarItem
-      : status.activeItem ?? status.selectedBlock;
+    if (!hotbarSelectionInitialized) {
+      const preferredHotbarSlotIndex = findHotbarSlotIndexForItem(status.activeItem)
+        ?? findHotbarSlotIndexForItem(status.selectedBlock);
+
+      if (preferredHotbarSlotIndex !== null) {
+        selectedHotbarSlotIndex = preferredHotbarSlotIndex;
+      }
+
+      hotbarSelectionInitialized = true;
+    }
+    selectedHotbarSlotIndex = normalizeHotbarSlotIndex(selectedHotbarSlotIndex);
+
     syncSelectedInventorySlot();
-    renderHudHotbarPanel(status);
+    renderHudHotbarPanel();
     renderInventoryPanels();
     safeCrafting.innerHTML = renderRecipes(status.recipes);
     bindHudHotbarInteractions();
@@ -846,9 +868,19 @@ export function createAppShell(root: HTMLDivElement): void {
     getHotbarSlots: () => {
       return getHudHotbarSlots(inventoryLayout).map((slot) => slot?.type ?? null);
     },
-    getActiveHotbarItem: () => activeHotbarItem,
+    getSelectedHotbarSlotIndex: () => selectedHotbarSlotIndex,
+    setSelectedHotbarSlotIndex: (slotIndex: number) => {
+      selectedHotbarSlotIndex = normalizeHotbarSlotIndex(slotIndex);
+      hotbarSelectionInitialized = true;
+    },
+    getActiveHotbarItem: () => getSelectedHotbarItem(),
     setActiveHotbarItem: (type: InventoryItemType | null) => {
-      activeHotbarItem = type;
+      const hotbarSlotIndex = findHotbarSlotIndexForItem(type);
+
+      if (hotbarSlotIndex !== null) {
+        selectedHotbarSlotIndex = hotbarSlotIndex;
+        hotbarSelectionInitialized = true;
+      }
     },
   };
 

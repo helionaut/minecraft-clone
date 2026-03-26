@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { HotbarBlockType } from '../../src/gameplay/blocks.ts';
 import {
-  cycleHotbarSelection,
+  cycleHotbarSlotIndex,
   getHotbarSelectionForSlot,
+  normalizeHotbarSlotIndex,
   reconcileHotbarSelection,
 } from '../../src/gameplay/hotbar.ts';
 
@@ -33,8 +34,16 @@ describe('reconcileHotbarSelection', () => {
   });
 });
 
-describe('cycleHotbarSelection', () => {
-  it('cycles only through owned hotbar items and skips empty or zero-count slots', () => {
+describe('normalizeHotbarSlotIndex', () => {
+  it('keeps the selected slot inside the stable nine-slot range', () => {
+    expect(normalizeHotbarSlotIndex(9, -1)).toBe(0);
+    expect(normalizeHotbarSlotIndex(9, 3)).toBe(3);
+    expect(normalizeHotbarSlotIndex(9, 12)).toBe(8);
+  });
+});
+
+describe('cycleHotbarSlotIndex', () => {
+  it('cycles by slot index across the stable hotbar even when slots are empty', () => {
     const slots: Array<HotbarBlockType | null> = [
       'oak-log',
       null,
@@ -46,15 +55,10 @@ describe('cycleHotbarSelection', () => {
       null,
       null,
     ];
-    const hasCount = hasCountFactory({
-      'oak-log': 0,
-      'crafting-table': 1,
-      furnace: 1,
-    });
 
-    expect(cycleHotbarSelection('oak-log', slots, 1, hasCount)).toBe('crafting-table');
-    expect(cycleHotbarSelection('crafting-table', slots, 1, hasCount)).toBe('furnace');
-    expect(cycleHotbarSelection('crafting-table', slots, -1, hasCount)).toBe('furnace');
+    expect(cycleHotbarSlotIndex(0, slots.length, 1)).toBe(1);
+    expect(cycleHotbarSlotIndex(1, slots.length, 1)).toBe(2);
+    expect(cycleHotbarSlotIndex(0, slots.length, -1)).toBe(8);
   });
 });
 

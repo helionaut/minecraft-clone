@@ -8,7 +8,11 @@ import {
   STATION_ITEM_TYPES,
   TOOL_ITEM_TYPES,
 } from '../../src/gameplay/progression.ts';
-import { INVENTORY_ICON_CATALOG, getInventoryIcon } from '../../src/ui/inventoryIcons.ts';
+import {
+  INVENTORY_ICON_CATALOG,
+  getInventoryIcon,
+  resolveInventoryIconAssetPath,
+} from '../../src/ui/inventoryIcons.ts';
 
 describe('inventory icon catalog', () => {
   it('covers every inventory item type used by gameplay', () => {
@@ -48,5 +52,15 @@ describe('inventory icon catalog', () => {
     }
 
     expect(assetPaths.size).toBe(INVENTORY_ICON_CATALOG.length);
+  });
+
+  it('resolves icon asset paths against the active Vite base path', () => {
+    expect(resolveInventoryIconAssetPath('oak-log', '/')).toBe('/textures/inventory/oak-log.svg');
+    expect(resolveInventoryIconAssetPath('oak-log', '/minecraft-clone/')).toBe(
+      '/minecraft-clone/textures/inventory/oak-log.svg',
+    );
+    expect(resolveInventoryIconAssetPath('oak-log', '/minecraft-clone')).toBe(
+      '/minecraft-clone/textures/inventory/oak-log.svg',
+    );
   });
 });

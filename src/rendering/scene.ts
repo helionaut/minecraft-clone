@@ -26,8 +26,9 @@ import {
   isFluidBlock,
 } from '../gameplay/blocks.ts';
 import {
-  cycleHotbarSelection,
+  cycleHotbarSlotIndex,
   getHotbarSelectionForSlot,
+  normalizeHotbarSlotIndex,
   reconcileHotbarSelection,
 } from '../gameplay/hotbar.ts';
 import {
@@ -65,7 +66,6 @@ import {
   isHeldItemType,
   isHeldToolType,
   isHotbarBlockType,
-  reconcileActiveHotbarItem,
 } from './heldItem.ts';
 import {
   createBlockMaterialFactory,
@@ -136,6 +136,8 @@ export interface TouchUiControls {
 
 export interface HotbarSelectionControls {
   readonly getHotbarSlots: () => readonly (InventoryItemType | null)[];
+  readonly getSelectedHotbarSlotIndex: () => number;
+  readonly setSelectedHotbarSlotIndex: (slotIndex: number) => void;
   readonly getActiveHotbarItem: () => InventoryItemType | null;
   readonly setActiveHotbarItem: (type: InventoryItemType | null) => void;
 }
@@ -370,6 +372,10 @@ export function createPlayableScene(
   scene.add(placementPreview);
 
   let selectedBlock: HotbarBlockType = 'grass';
+  let selectedHotbarSlotIndex = normalizeHotbarSlotIndex(
+    hotbarControls?.getHotbarSlots().length ?? PLACEABLE_BLOCK_ORDER.length,
+    hotbarControls?.getSelectedHotbarSlotIndex() ?? 0,
+  );
   let activeHotbarItem: InventoryItemType | null = hotbarControls?.getActiveHotbarItem() ?? null;
   let activeHeldItemModel: Group | null = null;
   let activeHeldItemType: InventoryItemType | null = null;
@@ -440,15 +446,20 @@ export function createPlayableScene(
     return getHotbarItems().map((type) => (isHotbarBlockType(type) && hasInventoryCount(type) ? type : null));
   };
 
-  const syncActiveHotbarItem = (nextItem?: InventoryItemType | null) => {
-    const preferredItem = hotbarControls?.getActiveHotbarItem() ?? nextItem ?? null;
+  const syncSelectedHotbarSlotIndex = () => {
+    selectedHotbarSlotIndex = normalizeHotbarSlotIndex(
+      getHotbarItems().length,
+      hotbarControls?.getSelectedHotbarSlotIndex() ?? selectedHotbarSlotIndex,
+    );
+    hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+  };
 
-    activeHotbarItem = reconcileActiveHotbarItem(
-      activeHotbarItem,
+  const syncActiveHotbarItem = () => {
+    syncSelectedHotbarSlotIndex();
+    activeHotbarItem = getHotbarSelectionForSlot(
       getHotbarItems(),
+      selectedHotbarSlotIndex,
       hasInventoryItemCount,
-      selectedBlock,
-      preferredItem,
     );
     hotbarControls?.setActiveHotbarItem(activeHotbarItem);
   };
@@ -817,26 +828,21 @@ export function createPlayableScene(
 
     if (event.code.startsWith('Digit')) {
       const slot = Number(event.code.slice(5)) - 1;
-      const nextItem = getHotbarSelectionForSlot(getHotbarItems(), slot, hasInventoryItemCount);
-
-      if (nextItem) {
-        activeHotbarItem = nextItem;
-        hotbarControls?.setActiveHotbarItem(nextItem);
-        if (isHotbarBlockType(nextItem)) {
-          selectedBlock = nextItem;
-        }
-        updateTargeting();
-        return;
+      selectedHotbarSlotIndex = normalizeHotbarSlotIndex(getHotbarItems().length, slot);
+      hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+      activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
+      hotbarControls?.setActiveHotbarItem(activeHotbarItem);
+      if (isHotbarBlockType(activeHotbarItem)) {
+        selectedBlock = activeHotbarItem;
       }
+      updateTargeting();
+      return;
     }
 
     if (event.code === 'BracketLeft') {
-      activeHotbarItem = cycleHotbarSelection(
-        activeHotbarItem ?? selectedBlock,
-        getHotbarItems(),
-        -1,
-        hasInventoryItemCount,
-      );
+      selectedHotbarSlotIndex = cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, -1);
+      hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+      activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
       hotbarControls?.setActiveHotbarItem(activeHotbarItem);
       if (isHotbarBlockType(activeHotbarItem)) {
         selectedBlock = activeHotbarItem;
@@ -846,12 +852,9 @@ export function createPlayableScene(
     }
 
     if (event.code === 'BracketRight') {
-      activeHotbarItem = cycleHotbarSelection(
-        activeHotbarItem ?? selectedBlock,
-        getHotbarItems(),
-        1,
-        hasInventoryItemCount,
-      );
+      selectedHotbarSlotIndex = cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, 1);
+      hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+      activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
       hotbarControls?.setActiveHotbarItem(activeHotbarItem);
       if (isHotbarBlockType(activeHotbarItem)) {
         selectedBlock = activeHotbarItem;
@@ -884,12 +887,13 @@ export function createPlayableScene(
   const onWheel = (event: WheelEvent) => {
     audio.unlock();
     event.preventDefault();
-    activeHotbarItem = cycleHotbarSelection(
-      activeHotbarItem ?? selectedBlock,
-      getHotbarItems(),
+    selectedHotbarSlotIndex = cycleHotbarSlotIndex(
+      selectedHotbarSlotIndex,
+      getHotbarItems().length,
       event.deltaY > 0 ? 1 : -1,
-      hasInventoryItemCount,
     );
+    hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+    activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
     hotbarControls?.setActiveHotbarItem(activeHotbarItem);
     if (isHotbarBlockType(activeHotbarItem)) {
       selectedBlock = activeHotbarItem;
@@ -1035,12 +1039,9 @@ export function createPlayableScene(
 
     event.preventDefault();
     audio.unlock();
-    activeHotbarItem = cycleHotbarSelection(
-      activeHotbarItem ?? selectedBlock,
-      getHotbarItems(),
-      offset,
-      hasInventoryItemCount,
-    );
+    selectedHotbarSlotIndex = cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, offset);
+    hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+    activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
     hotbarControls?.setActiveHotbarItem(activeHotbarItem);
     if (isHotbarBlockType(activeHotbarItem)) {
       selectedBlock = activeHotbarItem;
@@ -1161,6 +1162,11 @@ export function createPlayableScene(
         return;
       }
 
+      const nextSlotIndex = getHotbarItems().findIndex((item) => item === type);
+      if (nextSlotIndex >= 0) {
+        selectedHotbarSlotIndex = nextSlotIndex;
+        hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+      }
       selectedBlock = type;
       activeHotbarItem = type;
       hotbarControls?.setActiveHotbarItem(type);

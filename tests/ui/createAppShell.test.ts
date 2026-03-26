@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SandboxStatus } from '../../src/rendering/scene.ts';
 import { createAppShell } from '../../src/ui/createAppShell.ts';
+import type { HotbarSelectionControls } from '../../src/rendering/scene.ts';
 
 type StatusListener = (status: SandboxStatus) => void;
 
@@ -18,10 +19,17 @@ const sandboxStub = {
 };
 
 let statusListener: StatusListener | null = null;
+let hotbarControls: HotbarSelectionControls | null = null;
 
 vi.mock('../../src/rendering/scene.ts', () => ({
-  createPlayableScene: vi.fn((_container: HTMLElement, onStatusChange: StatusListener) => {
+  createPlayableScene: vi.fn((
+    _container: HTMLElement,
+    onStatusChange: StatusListener,
+    _touchControls: unknown,
+    nextHotbarControls: HotbarSelectionControls,
+  ) => {
     statusListener = onStatusChange;
+    hotbarControls = nextHotbarControls;
     return sandboxStub;
   }),
 }));
@@ -32,6 +40,7 @@ describe('createAppShell', () => {
     document.body.innerHTML = '<div id="app"></div>';
     window.localStorage.clear();
     statusListener = null;
+    hotbarControls = null;
     sandboxStub.setSelectedBlock.mockReset();
     sandboxStub.craftRecipe.mockReset();
     sandboxStub.placeSelectedBlockOnNearestSurface.mockReset();
@@ -331,6 +340,82 @@ describe('createAppShell', () => {
     root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.click();
 
     expect(root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.classList.contains('active')).toBe(true);
+    expect(sandboxStub.setSelectedBlock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selected hotbar slot highlighted after closing inventory, even when that slot is empty', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    window.localStorage.setItem('minecraft-clone:inventory-layout:v1', JSON.stringify([
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      { type: 'oak-log', count: 5 },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]));
+
+    createAppShell(root);
+
+    if (!statusListener || !hotbarControls) {
+      throw new Error('Expected scene status listener and hotbar controls.');
+    }
+
+    statusListener({
+      locked: false,
+      activeItem: 'oak-log',
+      selectedBlock: 'oak-log',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'oak-log', count: 5 },
+      ],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 5, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-open-menu]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-slot-index="28"]')?.click();
+    root.querySelector<HTMLButtonElement>('button[data-close-menu]')?.click();
+
+    statusListener({
+      locked: false,
+      activeItem: 'oak-log',
+      selectedBlock: 'oak-log',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'oak-log', count: 5 },
+      ],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 5, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    const selectedHudSlot = root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="1"]');
+
+    expect(hotbarControls.getSelectedHotbarSlotIndex()).toBe(1);
+    expect(selectedHudSlot?.classList.contains('active')).toBe(true);
+    expect(selectedHudSlot?.dataset.itemType).toBeUndefined();
     expect(sandboxStub.setSelectedBlock).not.toHaveBeenCalled();
   });
 

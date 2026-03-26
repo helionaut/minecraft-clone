@@ -1,17 +1,15 @@
-import type { HotbarBlockType } from './blocks.ts';
+export type HotbarSlots<T extends string> = readonly (T | null)[];
+type HasCount<T extends string> = (type: T) => boolean;
 
-export type HotbarSlots = readonly (HotbarBlockType | null)[];
-type HasCount = (type: HotbarBlockType) => boolean;
-
-function ownedHotbarSelections(slots: HotbarSlots, hasCount: HasCount): HotbarBlockType[] {
+function ownedHotbarSelections<T extends string>(slots: HotbarSlots<T>, hasCount: HasCount<T>): T[] {
   return slots.flatMap((type) => (type && hasCount(type) ? [type] : []));
 }
 
-export function reconcileHotbarSelection(
-  current: HotbarBlockType,
-  slots: HotbarSlots,
-  hasCount: HasCount,
-): HotbarBlockType {
+export function reconcileHotbarSelection<T extends string>(
+  current: T,
+  slots: HotbarSlots<T>,
+  hasCount: HasCount<T>,
+): T {
   if (hasCount(current) && slots.includes(current)) {
     return current;
   }
@@ -19,12 +17,12 @@ export function reconcileHotbarSelection(
   return ownedHotbarSelections(slots, hasCount)[0] ?? current;
 }
 
-export function cycleHotbarSelection(
-  current: HotbarBlockType,
-  slots: HotbarSlots,
+export function cycleHotbarSelection<T extends string>(
+  current: T,
+  slots: HotbarSlots<T>,
   offset: number,
-  hasCount: HasCount,
-): HotbarBlockType {
+  hasCount: HasCount<T>,
+): T {
   const available = ownedHotbarSelections(slots, hasCount);
 
   if (available.length === 0) {
@@ -41,11 +39,11 @@ export function cycleHotbarSelection(
   return available[nextIndex] ?? current;
 }
 
-export function getHotbarSelectionForSlot(
-  slots: HotbarSlots,
+export function getHotbarSelectionForSlot<T extends string>(
+  slots: HotbarSlots<T>,
   slotIndex: number,
-  hasCount: HasCount,
-): HotbarBlockType | null {
+  hasCount: HasCount<T>,
+): T | null {
   const type = slots[slotIndex];
   return type && hasCount(type) ? type : null;
 }

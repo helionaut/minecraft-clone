@@ -60,6 +60,7 @@ describe('createAppShell', () => {
 
     statusListener({
       locked: false,
+      activeItem: 'grass',
       selectedBlock: 'grass',
       coords: 'X 4.0 Y 10.0 Z -2.0',
       target: 'Target grass @ 4, 8, -2 | Place grass @ 4, 9, -2',
@@ -135,6 +136,7 @@ describe('createAppShell', () => {
 
     statusListener({
       locked: true,
+      activeItem: 'stone',
       selectedBlock: 'stone',
       coords: 'X 0.0 Y 5.0 Z 0.0',
       target: 'Aim at terrain',
@@ -176,6 +178,7 @@ describe('createAppShell', () => {
 
     statusListener({
       locked: false,
+      activeItem: 'crafting-table',
       selectedBlock: 'grass',
       coords: 'X 2.0 Y 8.0 Z 1.0',
       target: 'Aim at terrain',
@@ -222,6 +225,7 @@ describe('createAppShell', () => {
 
     statusListener({
       locked: false,
+      activeItem: 'grass',
       selectedBlock: 'grass',
       coords: 'X 2.0 Y 8.0 Z 1.0',
       target: 'Aim at terrain',
@@ -254,6 +258,7 @@ describe('createAppShell', () => {
 
     statusListener({
       locked: false,
+      activeItem: 'oak-log',
       selectedBlock: 'oak-log',
       coords: 'X 2.0 Y 8.0 Z 1.0',
       target: 'Aim at terrain',
@@ -277,6 +282,58 @@ describe('createAppShell', () => {
     expect(refreshedHotbarSlot?.classList.contains('active')).toBe(true);
   });
 
+  it('lets tool hotbar slots become active without treating them as placeable blocks', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    window.localStorage.setItem('minecraft-clone:inventory-layout:v1', JSON.stringify([
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      { type: 'stone-pickaxe', count: 1 },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]));
+
+    createAppShell(root);
+
+    if (!statusListener) {
+      throw new Error('Expected scene status listener.');
+    }
+
+    statusListener({
+      locked: false,
+      activeItem: 'grass',
+      selectedBlock: 'grass',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'stone-pickaxe',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'stone-pickaxe', count: 1 },
+      ],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.click();
+
+    expect(root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.classList.contains('active')).toBe(true);
+    expect(sandboxStub.setSelectedBlock).not.toHaveBeenCalled();
+  });
+
   it('auto-collapses touch help while keeping a reopen control available on mobile', () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
@@ -292,6 +349,7 @@ describe('createAppShell', () => {
 
     statusListener({
       locked: false,
+      activeItem: 'grass',
       selectedBlock: 'grass',
       coords: 'X 4.0 Y 10.0 Z -2.0',
       target: 'Target grass @ 4, 8, -2 | Place grass @ 4, 9, -2',

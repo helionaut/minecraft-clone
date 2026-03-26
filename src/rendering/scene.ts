@@ -63,6 +63,7 @@ import {
   disposeHeldItemModel,
   getActivePlaceableBlock,
   isHeldItemType,
+  isHeldToolType,
   isHotbarBlockType,
   reconcileActiveHotbarItem,
 } from './heldItem.ts';
@@ -440,11 +441,14 @@ export function createPlayableScene(
   };
 
   const syncActiveHotbarItem = (nextItem?: InventoryItemType | null) => {
+    const preferredItem = hotbarControls?.getActiveHotbarItem() ?? nextItem ?? null;
+
     activeHotbarItem = reconcileActiveHotbarItem(
-      nextItem ?? activeHotbarItem,
+      activeHotbarItem,
       getHotbarItems(),
       hasInventoryItemCount,
       selectedBlock,
+      preferredItem,
     );
     hotbarControls?.setActiveHotbarItem(activeHotbarItem);
   };
@@ -469,6 +473,13 @@ export function createPlayableScene(
     }
 
     activeHeldItemModel = createHeldItemModel(activeHotbarItem, blockMaterialFactory);
+
+    if (touchDevice && isHeldToolType(activeHotbarItem)) {
+      activeHeldItemModel.position.x -= 0.2;
+      activeHeldItemModel.position.y += 0.14;
+      activeHeldItemModel.scale.multiplyScalar(1.1);
+    }
+
     heldItemAnchor.add(activeHeldItemModel);
   };
 

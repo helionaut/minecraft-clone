@@ -66,9 +66,14 @@ export function reconcileActiveHotbarItem(
   slots: readonly (InventoryItemType | null)[],
   hasCount: (type: InventoryItemType) => boolean,
   fallbackBlock: HotbarBlockType,
+  preferred: InventoryItemType | null = null,
 ): InventoryItemType | null {
-  if (current && slots.includes(current) && hasCount(current)) {
-    return current;
+  const preferredCandidates = [preferred, current];
+
+  for (const candidate of preferredCandidates) {
+    if (candidate && slots.includes(candidate) && hasCount(candidate)) {
+      return candidate;
+    }
   }
 
   if (slots.includes(fallbackBlock) && hasCount(fallbackBlock)) {

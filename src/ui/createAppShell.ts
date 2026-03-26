@@ -236,12 +236,12 @@ function renderStorageSlots(
 function renderMenuHotbar(
   slots: readonly (InventoryLayoutSlot | null)[],
   selectedSlotIndex: number | null,
-  selectedBlock: PlaceableBlockType,
+  activeItem: InventoryItemType | null,
   draggedSlotIndex: number | null,
 ): string {
   return slots.slice(STORAGE_SLOT_COUNT).map((slot, offset) => {
     const slotIndex = STORAGE_SLOT_COUNT + offset;
-    const active = Boolean(slot && isHotbarSelectableItem(slot.type) && slot.type === selectedBlock);
+    const active = Boolean(slot && slot.type === activeItem);
 
     return renderInventorySlot(slot, slotIndex, {
       selected: selectedSlotIndex === slotIndex,
@@ -259,11 +259,11 @@ function getHudHotbarSlots(
 
 function renderHudHotbar(
   slots: readonly (InventoryLayoutSlot | null)[],
-  selectedBlock: PlaceableBlockType,
+  activeItem: InventoryItemType | null,
 ): string {
   return getHudHotbarSlots(slots).map((slot, index) => {
     const selectableType = slot && isHotbarSelectableItem(slot.type) ? slot.type : null;
-    const active = selectableType === selectedBlock;
+    const active = Boolean(slot && slot.type === activeItem);
     const icon = slot
       ? createItemIcon(slot.type, slot.count)
       : '<span class="inventory-slot-empty" aria-hidden="true"></span>';
@@ -558,6 +558,7 @@ export function createAppShell(root: HTMLDivElement): void {
   let inventoryLayout = loadInventoryLayout();
   let selectedInventorySlotIndex: number | null = null;
   let draggedInventorySlotIndex: number | null = null;
+  let activeHotbarItem: InventoryItemType | null = null;
   let lastStatus: SandboxStatus | null = null;
   let touchHelpVisible = false;
   let touchHelpInitialized = false;
@@ -614,15 +615,14 @@ export function createAppShell(root: HTMLDivElement): void {
       return;
     }
 
-    const selectedHotbarIndex = inventoryLayout.findIndex((slot, index) => {
+    const activeHotbarIndex = inventoryLayout.findIndex((slot, index) => {
       return index >= STORAGE_SLOT_COUNT && Boolean(
         slot &&
-        isHotbarSelectableItem(slot.type) &&
-        slot.type === status.selectedBlock,
+        slot.type === activeHotbarItem,
       );
     });
 
-    selectedInventorySlotIndex = selectedHotbarIndex >= 0 ? selectedHotbarIndex : null;
+    selectedInventorySlotIndex = activeHotbarIndex >= 0 ? activeHotbarIndex : null;
   };
 
   const renderInventoryPanels = (status: SandboxStatus) => {
@@ -634,13 +634,13 @@ export function createAppShell(root: HTMLDivElement): void {
     safeMenuHotbar.innerHTML = renderMenuHotbar(
       inventoryLayout,
       selectedInventorySlotIndex,
-      status.selectedBlock,
+      activeHotbarItem,
       draggedInventorySlotIndex,
     );
   };
 
   const renderHudHotbarPanel = (status: SandboxStatus) => {
-    palette.innerHTML = renderHudHotbar(inventoryLayout, status.selectedBlock);
+    palette.innerHTML = renderHudHotbar(inventoryLayout, activeHotbarItem ?? status.activeItem ?? status.selectedBlock);
   };
 
   const selectInventorySlot = (slotIndex: number | null) => {
@@ -654,22 +654,24 @@ export function createAppShell(root: HTMLDivElement): void {
     }
   };
 
-  const syncSelectedBlockFromSlot = (slotIndex: number | null) => {
+  const syncActiveHotbarItemFromSlot = (slotIndex: number | null) => {
     if (slotIndex === null || slotIndex < STORAGE_SLOT_COUNT) {
       return;
     }
 
     const slot = inventoryLayout[slotIndex];
 
-    if (slot && isHotbarSelectableItem(slot.type)) {
-      if (lastStatus) {
-        lastStatus = {
-          ...lastStatus,
-          selectedBlock: slot.type,
-        };
-      }
+    activeHotbarItem = slot?.type ?? null;
 
+    if (slot && isHotbarSelectableItem(slot.type)) {
       sandbox.setSelectedBlock(slot.type);
+    }
+
+    if (lastStatus) {
+      renderInventoryPanels(lastStatus);
+      renderHudHotbarPanel(lastStatus);
+      bindInventorySlotInteractions();
+      bindHudHotbarInteractions();
     }
   };
 
@@ -685,7 +687,7 @@ export function createAppShell(root: HTMLDivElement): void {
     inventoryLayout = nextLayout;
     selectedInventorySlotIndex = toIndex;
     persistInventoryLayout(inventoryLayout);
-    syncSelectedBlockFromSlot(toIndex);
+    syncActiveHotbarItemFromSlot(toIndex);
 
     if (lastStatus) {
       renderInventoryPanels(lastStatus);
@@ -703,7 +705,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
       button.addEventListener('click', () => {
         selectInventorySlot(slotIndex);
-        syncSelectedBlockFromSlot(slotIndex);
+        syncActiveHotbarItemFromSlot(slotIndex);
       });
     }
   }
@@ -723,7 +725,7 @@ export function createAppShell(root: HTMLDivElement): void {
         if (selectedInventorySlotIndex === null) {
           if (hasItem) {
             selectInventorySlot(slotIndex);
-            syncSelectedBlockFromSlot(slotIndex);
+            syncActiveHotbarItemFromSlot(slotIndex);
           }
 
           return;
@@ -749,6 +751,7 @@ export function createAppShell(root: HTMLDivElement): void {
         event.dataTransfer!.effectAllowed = 'move';
         renderInventoryPanels(lastStatus ?? {
           locked: false,
+          activeItem: 'grass',
           selectedBlock: 'grass',
           coords: '',
           target: '',
@@ -829,6 +832,11 @@ export function createAppShell(root: HTMLDivElement): void {
 
     inventoryLayout = reconcileInventoryLayout(inventoryLayout, status.inventory);
     persistInventoryLayout(inventoryLayout);
+    activeHotbarItem = inventoryLayout.some((slot, index) => {
+      return index >= STORAGE_SLOT_COUNT && Boolean(slot && slot.type === activeHotbarItem);
+    })
+      ? activeHotbarItem
+      : status.activeItem ?? status.selectedBlock;
     syncSelectedInventorySlot(status);
     renderHudHotbarPanel(status);
     renderInventoryPanels(status);
@@ -850,9 +858,11 @@ export function createAppShell(root: HTMLDivElement): void {
 
   const hotbarControls: HotbarSelectionControls = {
     getHotbarSlots: () => {
-      return getHudHotbarSlots(inventoryLayout).map((slot) => {
-        return slot && isHotbarSelectableItem(slot.type) ? slot.type : null;
-      });
+      return getHudHotbarSlots(inventoryLayout).map((slot) => slot?.type ?? null);
+    },
+    getActiveHotbarItem: () => activeHotbarItem,
+    setActiveHotbarItem: (type: InventoryItemType | null) => {
+      activeHotbarItem = type;
     },
   };
 

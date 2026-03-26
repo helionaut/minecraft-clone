@@ -9,6 +9,7 @@ import {
 function sampleStatus(overrides: Partial<SandboxStatus> = {}): SandboxStatus {
   return {
     locked: false,
+    activeItem: 'grass',
     selectedBlock: 'grass',
     coords: 'X 0.0 Y 5.0 Z 0.0',
     target: 'Aim at terrain',

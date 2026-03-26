@@ -52,6 +52,7 @@ import {
 } from '../gameplay/world.ts';
 import { getVisibleBoundsForPlayer } from './renderBounds.ts';
 import { buildRendererDiagnostics, shouldPublishSandboxStatus } from './sandboxStatus.ts';
+import { createCloudLayer } from './clouds.ts';
 import {
   createBlockMaterialFactory,
   type FaceVisibilityMask,
@@ -310,7 +311,11 @@ export function createPlayableScene(
   ));
   const world = new VoxelWorld(DEFAULT_WORLD_CONFIG, storedWorld);
   const inventory = Inventory.fromJSON(window.localStorage.getItem(inventoryStorageKey()));
+  let player = createPlayerState(world.getSpawnPoint());
   const worldGroup = new Group();
+  const clouds = createCloudLayer(DEFAULT_WORLD_CONFIG.seed);
+  clouds.update(player.position.x, player.position.z, 0);
+  scene.add(clouds.group);
   scene.add(worldGroup);
 
   const blockGeometry = new BoxGeometry(1, 1, 1);
@@ -348,7 +353,6 @@ export function createPlayableScene(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, streamingProfile.pixelRatioCap));
   let currentTarget: CellTarget | null = null;
   let currentPlacement: { x: number; y: number; z: number } | null = null;
-  let player = createPlayerState(world.getSpawnPoint());
   let worldDirty = true;
   let activeChunkKey = '';
   let fluidAccumulator = 0;
@@ -957,10 +961,12 @@ export function createPlayableScene(
 
   let frameId = 0;
   let previousTime = performance.now();
+  let elapsedTime = 0;
 
   const tick = (now: number) => {
     const delta = (now - previousTime) / 1000;
     previousTime = now;
+    elapsedTime += delta;
     const previousPlayer = player;
 
     player = stepPlayer(
@@ -1000,6 +1006,7 @@ export function createPlayableScene(
     playerLantern.position.copy(camera.position);
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
+    clouds.update(player.position.x, player.position.z, elapsedTime);
 
     updateTargeting();
     renderer.render(scene, camera);
@@ -1051,6 +1058,7 @@ export function createPlayableScene(
       waterGeometry.dispose();
       highlightGeometry.dispose();
       blockMaterialFactory.dispose();
+      clouds.dispose();
       audio.dispose();
       (placementPreview.material as MeshStandardMaterial).dispose();
       (targetOutline.material as LineBasicMaterial).dispose();

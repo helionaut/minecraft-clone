@@ -85,12 +85,12 @@ async function clickButtonBySelector(page: Page, selector: string): Promise<void
 }
 
 test('the deployed sandbox supports a station-based gather and crafting loop with visible inventory icons', async ({ page }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   const { worldSeed, resourceCells } = buildProgressionWorldSeed();
 
   await page.addInitScript((seededWorld: string) => {
     window.localStorage.setItem('minecraft-clone:inventory:v1:1337', JSON.stringify({
-      'oak-log': 3,
+      'oak-log': 4,
     }));
     window.localStorage.removeItem('minecraft-clone:inventory-layout:v1');
     window.localStorage.setItem('minecraft-clone:world:v2:1337:16', seededWorld);
@@ -104,6 +104,7 @@ test('the deployed sandbox supports a station-based gather and crafting loop wit
   const stickRecipe = page.locator('[data-recipe-id="stick"]');
   const craftingTableRecipe = page.locator('[data-recipe-id="crafting-table"]');
   const woodenPickaxeRecipe = page.locator('[data-recipe-id="wooden-pickaxe"]');
+  const woodenSwordRecipe = page.locator('[data-recipe-id="wooden-sword"]');
   const furnaceRecipe = page.locator('[data-recipe-id="furnace"]');
   const stonePickaxeRecipe = page.locator('[data-recipe-id="stone-pickaxe"]');
   const ironIngotRecipe = page.locator('[data-recipe-id="iron-ingot"]');
@@ -112,12 +113,15 @@ test('the deployed sandbox supports a station-based gather and crafting loop wit
   await expect(oakPlanksRecipe.locator('.recipe-row-output .item-icon')).toHaveAttribute('style', /oak-planks\.svg/);
   await expect(craftingTableRecipe.locator('.recipe-row-output .item-icon')).toHaveAttribute('style', /crafting-table\.svg/);
   await expect(woodenPickaxeRecipe).toBeDisabled();
+  await expect(woodenSwordRecipe).toBeDisabled();
   await expect(stonePickaxeRecipe).toBeDisabled();
   await expect(ironIngotRecipe).toBeDisabled();
 
   await clickButtonBySelector(page, '[data-recipe-id="oak-planks"]');
   await clickButtonBySelector(page, '[data-recipe-id="oak-planks"]');
   await clickButtonBySelector(page, '[data-recipe-id="oak-planks"]');
+  await clickButtonBySelector(page, '[data-recipe-id="oak-planks"]');
+  await clickButtonBySelector(page, '[data-recipe-id="stick"]');
   await clickButtonBySelector(page, '[data-recipe-id="stick"]');
   await expect(craftingTableRecipe).toBeEnabled();
   await clickButtonBySelector(page, '[data-recipe-id="crafting-table"]');
@@ -147,6 +151,19 @@ test('the deployed sandbox supports a station-based gather and crafting loop wit
   await expect(page.locator('[data-slot-index="27"][data-item-type="crafting-table"]')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('crafting-table-inventory.png') });
   await clickButtonBySelector(page, 'button[data-close-menu]');
+  await expect(page.locator('[data-hud-hotbar-slot="0"][data-item-type="crafting-table"]')).toBeVisible();
+
+  await page.keyboard.press(']');
+
+  const postCycleSelection = await page.evaluate(() => {
+    return (window as Window & {
+      __minecraftCloneQa?: {
+        getStatus: () => { selectedBlock: string } | null;
+      };
+    }).__minecraftCloneQa?.getStatus()?.selectedBlock ?? null;
+  });
+
+  expect(postCycleSelection).toBe('crafting-table');
 
   const placementProof = await page.evaluate(() => {
     const qa = (window as Window & {
@@ -185,9 +202,12 @@ test('the deployed sandbox supports a station-based gather and crafting loop wit
 
   await clickButtonBySelector(page, '[data-open-menu]');
   await expect(woodenPickaxeRecipe).toBeEnabled();
+  await expect(woodenSwordRecipe).toBeEnabled();
   await clickButtonBySelector(page, '[data-recipe-id="wooden-pickaxe"]');
+  await clickButtonBySelector(page, '[data-recipe-id="wooden-sword"]');
   await expect(furnaceRecipe).toBeDisabled();
   await expect(page.locator('[data-item-type="wooden-pickaxe"]').first()).toBeVisible();
+  await expect(page.locator('[data-item-type="wooden-sword"]').first()).toBeVisible();
 
   const miningProof = await page.evaluate((cells: readonly ResourceCell[]) => {
     const qa = (window as Window & {

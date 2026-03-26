@@ -26,6 +26,11 @@ import {
   isFluidBlock,
 } from '../gameplay/blocks.ts';
 import {
+  cycleHotbarSelection,
+  getHotbarSelectionForSlot,
+  reconcileHotbarSelection,
+} from '../gameplay/hotbar.ts';
+import {
   DEFAULT_PLAYER_CONFIG,
   createPlayerState,
   playerIntersectsBlock,
@@ -119,6 +124,10 @@ export interface TouchUiControls {
   readonly hotbarNextButton: HTMLButtonElement;
 }
 
+export interface HotbarSelectionControls {
+  readonly getHotbarSlots: () => readonly (HotbarBlockType | null)[];
+}
+
 const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number, number, number]> = [
   ['px', 1, 0, 0],
   ['nx', -1, 0, 0],
@@ -153,12 +162,6 @@ const MOBILE_STREAMING_PROFILE: StreamingProfile = {
 
 function formatCoords(value: number): string {
   return value.toFixed(1);
-}
-
-function selectPlaceableBlock(current: HotbarBlockType, offset: number): HotbarBlockType {
-  const index = PLACEABLE_BLOCK_ORDER.indexOf(current);
-  const nextIndex = (index + offset + PLACEABLE_BLOCK_ORDER.length) % PLACEABLE_BLOCK_ORDER.length;
-  return PLACEABLE_BLOCK_ORDER[nextIndex] ?? PLACEABLE_BLOCK_ORDER[0];
 }
 
 function createVisibleFaces(): FaceVisibilityMask {
@@ -271,6 +274,7 @@ export function createPlayableScene(
   container: HTMLElement,
   onStatusChange: (status: SandboxStatus) => void,
   touchControls?: TouchUiControls,
+  hotbarControls?: HotbarSelectionControls,
 ): PlayableScene {
   const canvas = document.createElement('canvas');
   canvas.setAttribute('aria-label', 'Minecraft clone sandbox viewport');
@@ -397,6 +401,20 @@ export function createPlayableScene(
     return getVisibleBoundsForPlayer(player.position, world.config, streamingProfile.renderChunkRadius);
   };
 
+  const hasInventoryCount = (type: HotbarBlockType) => inventory.getCount(type as InventoryItemType) > 0;
+  const getSelectableHotbarSlots = (): Array<HotbarBlockType | null> => {
+    const configuredSlots = hotbarControls?.getHotbarSlots();
+
+    if (configuredSlots) {
+      return Array.from({ length: PLACEABLE_BLOCK_ORDER.length }, (_unused, index) => {
+        const type = configuredSlots[index];
+        return type && hasInventoryCount(type) ? type : null;
+      });
+    }
+
+    return PLACEABLE_BLOCK_ORDER.map((type) => (hasInventoryCount(type) ? type : null));
+  };
+
   const rebuildWorld = () => {
     world.loadChunksAround(
       Math.floor(player.position.x),
@@ -450,6 +468,7 @@ export function createPlayableScene(
   };
 
   const updateStatus = () => {
+    selectedBlock = reconcileHotbarSelection(selectedBlock, getSelectableHotbarSlots(), hasInventoryCount);
     const eyeY = player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight;
     const selectedTool = getBestTool(inventory);
     const nearbyStations = getNearbyStations(
@@ -720,7 +739,7 @@ export function createPlayableScene(
 
     if (event.code.startsWith('Digit')) {
       const slot = Number(event.code.slice(5)) - 1;
-      const nextBlock = PLACEABLE_BLOCK_ORDER[slot];
+      const nextBlock = getHotbarSelectionForSlot(getSelectableHotbarSlots(), slot, hasInventoryCount);
 
       if (nextBlock) {
         selectedBlock = nextBlock;
@@ -730,13 +749,13 @@ export function createPlayableScene(
     }
 
     if (event.code === 'BracketLeft') {
-      selectedBlock = selectPlaceableBlock(selectedBlock, -1);
+      selectedBlock = cycleHotbarSelection(selectedBlock, getSelectableHotbarSlots(), -1, hasInventoryCount);
       updateTargeting();
       return;
     }
 
     if (event.code === 'BracketRight') {
-      selectedBlock = selectPlaceableBlock(selectedBlock, 1);
+      selectedBlock = cycleHotbarSelection(selectedBlock, getSelectableHotbarSlots(), 1, hasInventoryCount);
       updateTargeting();
       return;
     }
@@ -765,7 +784,12 @@ export function createPlayableScene(
   const onWheel = (event: WheelEvent) => {
     audio.unlock();
     event.preventDefault();
-    selectedBlock = selectPlaceableBlock(selectedBlock, event.deltaY > 0 ? 1 : -1);
+    selectedBlock = cycleHotbarSelection(
+      selectedBlock,
+      getSelectableHotbarSlots(),
+      event.deltaY > 0 ? 1 : -1,
+      hasInventoryCount,
+    );
     updateTargeting();
   };
 
@@ -907,7 +931,7 @@ export function createPlayableScene(
 
     event.preventDefault();
     audio.unlock();
-    selectedBlock = selectPlaceableBlock(selectedBlock, offset);
+    selectedBlock = cycleHotbarSelection(selectedBlock, getSelectableHotbarSlots(), offset, hasInventoryCount);
     updateTargeting();
   };
   const onBreakPointerDown = onTouchActionClick(0);
@@ -1019,6 +1043,11 @@ export function createPlayableScene(
     canvas,
     renderer,
     setSelectedBlock: (type: HotbarBlockType) => {
+      if (!hasInventoryCount(type)) {
+        updateStatus();
+        return;
+      }
+
       selectedBlock = type;
       updateTargeting();
     },

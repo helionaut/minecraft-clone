@@ -6,6 +6,7 @@ import {
 import type { InventoryItemType } from '../gameplay/progression.ts';
 import {
   createPlayableScene,
+  type HotbarSelectionControls,
   type InventoryStatusEntry,
   type RecipeStatusEntry,
   type SandboxStatus,
@@ -247,6 +248,39 @@ function renderMenuHotbar(
       active,
       dragging: draggedSlotIndex === slotIndex,
     });
+  }).join('');
+}
+
+function getHudHotbarSlots(
+  slots: readonly (InventoryLayoutSlot | null)[],
+): Array<InventoryLayoutSlot | null> {
+  return slots.slice(STORAGE_SLOT_COUNT);
+}
+
+function renderHudHotbar(
+  slots: readonly (InventoryLayoutSlot | null)[],
+  selectedBlock: PlaceableBlockType,
+): string {
+  return getHudHotbarSlots(slots).map((slot, index) => {
+    const selectableType = slot && isHotbarSelectableItem(slot.type) ? slot.type : null;
+    const active = selectableType === selectedBlock;
+    const icon = slot
+      ? createItemIcon(slot.type, slot.count)
+      : '<span class="inventory-slot-empty" aria-hidden="true"></span>';
+
+    return `
+      <button
+        class="swatch${active ? ' active' : ''}${slot ? '' : ' swatch-empty'}"
+        type="button"
+        data-hud-hotbar-slot="${index}"
+        ${slot ? `data-item-type="${slot.type}"` : ''}
+        ${selectableType ? `data-block-type="${selectableType}"` : ''}
+        aria-label="${slot ? `Hotbar slot ${index + 1}: ${getInventoryIcon(slot.type).label} x${slot.count}` : `Empty hotbar slot ${index + 1}`}"
+      >
+        <span class="swatch-key">${index + 1}</span>
+        ${icon}
+      </button>
+    `;
   }).join('');
 }
 
@@ -503,6 +537,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
   const TOUCH_HELP_AUTO_HIDE_DELAY_MS = 2400;
   const safeHudStatus = hudStatus;
+  const safePalette = palette;
   const safePrompt = prompt;
   const safeCoords = coords;
   const safeTarget = target;
@@ -562,17 +597,6 @@ export function createAppShell(root: HTMLDivElement): void {
     root.classList.toggle('menu-open', open);
   };
 
-  palette.innerHTML = BLOCK_ORDER.map(
-    (type, index) => `
-      <button class="swatch${index === 0 ? ' active' : ''}" type="button" data-block-type="${type}">
-        <span class="swatch-chip swatch-${type}"></span>
-        <span class="swatch-key">${index + 1}</span>
-        <span class="swatch-count" data-count-for="${type}">0</span>
-      </button>
-    `,
-  ).join('');
-
-  const paletteButtons = [...palette.querySelectorAll<HTMLButtonElement>('[data-block-type]')];
   const touchControls: TouchUiControls = {
     root: safeTouchUi,
     lookSurface: safeLookSurface,
@@ -615,12 +639,18 @@ export function createAppShell(root: HTMLDivElement): void {
     );
   };
 
+  const renderHudHotbarPanel = (status: SandboxStatus) => {
+    palette.innerHTML = renderHudHotbar(inventoryLayout, status.selectedBlock);
+  };
+
   const selectInventorySlot = (slotIndex: number | null) => {
     selectedInventorySlotIndex = slotIndex;
 
     if (lastStatus) {
       renderInventoryPanels(lastStatus);
+      renderHudHotbarPanel(lastStatus);
       bindInventorySlotInteractions();
+      bindHudHotbarInteractions();
     }
   };
 
@@ -632,6 +662,13 @@ export function createAppShell(root: HTMLDivElement): void {
     const slot = inventoryLayout[slotIndex];
 
     if (slot && isHotbarSelectableItem(slot.type)) {
+      if (lastStatus) {
+        lastStatus = {
+          ...lastStatus,
+          selectedBlock: slot.type,
+        };
+      }
+
       sandbox.setSelectedBlock(slot.type);
     }
   };
@@ -652,9 +689,24 @@ export function createAppShell(root: HTMLDivElement): void {
 
     if (lastStatus) {
       renderInventoryPanels(lastStatus);
+      renderHudHotbarPanel(lastStatus);
       bindInventorySlotInteractions();
+      bindHudHotbarInteractions();
     }
   };
+
+  function bindHudHotbarInteractions(): void {
+    const hotbarButtons = [...safePalette.querySelectorAll<HTMLButtonElement>('[data-hud-hotbar-slot]')];
+
+    for (const button of hotbarButtons) {
+      const slotIndex = STORAGE_SLOT_COUNT + Number(button.dataset.hudHotbarSlot);
+
+      button.addEventListener('click', () => {
+        selectInventorySlot(slotIndex);
+        syncSelectedBlockFromSlot(slotIndex);
+      });
+    }
+  }
 
   function bindInventorySlotInteractions(): void {
     const slotButtons = [
@@ -778,8 +830,10 @@ export function createAppShell(root: HTMLDivElement): void {
     inventoryLayout = reconcileInventoryLayout(inventoryLayout, status.inventory);
     persistInventoryLayout(inventoryLayout);
     syncSelectedInventorySlot(status);
+    renderHudHotbarPanel(status);
     renderInventoryPanels(status);
     safeCrafting.innerHTML = renderRecipes(status.recipes);
+    bindHudHotbarInteractions();
     bindInventorySlotInteractions();
 
     for (const button of safeCrafting.querySelectorAll<HTMLButtonElement>('[data-recipe-id]')) {
@@ -792,18 +846,17 @@ export function createAppShell(root: HTMLDivElement): void {
       });
     }
 
-    for (const button of paletteButtons) {
-      const blockType = button.dataset.blockType ?? '';
-      button.classList.toggle('active', blockType === status.selectedBlock);
-      const countNode = button.querySelector<HTMLElement>(`[data-count-for="${blockType}"]`);
-
-      if (countNode) {
-        countNode.textContent = String(status.placeableCounts[blockType] ?? 0);
-      }
-    }
   }
 
-  const sandbox = createPlayableScene(viewport, applyStatus, touchControls);
+  const hotbarControls: HotbarSelectionControls = {
+    getHotbarSlots: () => {
+      return getHudHotbarSlots(inventoryLayout).map((slot) => {
+        return slot && isHotbarSelectableItem(slot.type) ? slot.type : null;
+      });
+    },
+  };
+
+  const sandbox = createPlayableScene(viewport, applyStatus, touchControls, hotbarControls);
   const exposeQaHarness = new URLSearchParams(window.location.search).has('qaHarness');
 
   if (exposeQaHarness) {
@@ -823,13 +876,6 @@ export function createAppShell(root: HTMLDivElement): void {
       },
       setMenuOpen,
     };
-  }
-
-  for (const button of paletteButtons) {
-    button.addEventListener('click', () => {
-      const type = button.dataset.blockType as HotbarBlockType;
-      sandbox.setSelectedBlock(type);
-    });
   }
 
   openMenuButton.addEventListener('click', () => {

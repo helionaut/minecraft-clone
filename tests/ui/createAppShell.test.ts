@@ -112,6 +112,21 @@ describe('createAppShell', () => {
       throw new Error('Expected #app test root.');
     }
 
+    window.localStorage.setItem('minecraft-clone:inventory-layout:v1', JSON.stringify([
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      { type: 'stone', count: 5 },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]));
+
     createAppShell(root);
 
     if (!statusListener) {
@@ -128,12 +143,13 @@ describe('createAppShell', () => {
       selectedTool: 'stone-pickaxe',
       stations: 'crafting-table',
       renderer: 'WebGL 2 | hardware accelerated | ANGLE (NVIDIA, NVIDIA GeForce RTX 3070, OpenGL 4.6)',
-      inventory: [{ type: 'stone-pickaxe', count: 1 }],
+      inventory: [{ type: 'stone', count: 5 }, { type: 'stone-pickaxe', count: 1 }],
       recipes: [],
       placeableCounts: { grass: 0, dirt: 0, stone: 5, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
     });
 
-    root.querySelector<HTMLButtonElement>('[data-block-type="stone"]')?.click();
+    expect(root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.dataset.itemType).toBe('stone');
+    root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.click();
 
     expect(sandboxStub.setSelectedBlock).toHaveBeenCalledWith('stone');
 
@@ -143,6 +159,52 @@ describe('createAppShell', () => {
     expect(root.textContent).toContain('Best tool: stone-pickaxe');
     expect(root.textContent).toContain('Stations: crafting-table');
     expect(sandboxStub.resetWorld).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the main HUD hotbar from the real hotbar layout after moving a crafting table into it', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    createAppShell(root);
+
+    if (!statusListener) {
+      throw new Error('Expected scene status listener.');
+    }
+
+    statusListener({
+      locked: false,
+      selectedBlock: 'grass',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'crafting-table', count: 1 },
+        { type: 'oak-log', count: 3 },
+      ],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 1, furnace: 0 },
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-open-menu]')?.click();
+
+    const craftingTableSlot = root.querySelector<HTMLButtonElement>('[data-item-type="crafting-table"]');
+    const emptyHotbarSlot = root.querySelector<HTMLButtonElement>('[data-slot-index="27"]');
+
+    craftingTableSlot?.click();
+    emptyHotbarSlot?.click();
+    root.querySelector<HTMLButtonElement>('button[data-close-menu]')?.click();
+
+    const hudHotbarSlot = root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]');
+    expect(hudHotbarSlot?.dataset.itemType).toBe('crafting-table');
+    expect(hudHotbarSlot?.classList.contains('active')).toBe(true);
+    expect(hudHotbarSlot?.textContent).toContain('1');
   });
 
   it('supports selecting and moving inventory items between storage and hotbar slots', () => {

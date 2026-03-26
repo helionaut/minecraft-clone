@@ -55,6 +55,7 @@ import {
   VoxelWorld,
   parseWorldPersistence,
 } from '../gameplay/world.ts';
+import { getNearbyStations } from '../gameplay/stations.ts';
 import { getVisibleBoundsForPlayer } from './renderBounds.ts';
 import { buildRendererDiagnostics, shouldPublishSandboxStatus } from './sandboxStatus.ts';
 import { createCloudLayer } from './clouds.ts';
@@ -216,24 +217,6 @@ function statusEntriesFromCounts(
   return Object.entries(counts)
     .flatMap(([type, count]) => (count && count > 0 ? [{ type, count }] : []))
     .sort((left, right) => left.type.localeCompare(right.type));
-}
-
-function getNearbyStations(world: VoxelWorld, x: number, y: number, z: number): StationItemType[] {
-  const nearby = new Set<StationItemType>();
-
-  for (let offsetX = -2; offsetX <= 2; offsetX += 1) {
-    for (let offsetY = -1; offsetY <= 2; offsetY += 1) {
-      for (let offsetZ = -2; offsetZ <= 2; offsetZ += 1) {
-        const block = world.getBlock(x + offsetX, y + offsetY, z + offsetZ);
-
-        if (block === 'crafting-table' || block === 'furnace') {
-          nearby.add(block);
-        }
-      }
-    }
-  }
-
-  return [...nearby].sort();
 }
 
 function recipeAvailable(recipe: Recipe, inventory: Inventory, nearbyStations: readonly StationItemType[]): boolean {

@@ -16,6 +16,16 @@ describe('reconcileActiveHotbarItem', () => {
     )).toBe('stone-pickaxe');
   });
 
+  it('prefers an externally selected tool when it is still owned in the hotbar', () => {
+    expect(reconcileActiveHotbarItem(
+      'oak-log',
+      ['oak-log', 'stone-pickaxe', null, null, null, null, null, null, null],
+      () => true,
+      'oak-log',
+      'stone-pickaxe',
+    )).toBe('stone-pickaxe');
+  });
+
   it('falls back to the selected block when the previous active item disappears', () => {
     expect(reconcileActiveHotbarItem(
       'stone-pickaxe',

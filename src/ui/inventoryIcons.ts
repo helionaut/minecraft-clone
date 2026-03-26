@@ -22,6 +22,22 @@ export interface InventoryIconDefinition {
   readonly artNotes: string;
 }
 
+function normalizeAssetBasePath(value: string): string {
+  if (value === '/' || value === '') {
+    return '/';
+  }
+
+  return value.endsWith('/') ? value : `${value}/`;
+}
+
+export function resolveInventoryIconAssetPath(
+  type: InventoryItemType,
+  basePath = import.meta.env.BASE_URL,
+): string {
+  const normalizedBasePath = normalizeAssetBasePath(basePath);
+  return `${normalizedBasePath}textures/inventory/${type}.svg`;
+}
+
 const TYPE_ORDER = [
   ...PLACEABLE_BLOCK_TYPES,
   ...MATERIAL_ITEM_TYPES,
@@ -100,7 +116,7 @@ function createInventoryIconDefinition(type: InventoryItemType): InventoryIconDe
     checklistStatus: 'final-art-ready',
     source: 'repo-authored-svg',
     sourcePath: 'scripts/generateInventoryIcons.mjs',
-    assetPath: `/textures/inventory/${type}.svg`,
+    assetPath: resolveInventoryIconAssetPath(type),
     pixelGrid: '16x16',
     artNotes: artNotesByType[type] ?? 'Minecraft-style inventory icon silhouette aligned to the item family.',
   };

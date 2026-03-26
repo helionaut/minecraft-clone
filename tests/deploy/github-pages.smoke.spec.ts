@@ -16,6 +16,23 @@ async function expectVisibleInViewport(locator: Locator) {
   expect(box.y + box.height).toBeGreaterThan(0);
 }
 
+function trackInventoryIconResponses(page: Page) {
+  const responses: Array<{ url: string; status: number }> = [];
+
+  page.on('response', (response) => {
+    const url = response.url();
+
+    if (url.includes('/textures/inventory/')) {
+      responses.push({
+        url,
+        status: response.status(),
+      });
+    }
+  });
+
+  return responses;
+}
+
 async function seedInventory(page: { addInitScript: (script: () => void) => Promise<void> }) {
   await page.addInitScript(() => {
     window.localStorage.setItem('minecraft-clone:inventory:v1:1337', JSON.stringify({
@@ -100,6 +117,7 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
     viewport: { width: 1440, height: 900 },
   });
   const desktopPage = await desktopContext.newPage();
+  const desktopIconResponses = trackInventoryIconResponses(desktopPage);
   await seedInventory(desktopPage);
 
   await desktopPage.goto('./?qaHarness=1', { waitUntil: 'domcontentloaded' });
@@ -113,6 +131,9 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   const desktopOakLogSlot = desktopPage.locator('[data-item-type="oak-log"]').first();
   await expect(desktopOakLogSlot).toBeVisible();
   await expect(desktopOakLogSlot.locator('.item-icon')).toBeVisible();
+  await expect
+    .poll(() => desktopIconResponses.filter((response) => response.url.includes('oak-log.svg')).at(-1)?.status)
+    .toBe(200);
   await moveInventoryItemToSlot(desktopPage, 'oak-log', 27);
   await expect(desktopPage.locator('[data-slot-index="27"][data-item-type="oak-log"]')).toBeVisible();
   await expectVisibleInViewport(desktopPage.getByRole('button', { name: 'Reset world' }));
@@ -125,6 +146,7 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
     isMobile: true,
   });
   const mobilePage = await mobileContext.newPage();
+  const mobileIconResponses = trackInventoryIconResponses(mobilePage);
   await seedInventory(mobilePage);
 
   await mobilePage.goto('./?qaHarness=1', { waitUntil: 'domcontentloaded' });
@@ -154,6 +176,9 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expect(mobileOakLogSlot).toBeVisible();
   await expect(mobileOakLogSlot.locator('.item-icon')).toBeVisible();
   await expect(mobileOakLogSlot.locator('.item-icon')).toHaveAttribute('style', /oak-log\.svg/);
+  await expect
+    .poll(() => mobileIconResponses.filter((response) => response.url.includes('oak-log.svg')).at(-1)?.status)
+    .toBe(200);
   await moveInventoryItemToSlot(mobilePage, 'oak-log', 27);
   await expect(mobilePage.locator('[data-slot-index="27"][data-item-type="oak-log"]')).toBeVisible();
   await expect(closeButton).toBeVisible();

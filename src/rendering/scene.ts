@@ -453,26 +453,38 @@ export function createPlayableScene(
     return getHotbarItems().map((type) => (isHotbarBlockType(type) && hasInventoryCount(type) ? type : null));
   };
 
-  const syncSelectedHotbarSlotIndex = () => {
-    selectedHotbarSlotIndex = normalizeHotbarSlotIndex(
-      getHotbarItems().length,
-      hotbarControls?.getSelectedHotbarSlotIndex() ?? selectedHotbarSlotIndex,
-    );
-    hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
-  };
-
-  const syncActiveHotbarItem = () => {
-    syncSelectedHotbarSlotIndex();
-    activeHotbarItem = getHotbarSelectionForSlot(
+  const applyHotbarSelection = (nextSlotIndex: number, playSound = false) => {
+    const nextNormalizedSlotIndex = normalizeHotbarSlotIndex(getHotbarItems().length, nextSlotIndex);
+    const nextActiveHotbarItem = getHotbarSelectionForSlot(
       getHotbarItems(),
-      selectedHotbarSlotIndex,
+      nextNormalizedSlotIndex,
       hasInventoryItemCount,
     );
+    const changed =
+      nextNormalizedSlotIndex !== selectedHotbarSlotIndex ||
+      nextActiveHotbarItem !== activeHotbarItem;
+
+    selectedHotbarSlotIndex = nextNormalizedSlotIndex;
+    hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+    activeHotbarItem = nextActiveHotbarItem;
     hotbarControls?.setActiveHotbarItem(activeHotbarItem);
+
+    if (isHotbarBlockType(activeHotbarItem)) {
+      selectedBlock = activeHotbarItem;
+    }
+
+    if (playSound && changed) {
+      audio.playSelect();
+    }
+
+    return changed;
   };
 
   const updateHeldItem = () => {
-    syncActiveHotbarItem();
+    applyHotbarSelection(
+      hotbarControls?.getSelectedHotbarSlotIndex() ?? selectedHotbarSlotIndex,
+      false,
+    );
 
     if (activeHeldItemType === activeHotbarItem) {
       return;
@@ -565,7 +577,6 @@ export function createPlayableScene(
 
   const updateStatus = () => {
     selectedBlock = reconcileHotbarSelection(selectedBlock, getSelectableHotbarSlots(), hasInventoryCount);
-    syncActiveHotbarItem();
     updateHeldItem();
     const eyeY = player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight;
     const activePlaceableBlock = getActivePlaceableBlock(activeHotbarItem);
@@ -772,6 +783,7 @@ export function createPlayableScene(
     }
 
     persistInventory();
+    audio.playCraft();
     updateStatus();
   };
 
@@ -847,37 +859,19 @@ export function createPlayableScene(
 
     if (event.code.startsWith('Digit')) {
       const slot = Number(event.code.slice(5)) - 1;
-      selectedHotbarSlotIndex = normalizeHotbarSlotIndex(getHotbarItems().length, slot);
-      hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
-      activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
-      hotbarControls?.setActiveHotbarItem(activeHotbarItem);
-      if (isHotbarBlockType(activeHotbarItem)) {
-        selectedBlock = activeHotbarItem;
-      }
+      applyHotbarSelection(slot, true);
       updateTargeting();
       return;
     }
 
     if (event.code === 'BracketLeft') {
-      selectedHotbarSlotIndex = cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, -1);
-      hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
-      activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
-      hotbarControls?.setActiveHotbarItem(activeHotbarItem);
-      if (isHotbarBlockType(activeHotbarItem)) {
-        selectedBlock = activeHotbarItem;
-      }
+      applyHotbarSelection(cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, -1), true);
       updateTargeting();
       return;
     }
 
     if (event.code === 'BracketRight') {
-      selectedHotbarSlotIndex = cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, 1);
-      hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
-      activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
-      hotbarControls?.setActiveHotbarItem(activeHotbarItem);
-      if (isHotbarBlockType(activeHotbarItem)) {
-        selectedBlock = activeHotbarItem;
-      }
+      applyHotbarSelection(cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, 1), true);
       updateTargeting();
       return;
     }
@@ -906,17 +900,14 @@ export function createPlayableScene(
   const onWheel = (event: WheelEvent) => {
     audio.unlock();
     event.preventDefault();
-    selectedHotbarSlotIndex = cycleHotbarSlotIndex(
-      selectedHotbarSlotIndex,
-      getHotbarItems().length,
-      event.deltaY > 0 ? 1 : -1,
+    applyHotbarSelection(
+      cycleHotbarSlotIndex(
+        selectedHotbarSlotIndex,
+        getHotbarItems().length,
+        event.deltaY > 0 ? 1 : -1,
+      ),
+      true,
     );
-    hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
-    activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
-    hotbarControls?.setActiveHotbarItem(activeHotbarItem);
-    if (isHotbarBlockType(activeHotbarItem)) {
-      selectedBlock = activeHotbarItem;
-    }
     updateTargeting();
   };
 
@@ -1058,13 +1049,7 @@ export function createPlayableScene(
 
     event.preventDefault();
     audio.unlock();
-    selectedHotbarSlotIndex = cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, offset);
-    hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
-    activeHotbarItem = getHotbarSelectionForSlot(getHotbarItems(), selectedHotbarSlotIndex, hasInventoryItemCount);
-    hotbarControls?.setActiveHotbarItem(activeHotbarItem);
-    if (isHotbarBlockType(activeHotbarItem)) {
-      selectedBlock = activeHotbarItem;
-    }
+    applyHotbarSelection(cycleHotbarSlotIndex(selectedHotbarSlotIndex, getHotbarItems().length, offset), true);
     updateTargeting();
   };
   const onBreakPointerDown = onTouchActionClick(0);
@@ -1212,12 +1197,16 @@ export function createPlayableScene(
 
       const nextSlotIndex = getHotbarItems().findIndex((item) => item === type);
       if (nextSlotIndex >= 0) {
-        selectedHotbarSlotIndex = nextSlotIndex;
-        hotbarControls?.setSelectedHotbarSlotIndex(selectedHotbarSlotIndex);
+        applyHotbarSelection(nextSlotIndex, true);
+      } else {
+        const changed = activeHotbarItem !== type;
+        selectedBlock = type;
+        activeHotbarItem = type;
+        hotbarControls?.setActiveHotbarItem(type);
+        if (changed) {
+          audio.playSelect();
+        }
       }
-      selectedBlock = type;
-      activeHotbarItem = type;
-      hotbarControls?.setActiveHotbarItem(type);
       updateTargeting();
     },
     craftRecipe,

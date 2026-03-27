@@ -26,6 +26,8 @@ type GameAudio = {
   playJump: () => void;
   playMine: () => void;
   playPlace: () => void;
+  playCraft: () => void;
+  playSelect: () => void;
   update: (
     previousPlayer: PlayerState,
     nextPlayer: PlayerState,
@@ -45,6 +47,8 @@ export function createGameAudio(
       playJump: () => undefined,
       playMine: () => undefined,
       playPlace: () => undefined,
+      playCraft: () => undefined,
+      playSelect: () => undefined,
       update: () => undefined,
       dispose: () => undefined,
     };
@@ -62,6 +66,66 @@ export function createGameAudio(
     pulse(196, { duration: 0.2, type: 'triangle', gain: 0.055, attack: 0.008, endFrequency: 392 });
     pulse(294, { duration: 0.14, type: 'sawtooth', gain: 0.018, attack: 0.003, endFrequency: 540 });
     pulse(523.25, { duration: 0.22, type: 'sine', gain: 0.02, attack: 0.012, endFrequency: 392 });
+  };
+
+  const playPlace = () => {
+    pulse(164.81, { duration: 0.16, type: 'triangle', gain: 0.043, attack: 0.003, endFrequency: 110 });
+    pulse(246.94, {
+      duration: 0.07,
+      type: 'square',
+      gain: 0.02,
+      attack: 0.002,
+      endFrequency: 196,
+      delay: 0.008,
+    });
+    pulse(392, {
+      duration: 0.06,
+      type: 'sine',
+      gain: 0.012,
+      attack: 0.002,
+      endFrequency: 329.63,
+      delay: 0.012,
+    });
+  };
+
+  const playCraft = () => {
+    pulse(196, { duration: 0.16, type: 'triangle', gain: 0.022, attack: 0.003, endFrequency: 246.94 });
+    pulse(392, {
+      duration: 0.09,
+      type: 'sine',
+      gain: 0.015,
+      attack: 0.002,
+      endFrequency: 587.33,
+      delay: 0.028,
+    });
+    pulse(493.88, {
+      duration: 0.09,
+      type: 'triangle',
+      gain: 0.017,
+      attack: 0.002,
+      endFrequency: 739.99,
+      delay: 0.052,
+    });
+    pulse(659.25, {
+      duration: 0.16,
+      type: 'sine',
+      gain: 0.016,
+      attack: 0.006,
+      endFrequency: 987.77,
+      delay: 0.086,
+    });
+  };
+
+  const playSelect = () => {
+    pulse(392, { duration: 0.06, type: 'triangle', gain: 0.016, attack: 0.002, endFrequency: 329.63 });
+    pulse(659.25, {
+      duration: 0.04,
+      type: 'sine',
+      gain: 0.01,
+      attack: 0.001,
+      endFrequency: 523.25,
+      delay: 0.004,
+    });
   };
 
   const ensureContext = (): AudioContextLike => {
@@ -88,6 +152,7 @@ export function createGameAudio(
       attack = 0.01,
       endFrequency,
       destination,
+      delay = 0,
     }: {
       duration: number;
       type: OscillatorType;
@@ -95,6 +160,7 @@ export function createGameAudio(
       attack?: number;
       endFrequency?: number;
       destination?: AudioNode | null;
+      delay?: number;
     },
   ) => {
     const activeContext = ensureContext();
@@ -106,7 +172,7 @@ export function createGameAudio(
 
     const oscillator = activeContext.createOscillator();
     const amp = activeContext.createGain();
-    const now = activeContext.currentTime;
+    const now = activeContext.currentTime + delay;
 
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, now);
@@ -167,10 +233,9 @@ export function createGameAudio(
       pulse(164.81, { duration: 0.14, type: 'square', gain: 0.05, attack: 0.004 });
       pulse(110, { duration: 0.09, type: 'triangle', gain: 0.025, attack: 0.002 });
     },
-    playPlace: () => {
-      pulse(246.94, { duration: 0.12, type: 'triangle', gain: 0.04, attack: 0.003 });
-      pulse(369.99, { duration: 0.08, type: 'sine', gain: 0.02, attack: 0.003 });
-    },
+    playPlace,
+    playCraft,
+    playSelect,
     update: (previousPlayer, nextPlayer, input, delta) => {
       if (!context || !masterGain) {
         return;

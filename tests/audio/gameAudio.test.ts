@@ -146,4 +146,94 @@ describe('createGameAudio', () => {
     audio.dispose();
     expect(context!.close).toHaveBeenCalledTimes(1);
   });
+
+  it('uses a layered block placement thunk instead of a flat beep', () => {
+    const audio = createGameAudio(FakeAudioContext as unknown as typeof AudioContext);
+    audio.playPlace();
+
+    const context = FakeAudioContext.latest;
+    expect(context).not.toBeNull();
+    expect(context!.oscillators).toHaveLength(3);
+    expect(context!.oscillators.map((oscillator) => oscillator.type)).toEqual([
+      'triangle',
+      'square',
+      'sine',
+    ]);
+
+    const [body, click, snap] = context!.oscillators;
+    expect(body.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 164.81, time: 12 },
+      { method: 'exponentialRampToValueAtTime', value: 110, time: 12.16 },
+    ]);
+    expect(click.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 246.94, time: 12.008 },
+      { method: 'exponentialRampToValueAtTime', value: 196, time: 12.078 },
+    ]);
+    expect(snap.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 392, time: 12.012 },
+      { method: 'exponentialRampToValueAtTime', value: 329.63, time: 12.072000000000001 },
+    ]);
+
+    audio.dispose();
+  });
+
+  it('schedules a short upward craft confirmation flourish', () => {
+    const audio = createGameAudio(FakeAudioContext as unknown as typeof AudioContext);
+    audio.playCraft();
+
+    const context = FakeAudioContext.latest;
+    expect(context).not.toBeNull();
+    expect(context!.oscillators).toHaveLength(4);
+    expect(context!.oscillators.map((oscillator) => oscillator.type)).toEqual([
+      'triangle',
+      'sine',
+      'triangle',
+      'sine',
+    ]);
+
+    const [body, sparkle, lift, tail] = context!.oscillators;
+    expect(body.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 196, time: 12 },
+      { method: 'exponentialRampToValueAtTime', value: 246.94, time: 12.16 },
+    ]);
+    expect(sparkle.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 392, time: 12.028 },
+      { method: 'exponentialRampToValueAtTime', value: 587.33, time: 12.118 },
+    ]);
+    expect(lift.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 493.88, time: 12.052 },
+      { method: 'exponentialRampToValueAtTime', value: 739.99, time: 12.142 },
+    ]);
+    expect(tail.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 659.25, time: 12.086 },
+      { method: 'exponentialRampToValueAtTime', value: 987.77, time: 12.246 },
+    ]);
+
+    audio.dispose();
+  });
+
+  it('adds a fast tick for hotbar and item selection changes', () => {
+    const audio = createGameAudio(FakeAudioContext as unknown as typeof AudioContext);
+    audio.playSelect();
+
+    const context = FakeAudioContext.latest;
+    expect(context).not.toBeNull();
+    expect(context!.oscillators).toHaveLength(2);
+    expect(context!.oscillators.map((oscillator) => oscillator.type)).toEqual([
+      'triangle',
+      'sine',
+    ]);
+
+    const [tick, edge] = context!.oscillators;
+    expect(tick.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 392, time: 12 },
+      { method: 'exponentialRampToValueAtTime', value: 329.63, time: 12.06 },
+    ]);
+    expect(edge.frequency.events).toEqual([
+      { method: 'setValueAtTime', value: 659.25, time: 12.004 },
+      { method: 'exponentialRampToValueAtTime', value: 523.25, time: 12.043999999999999 },
+    ]);
+
+    audio.dispose();
+  });
 });

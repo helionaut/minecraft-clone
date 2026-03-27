@@ -10,6 +10,10 @@ interface CloudFieldOptions {
   readonly tileSize: number;
   readonly gridRadius: number;
   readonly driftSpeed: number;
+  readonly baseHeight: number;
+  readonly density: number;
+  readonly cellSize: number;
+  readonly thickness: number;
 }
 
 export interface CloudSegmentLayout {
@@ -31,10 +35,52 @@ export interface CloudClusterLayout {
 
 const DEFAULT_CLOUD_FIELD_OPTIONS: CloudFieldOptions = {
   seed: 1337,
-  tileSize: 28,
+  tileSize: 34,
   gridRadius: 5,
-  driftSpeed: 1.1,
+  driftSpeed: 0.55,
+  baseHeight: 34,
+  density: 0.38,
+  cellSize: 2.4,
+  thickness: 0.7,
 };
+
+const CLOUD_TEMPLATES = [
+  [
+    '..###....',
+    '.######..',
+    '########.',
+    '.######..',
+    '..###....',
+  ],
+  [
+    '...####..',
+    '.#######.',
+    '#########',
+    '.#######.',
+    '..#####..',
+  ],
+  [
+    '.#####...',
+    '########.',
+    '#########',
+    '.#######.',
+    '...####..',
+  ],
+  [
+    '..#####..',
+    '.#######.',
+    '########.',
+    '########.',
+    '.######..',
+  ],
+  [
+    '..####...',
+    '.#######.',
+    '#########',
+    '.######..',
+    '...###...',
+  ],
+] as const;
 
 function fract(value: number): number {
   return value - Math.floor(value);
@@ -45,19 +91,47 @@ function hash(seed: number, x: number, y = 0, z = 0): number {
   return fract(sample);
 }
 
-function getCloudSegments(seed: number, cellX: number, cellZ: number): CloudSegmentLayout[] {
-  const count = 4 + Math.floor(hash(seed + 11, cellX, 1, cellZ) * 3);
+function getCloudSegments(
+  seed: number,
+  cellX: number,
+  cellZ: number,
+  cellSize: number,
+  thickness: number,
+): CloudSegmentLayout[] {
+  const template = CLOUD_TEMPLATES[
+    Math.floor(hash(seed + 11, cellX, 1, cellZ) * CLOUD_TEMPLATES.length) % CLOUD_TEMPLATES.length
+  ];
   const segments: CloudSegmentLayout[] = [];
+  const rowCount = template.length;
 
-  for (let index = 0; index < count; index += 1) {
-    segments.push({
-      offsetX: (hash(seed + 23, cellX, index, cellZ) - 0.5) * 12,
-      offsetY: (hash(seed + 31, cellX, index, cellZ) - 0.5) * 1.1,
-      offsetZ: (hash(seed + 41, cellX, index, cellZ) - 0.5) * 7,
-      scaleX: 5.5 + hash(seed + 53, cellX, index, cellZ) * 6.5,
-      scaleY: 0.9 + hash(seed + 61, cellX, index, cellZ) * 1.6,
-      scaleZ: 3 + hash(seed + 71, cellX, index, cellZ) * 4.6,
-    });
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const row = template[rowIndex]!;
+    const columnCount = row.length;
+    let columnIndex = 0;
+
+    while (columnIndex < columnCount) {
+      if (row[columnIndex] !== '#') {
+        columnIndex += 1;
+        continue;
+      }
+
+      let runEnd = columnIndex + 1;
+      while (runEnd < columnCount && row[runEnd] === '#') {
+        runEnd += 1;
+      }
+
+      const runLength = runEnd - columnIndex;
+      segments.push({
+        offsetX: ((columnIndex + runLength / 2) - columnCount / 2) * cellSize,
+        offsetY: 0,
+        offsetZ: ((rowIndex + 0.5) - rowCount / 2) * cellSize,
+        scaleX: runLength * cellSize,
+        scaleY: thickness,
+        scaleZ: cellSize,
+      });
+
+      columnIndex = runEnd;
+    }
   }
 
   return segments;
@@ -79,16 +153,22 @@ export function buildCloudLayouts(
     for (let offsetX = -settings.gridRadius; offsetX <= settings.gridRadius; offsetX += 1) {
       const cellX = anchorCellX + offsetX;
       const cellZ = anchorCellZ + offsetZ;
-      if (hash(settings.seed, cellX, 0, cellZ) < 0.18) {
+      if (hash(settings.seed, cellX, 0, cellZ) > settings.density) {
         continue;
       }
 
       layouts.push({
         key: `${cellX},${cellZ}`,
-        x: cellX * settings.tileSize - driftX,
-        y: 26 + hash(settings.seed + 89, cellX, 0, cellZ) * 10,
+        x: (cellX * settings.tileSize - driftX) + (hash(settings.seed + 89, cellX, 0, cellZ) - 0.5) * 6,
+        y: settings.baseHeight,
         z: cellZ * settings.tileSize,
-        segments: getCloudSegments(settings.seed, cellX, cellZ),
+        segments: getCloudSegments(
+          settings.seed,
+          cellX,
+          cellZ,
+          settings.cellSize,
+          settings.thickness,
+        ),
       });
     }
   }
@@ -106,9 +186,11 @@ export function createCloudLayer(seed: number): CloudLayer {
   const group = new Group();
   const geometry = new BoxGeometry(1, 1, 1);
   const material = new MeshStandardMaterial({
-    color: 0xffffff,
+    color: 0xfafcff,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.94,
+    emissive: 0xd8e4ee,
+    emissiveIntensity: 0.18,
     roughness: 1,
     metalness: 0,
     depthWrite: false,

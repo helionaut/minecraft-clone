@@ -16,19 +16,23 @@ describe('buildCloudLayouts', () => {
       seed: 7,
       gridRadius: 2,
       tileSize: 24,
+      density: 1,
     });
 
     expect(layouts.length).toBeGreaterThan(0);
 
     for (const layout of layouts) {
-      expect(layout.x).toBeGreaterThanOrEqual(-48);
-      expect(layout.x).toBeLessThanOrEqual(48);
+      expect(layout.x).toBeGreaterThanOrEqual(-51);
+      expect(layout.x).toBeLessThanOrEqual(51);
       expect(layout.z).toBeGreaterThanOrEqual(-48);
       expect(layout.z).toBeLessThanOrEqual(48);
-      expect(layout.y).toBeGreaterThanOrEqual(26);
-      expect(layout.y).toBeLessThanOrEqual(36);
-      expect(layout.segments.length).toBeGreaterThanOrEqual(4);
-      expect(layout.segments.length).toBeLessThanOrEqual(6);
+      expect(layout.y).toBe(34);
+      expect(layout.segments.length).toBeGreaterThanOrEqual(3);
+      expect(layout.segments.length).toBeLessThanOrEqual(5);
+      for (const segment of layout.segments) {
+        expect(segment.offsetY).toBe(0);
+        expect(segment.scaleY).toBe(0.7);
+      }
     }
   });
 
@@ -38,5 +42,16 @@ describe('buildCloudLayouts', () => {
 
     expect(afterDrift.map((layout) => layout.key)).toEqual(atStart.map((layout) => layout.key));
     expect(afterDrift.some((layout, index) => layout.x !== atStart[index]?.x)).toBe(true);
+  });
+
+  it('uses a sparse field so the sky stays readable between cloud clusters', () => {
+    const layouts = buildCloudLayouts(0, 0, 0, {
+      seed: 11,
+      gridRadius: 4,
+      density: 0.38,
+    });
+
+    expect(layouts.length).toBeGreaterThan(8);
+    expect(layouts.length).toBeLessThan(45);
   });
 });

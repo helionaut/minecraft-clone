@@ -1,6 +1,5 @@
 import {
   AmbientLight,
-  BoxGeometry,
   Color,
   DirectionalLight,
   EdgesGeometry,
@@ -14,6 +13,7 @@ import {
   PointLight,
   Scene,
   WebGLRenderer,
+  BoxGeometry,
 } from 'three';
 
 import { createGameAudio } from '../audio/gameAudio.ts';
@@ -60,6 +60,7 @@ import { getNearbyStations } from '../gameplay/stations.ts';
 import { getVisibleBoundsForPlayer } from './renderBounds.ts';
 import { buildRendererDiagnostics, shouldPublishSandboxStatus } from './sandboxStatus.ts';
 import { createCloudLayer } from './clouds.ts';
+import { createSkyBackdrop } from './skyBackdrop.ts';
 import {
   createHeldItemModel,
   disposeHeldItemModel,
@@ -288,8 +289,13 @@ export function createPlayableScene(
   });
 
   const scene = new Scene();
-  scene.background = new Color(0x9ecff2);
-  scene.fog = new Fog(0x9ecff2, 24, 82);
+  const skyBackdrop = createSkyBackdrop();
+  scene.background = new Color(skyBackdrop.theme.backgroundColor);
+  scene.fog = new Fog(
+    skyBackdrop.theme.fogColor,
+    skyBackdrop.theme.fogNear,
+    skyBackdrop.theme.fogFar,
+  );
 
   const camera = new PerspectiveCamera(75, 1, 0.1, 180);
   camera.rotation.order = 'YXZ';
@@ -325,7 +331,9 @@ export function createPlayableScene(
   let player = createPlayerState(world.getSpawnPoint());
   const worldGroup = new Group();
   const clouds = createCloudLayer(DEFAULT_WORLD_CONFIG.seed);
+  skyBackdrop.update(player.position.x, player.position.z);
   clouds.update(player.position.x, player.position.z, 0);
+  scene.add(skyBackdrop.group);
   scene.add(clouds.group);
   scene.add(worldGroup);
 
@@ -1155,6 +1163,7 @@ export function createPlayableScene(
     playerLantern.position.copy(camera.position);
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
+    skyBackdrop.update(player.position.x, player.position.z);
     clouds.update(player.position.x, player.position.z, elapsedTime);
     heldItemEquipTimer = Math.max(0, heldItemEquipTimer - delta);
     heldItemSwingTimer = Math.max(0, heldItemSwingTimer - delta);
@@ -1248,6 +1257,7 @@ export function createPlayableScene(
       highlightGeometry.dispose();
       blockMaterialFactory.dispose();
       clouds.dispose();
+      skyBackdrop.dispose();
       audio.dispose();
       if (activeHeldItemModel) {
         disposeHeldItemModel(activeHeldItemModel);

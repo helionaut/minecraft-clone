@@ -68,7 +68,6 @@ import { getNearbyStations } from '../gameplay/stations.ts';
 import { getVisibleBoundsForPlayer } from './renderBounds.ts';
 import { buildRendererDiagnostics, shouldPublishSandboxStatus } from './sandboxStatus.ts';
 import { createCloudLayer } from './clouds.ts';
-import { createGodRaysEffect } from './godRays.ts';
 import { createSkyBackdrop, getSkyBackdropTheme } from './skyBackdrop.ts';
 import {
   createHeldItemModel,
@@ -85,6 +84,7 @@ import {
   type FaceVisibilityMask,
 } from './textures.ts';
 import { type CellTarget, getLookDirection, traceVoxelTarget } from './voxelRaycast.ts';
+import { getVolumetricLightingDecision } from './volumetricLighting.ts';
 import { getWorldLightingRigState } from './worldLighting.ts';
 
 export interface InventoryStatusEntry {
@@ -371,10 +371,15 @@ export function createPlayableScene(
     'ontouchstart' in window ||
     navigator.maxTouchPoints > 0
   );
+  getVolumetricLightingDecision({
+    touchDevice,
+    rendererMode: rendererDiagnostics.mode,
+    browserSupportsWebGpu: typeof navigator.gpu !== 'undefined',
+    hasRtxVolumetricPipeline: false,
+  });
   let player = createPlayerState(world.getSpawnPoint());
   const worldGroup = new Group();
   const clouds = createCloudLayer(DEFAULT_WORLD_CONFIG.seed);
-  const godRays = createGodRaysEffect();
   skyBackdrop.update(
     player.position.x,
     player.position.z,
@@ -384,7 +389,6 @@ export function createPlayableScene(
   clouds.update(player.position.x, player.position.z, 0);
   scene.add(skyBackdrop.group);
   scene.add(clouds.group);
-  scene.add(godRays.group);
   scene.add(worldGroup);
 
   const blockGeometry = new BoxGeometry(1, 1, 1);
@@ -1209,14 +1213,6 @@ export function createPlayableScene(
     sceneFog.near = skyBackdrop.theme.fogNear;
     sceneFog.far = skyBackdrop.theme.fogFar;
     clouds.update(player.position.x, player.position.z, elapsedTime);
-    godRays.update({
-      playerPosition: player.position,
-      cameraPosition: camera.position,
-      cameraDirection: getLookDirection(player.yaw, player.pitch),
-      sunPosition: sun.position,
-      targetPosition: sunTarget.position,
-      elapsedSeconds: elapsedTime,
-    });
     heldItemEquipTimer = Math.max(0, heldItemEquipTimer - delta);
     heldItemSwingTimer = Math.max(0, heldItemSwingTimer - delta);
 
@@ -1358,7 +1354,6 @@ export function createPlayableScene(
       blockMaterialFactory.dispose();
       clouds.dispose();
       skyBackdrop.dispose();
-      godRays.dispose();
       audio.dispose();
       if (activeHeldItemModel) {
         disposeHeldItemModel(activeHeldItemModel);

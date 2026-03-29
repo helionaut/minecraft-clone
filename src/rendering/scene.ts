@@ -148,6 +148,10 @@ export interface TouchUiControls {
   readonly hotbarNextButton: HTMLButtonElement;
 }
 
+export interface PlayableSceneOptions {
+  readonly freezeAtSpawnFrame?: boolean;
+}
+
 export interface HotbarSelectionControls {
   readonly getHotbarSlots: () => readonly (InventoryItemType | null)[];
   readonly getSelectedHotbarSlotIndex: () => number;
@@ -279,6 +283,7 @@ export function createPlayableScene(
   onStatusChange: (status: SandboxStatus) => void,
   touchControls?: TouchUiControls,
   hotbarControls?: HotbarSelectionControls,
+  options: PlayableSceneOptions = {},
 ): PlayableScene {
   const canvas = document.createElement('canvas');
   canvas.setAttribute('aria-label', 'Minecraft clone sandbox viewport');
@@ -1138,41 +1143,7 @@ export function createPlayableScene(
   let previousTime = performance.now();
   let elapsedTime = 0;
 
-  const tick = (now: number) => {
-    const delta = (now - previousTime) / 1000;
-    previousTime = now;
-    elapsedTime += delta;
-    const previousPlayer = player;
-
-    player = stepPlayer(
-      player,
-      input,
-      delta,
-      (x, y, z) => world.isSolidBlock(x, y, z),
-      DEFAULT_PLAYER_CONFIG,
-      (x, y, z) => isFluidBlock(world.getBlock(x, y, z)),
-    );
-    audio.update(previousPlayer, player, input, delta);
-
-    const currentChunkKey = `${Math.floor(player.position.x / world.config.chunkSize)},${Math.floor(player.position.z / world.config.chunkSize)}`;
-    if (currentChunkKey !== activeChunkKey) {
-      activeChunkKey = currentChunkKey;
-      worldDirty = true;
-    }
-
-    fluidAccumulator += delta;
-    if (fluidAccumulator >= 0.35) {
-      fluidAccumulator = 0;
-      if (world.tickFluids(1) > 0) {
-        persistWorld();
-        worldDirty = true;
-      }
-    }
-
-    if (worldDirty) {
-      rebuildWorld();
-    }
-
+  const syncFrameVisuals = (previousPlayer: typeof player, delta: number) => {
     camera.position.set(
       player.position.x,
       player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight,
@@ -1237,10 +1208,54 @@ export function createPlayableScene(
 
     updateTargeting();
     renderer.render(scene, camera);
+  };
+
+  const tick = (now: number) => {
+    const delta = (now - previousTime) / 1000;
+    previousTime = now;
+    elapsedTime += delta;
+    const previousPlayer = player;
+
+    player = stepPlayer(
+      player,
+      input,
+      delta,
+      (x, y, z) => world.isSolidBlock(x, y, z),
+      DEFAULT_PLAYER_CONFIG,
+      (x, y, z) => isFluidBlock(world.getBlock(x, y, z)),
+    );
+    audio.update(previousPlayer, player, input, delta);
+
+    const currentChunkKey = `${Math.floor(player.position.x / world.config.chunkSize)},${Math.floor(player.position.z / world.config.chunkSize)}`;
+    if (currentChunkKey !== activeChunkKey) {
+      activeChunkKey = currentChunkKey;
+      worldDirty = true;
+    }
+
+    fluidAccumulator += delta;
+    if (fluidAccumulator >= 0.35) {
+      fluidAccumulator = 0;
+      if (world.tickFluids(1) > 0) {
+        persistWorld();
+        worldDirty = true;
+      }
+    }
+
+    if (worldDirty) {
+      rebuildWorld();
+    }
+
+    syncFrameVisuals(previousPlayer, delta);
     frameId = window.requestAnimationFrame(tick);
   };
 
   frameId = window.requestAnimationFrame(tick);
+
+  if (options.freezeAtSpawnFrame) {
+    window.cancelAnimationFrame(frameId);
+    frameId = 0;
+    syncFrameVisuals(player, 0);
+  }
 
   return {
     canvas,

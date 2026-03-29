@@ -32,7 +32,7 @@ export interface WorldLightingRigState {
   readonly exposure: number;
 }
 
-export const DAY_NIGHT_CYCLE_DURATION_SECONDS = 180;
+export const DAY_NIGHT_CYCLE_DURATION_SECONDS = 600;
 
 const FACE_LIGHT_MULTIPLIERS: Record<LightingFace, number> = {
   px: 0.88,

@@ -101,6 +101,7 @@ export interface SandboxStatus {
   readonly touchDevice: boolean;
   readonly selectedTool: string;
   readonly stations: string;
+  readonly nearbyStations?: readonly string[];
   readonly renderer: string;
   readonly inventory: readonly InventoryStatusEntry[];
   readonly recipes: readonly RecipeStatusEntry[];
@@ -614,6 +615,7 @@ export function createPlayableScene(
       touchDevice,
       selectedTool: selectedTool ? getReadableName(selectedTool) : 'hand',
       stations: nearbyStations.length > 0 ? nearbyStations.map(getReadableName).join(', ') : 'none nearby',
+      nearbyStations: nearbyStations.map(getReadableName),
       renderer: rendererDiagnostics.summary,
       inventory: inventoryEntries,
       recipes: RECIPES.map((recipe) => ({

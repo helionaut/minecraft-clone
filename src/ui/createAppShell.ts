@@ -46,6 +46,12 @@ interface InventoryLayoutSlot {
   readonly count: number;
 }
 
+interface CraftingGuideState {
+  readonly title: string;
+  readonly body: string;
+  readonly hint: string;
+}
+
 function inventoryItemTypeFrom(value: string): InventoryItemType {
   return value as InventoryItemType;
 }
@@ -313,7 +319,116 @@ function renderRecipeCost(entries: readonly InventoryStatusEntry[]): string {
   }).join('');
 }
 
-function renderRecipes(recipes: readonly RecipeStatusEntry[]): string {
+function getInventoryCount(
+  entries: readonly InventoryStatusEntry[],
+  type: InventoryItemType,
+): number {
+  return entries.find((entry) => entry.type === type)?.count ?? 0;
+}
+
+function getRecipeHint(recipe: RecipeStatusEntry, nearbyStations: readonly string[]): string {
+  if (recipe.available) {
+    return recipe.station ? `Ready at nearby ${recipe.station}` : 'Ready to craft now';
+  }
+
+  if (recipe.station && !nearbyStations.includes(recipe.station)) {
+    return `Place ${recipe.station} nearby to unlock this recipe`;
+  }
+
+  return 'Missing ingredients';
+}
+
+function getCraftingGuideState(
+  status: SandboxStatus,
+  inventoryLayout: readonly (InventoryLayoutSlot | null)[],
+): CraftingGuideState {
+  const nearbyStations = status.nearbyStations ?? [];
+  const hasNearbyCraftingTable = nearbyStations.includes('crafting table');
+  const craftingTableRecipe = status.recipes.find((recipe) => recipe.id === 'crafting-table');
+  const hasCraftingTableItem = getInventoryCount(status.inventory, 'crafting-table') > 0;
+  const hasCraftingTableInHotbar = inventoryLayout.slice(STORAGE_SLOT_COUNT).some((slot) => slot?.type === 'crafting-table');
+  const hasOakPlanks = getInventoryCount(status.inventory, 'oak-planks') > 0;
+  const hasOakLogs = getInventoryCount(status.inventory, 'oak-log') > 0;
+  const hasSticks = getInventoryCount(status.inventory, 'stick') > 0;
+  const hasAvailableTableRecipe = craftingTableRecipe?.available ?? false;
+  const hasAvailableToolRecipe = status.recipes.some((recipe) => {
+    return recipe.station === 'crafting table' && recipe.available;
+  });
+
+  if (hasNearbyCraftingTable) {
+    return {
+      title: 'Crafting table active',
+      body: hasAvailableToolRecipe
+        ? 'Tool and station recipes are unlocked while you stay near the placed crafting table.'
+        : 'The placed crafting table is active. Gather the missing ingredients, then use the Recipe Book buttons to craft tools.',
+      hint: 'Keep the table nearby, then craft from the Recipe Book on the right.',
+    };
+  }
+
+  if (hasCraftingTableItem && hasCraftingTableInHotbar) {
+    return {
+      title: 'Place the table nearby',
+      body: 'Close the inventory, select the crafting table in your hotbar, and place it on the ground near you.',
+      hint: 'Reopen the inventory after placing it. Wooden tools unlock only when a placed table is nearby.',
+    };
+  }
+
+  if (hasCraftingTableItem) {
+    return {
+      title: 'Move table to hotbar',
+      body: 'Select the crafting table, then click an empty hotbar slot so you can place it in the world.',
+      hint: 'The hotbar is the bottom row in this menu and the bar at the bottom of the screen.',
+    };
+  }
+
+  if (hasAvailableTableRecipe) {
+    return {
+      title: 'Craft the table',
+      body: 'Use the crafting table recipe button in the Recipe Book. Crafting here is instant in this slice.',
+      hint: 'After it appears in inventory, move it to the hotbar and place it nearby to unlock tool recipes.',
+    };
+  }
+
+  if (hasOakPlanks && !hasSticks) {
+    return {
+      title: 'Craft sticks next',
+      body: 'Use the stick recipe from the Recipe Book, then come back for the crafting table recipe.',
+      hint: 'Two planks make four sticks. Four planks make one crafting table.',
+    };
+  }
+
+  if (hasOakLogs || hasOakPlanks) {
+    return {
+      title: 'Start with planks',
+      body: 'Use the Recipe Book to turn oak logs into planks until the crafting table recipe becomes available.',
+      hint: 'You need four oak planks total for one crafting table.',
+    };
+  }
+
+  return {
+    title: 'Mine wood first',
+    body: 'Mine an oak log, then open the inventory and use the Recipe Book to start the crafting chain.',
+    hint: 'The crafting flow is logs -> planks -> crafting table -> place table -> tools.',
+  };
+}
+
+function renderCraftingGuide(
+  status: SandboxStatus,
+  inventoryLayout: readonly (InventoryLayoutSlot | null)[],
+): string {
+  const guide = getCraftingGuideState(status, inventoryLayout);
+
+  return `
+    <section class="crafting-guide" aria-label="Crafting help">
+      <p class="crafting-guide-kicker">How crafting works</p>
+      <p class="crafting-guide-title">${guide.title}</p>
+      <p class="crafting-guide-body">${guide.body}</p>
+      <p class="crafting-guide-hint">${guide.hint}</p>
+    </section>
+  `;
+}
+
+function renderRecipes(recipes: readonly RecipeStatusEntry[], nearbyStations: readonly string[]): string {
   if (recipes.length === 0) {
     return `
       <div class="recipe-book-empty">
@@ -336,16 +451,16 @@ function renderRecipes(recipes: readonly RecipeStatusEntry[]): string {
         aria-label="${outputLabel} recipe"
         ${recipe.available ? '' : 'disabled'}
       >
-        <span class="recipe-row-output">
-          <span class="inventory-slot inventory-slot-small">
+          <span class="recipe-row-output">
+            <span class="inventory-slot inventory-slot-small">
             ${createItemIcon(outputType, output?.count)}
+            </span>
+            <span class="recipe-row-copy">
+              <span class="recipe-row-name">${recipe.label}</span>
+            <span class="recipe-row-meta">${getRecipeHint(recipe, nearbyStations)}</span>
+            </span>
           </span>
-          <span class="recipe-row-copy">
-            <span class="recipe-row-name">${recipe.label}</span>
-            <span class="recipe-row-meta">${recipe.station ? `Needs ${recipe.station}` : 'Hand craft'}</span>
-          </span>
-        </span>
-        <span class="recipe-row-costs">${renderRecipeCost(recipe.inputs)}</span>
+          <span class="recipe-row-costs">${renderRecipeCost(recipe.inputs)}</span>
       </button>
     `;
   }).join('');
@@ -461,8 +576,9 @@ export function createAppShell(root: HTMLDivElement): void {
                     <section class="recipe-book-panel">
                       <div class="recipe-book-header">
                         <p class="inventory-window-label">Recipe Book</p>
-                        <p class="recipe-book-note">Unlocked outputs and their ingredient costs.</p>
+                        <p class="recipe-book-note">Use the Recipe Book buttons to craft instantly, then place stations in the world when recipes ask for them.</p>
                       </div>
+                      <div data-crafting-guide></div>
                       <div class="recipe-book" data-crafting></div>
                     </section>
 
@@ -496,6 +612,7 @@ export function createAppShell(root: HTMLDivElement): void {
   const renderer = root.querySelector<HTMLElement>('[data-renderer]');
   const inventory = root.querySelector<HTMLElement>('[data-inventory]');
   const crafting = root.querySelector<HTMLElement>('[data-crafting]');
+  const craftingGuide = root.querySelector<HTMLElement>('[data-crafting-guide]');
   const menuHotbar = root.querySelector<HTMLElement>('[data-menu-hotbar]');
   const resetButton = root.querySelector<HTMLButtonElement>('[data-reset]');
   const deviceNote = root.querySelector<HTMLElement>('[data-device-note]');
@@ -528,6 +645,7 @@ export function createAppShell(root: HTMLDivElement): void {
     !renderer ||
     !inventory ||
     !crafting ||
+    !craftingGuide ||
     !menuHotbar ||
     !resetButton ||
     !deviceNote ||
@@ -561,6 +679,7 @@ export function createAppShell(root: HTMLDivElement): void {
   const safeRenderer = renderer;
   const safeInventory = inventory;
   const safeCrafting = crafting;
+  const safeCraftingGuide = craftingGuide;
   const safeMenuHotbar = menuHotbar;
   const safeResetButton = resetButton;
   const safeDeviceNote = deviceNote;
@@ -667,6 +786,15 @@ export function createAppShell(root: HTMLDivElement): void {
     );
   };
 
+  const renderCraftingGuidePanel = () => {
+    if (!lastStatus) {
+      safeCraftingGuide.innerHTML = '';
+      return;
+    }
+
+    safeCraftingGuide.innerHTML = renderCraftingGuide(lastStatus, inventoryLayout);
+  };
+
   const renderHudHotbarPanel = () => {
     palette.innerHTML = renderHudHotbar(inventoryLayout, selectedHotbarSlotIndex);
   };
@@ -676,6 +804,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
     if (lastStatus) {
       renderInventoryPanels();
+      renderCraftingGuidePanel();
       renderHudHotbarPanel();
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
@@ -693,6 +822,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
     if (lastStatus) {
       renderInventoryPanels();
+      renderCraftingGuidePanel();
       renderHudHotbarPanel();
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
@@ -718,6 +848,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
     if (lastStatus) {
       renderInventoryPanels();
+      renderCraftingGuidePanel();
       renderHudHotbarPanel();
       bindInventorySlotInteractions();
       bindHudHotbarInteractions();
@@ -863,7 +994,8 @@ export function createAppShell(root: HTMLDivElement): void {
     syncSelectedInventorySlot();
     renderHudHotbarPanel();
     renderInventoryPanels();
-    safeCrafting.innerHTML = renderRecipes(status.recipes);
+    renderCraftingGuidePanel();
+    safeCrafting.innerHTML = renderRecipes(status.recipes, status.nearbyStations ?? []);
     bindHudHotbarInteractions();
     bindInventorySlotInteractions();
 

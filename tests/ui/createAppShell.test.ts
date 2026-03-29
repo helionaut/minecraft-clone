@@ -77,16 +77,27 @@ describe('createAppShell', () => {
       touchDevice: true,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | software fallback | SwiftShader',
       inventory: [{ type: 'oak-log', count: 3 }, { type: 'cobblestone', count: 8 }],
-      recipes: [{
-        id: 'crafting-table',
-        label: 'crafting table',
-        station: null,
-        available: true,
-        inputs: [{ type: 'oak-planks', count: 4 }],
-        outputs: [{ type: 'crafting-table', count: 1 }],
-      }],
+      recipes: [
+        {
+          id: 'crafting-table',
+          label: 'crafting table',
+          station: null,
+          available: true,
+          inputs: [{ type: 'oak-planks', count: 4 }],
+          outputs: [{ type: 'crafting-table', count: 1 }],
+        },
+        {
+          id: 'wooden-pickaxe',
+          label: 'wooden pickaxe',
+          station: 'crafting table',
+          available: false,
+          inputs: [{ type: 'oak-planks', count: 3 }, { type: 'stick', count: 2 }],
+          outputs: [{ type: 'wooden-pickaxe', count: 1 }],
+        },
+      ],
       placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
     });
 
@@ -105,7 +116,11 @@ describe('createAppShell', () => {
     expect(root.classList.contains('menu-open')).toBe(true);
     expect(root.textContent).toContain('Inventory');
     expect(root.textContent).toContain('Recipe Book');
+    expect(root.textContent).toContain('How crafting works');
+    expect(root.textContent).toContain('Craft the table');
+    expect(root.textContent).toContain('Use the crafting table recipe button in the Recipe Book.');
     expect(root.textContent).toContain('crafting table');
+    expect(root.textContent).toContain('Place crafting table nearby to unlock this recipe');
     expect(root.textContent).toContain('Oak Log');
     expect(root.textContent).toContain('Renderer: WebGL 2 | software fallback | SwiftShader');
     expect(root.querySelector<HTMLButtonElement>('[data-slot-index="27"]')?.dataset.itemType).toBe('oak-log');
@@ -153,6 +168,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'stone-pickaxe',
       stations: 'crafting-table',
+      nearbyStations: ['crafting table'],
       renderer: 'WebGL 2 | hardware accelerated | ANGLE (NVIDIA, NVIDIA GeForce RTX 3070, OpenGL 4.6)',
       inventory: [{ type: 'stone', count: 5 }, { type: 'stone-pickaxe', count: 1 }],
       recipes: [],
@@ -195,6 +211,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | hardware accelerated',
       inventory: [
         { type: 'crafting-table', count: 1 },
@@ -252,6 +269,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | hardware accelerated',
       inventory: [
         { type: 'oak-log', count: 3 },
@@ -285,6 +303,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | hardware accelerated',
       inventory: [
         { type: 'oak-log', count: 5 },
@@ -324,6 +343,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | hardware accelerated',
       inventory: [
         { type: 'oak-log', count: 3 },
@@ -379,6 +399,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'stone-pickaxe',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | hardware accelerated',
       inventory: [
         { type: 'stone-pickaxe', count: 1 },
@@ -431,6 +452,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | hardware accelerated',
       inventory: [
         { type: 'oak-log', count: 5 },
@@ -453,6 +475,7 @@ describe('createAppShell', () => {
       touchDevice: false,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | hardware accelerated',
       inventory: [
         { type: 'oak-log', count: 5 },
@@ -492,6 +515,7 @@ describe('createAppShell', () => {
       touchDevice: true,
       selectedTool: 'hand',
       stations: 'none nearby',
+      nearbyStations: [],
       renderer: 'WebGL 2 | software fallback | SwiftShader',
       inventory: [],
       recipes: [],
@@ -520,5 +544,95 @@ describe('createAppShell', () => {
     dismissHelpButton?.click();
     expect(hudStatus?.hidden).toBe(true);
     expect(openHelpButton?.hidden).toBe(false);
+  });
+
+  it('walks the player from crafted table to placed table with explicit onboarding copy', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    window.localStorage.setItem('minecraft-clone:inventory-layout:v1', JSON.stringify([
+      { type: 'crafting-table', count: 1 },
+      null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+    ]));
+
+    createAppShell(root);
+
+    if (!statusListener) {
+      throw new Error('Expected scene status listener.');
+    }
+
+    root.querySelector<HTMLButtonElement>('[data-open-menu]')?.click();
+
+    statusListener({
+      locked: false,
+      activeItem: 'grass',
+      selectedBlock: 'grass',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      nearbyStations: [],
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'crafting-table', count: 1 },
+      ],
+      recipes: [
+        {
+          id: 'wooden-pickaxe',
+          label: 'wooden pickaxe',
+          station: 'crafting table',
+          available: false,
+          inputs: [{ type: 'oak-planks', count: 3 }, { type: 'stick', count: 2 }],
+          outputs: [{ type: 'wooden-pickaxe', count: 1 }],
+        },
+      ],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 1, furnace: 0 },
+    });
+
+    expect(root.textContent).toContain('Move table to hotbar');
+
+    root.querySelector<HTMLButtonElement>('[data-slot-index="0"]')?.click();
+    root.querySelector<HTMLButtonElement>('[data-slot-index="27"]')?.click();
+
+    expect(root.textContent).toContain('Place the table nearby');
+    expect(root.textContent).toContain('Reopen the inventory after placing it.');
+
+    statusListener({
+      locked: false,
+      activeItem: 'crafting-table',
+      selectedBlock: 'crafting-table',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'crafting-table',
+      nearbyStations: ['crafting table'],
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [],
+      recipes: [
+        {
+          id: 'wooden-pickaxe',
+          label: 'wooden pickaxe',
+          station: 'crafting table',
+          available: true,
+          inputs: [{ type: 'oak-planks', count: 3 }, { type: 'stick', count: 2 }],
+          outputs: [{ type: 'wooden-pickaxe', count: 1 }],
+        },
+      ],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 0, sand: 0, 'oak-log': 0, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    expect(root.textContent).toContain('Crafting table active');
+    expect(root.textContent).toContain('Tool and station recipes are unlocked while you stay near the placed crafting table.');
+    expect(root.textContent).toContain('Ready at nearby crafting table');
   });
 });

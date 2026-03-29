@@ -94,7 +94,7 @@ describe('createAppShell', () => {
     expect(root.querySelector('.inventory-storage-grid')).not.toBeNull();
     expect(root.querySelector('.inventory-hotbar-grid')).not.toBeNull();
     expect(root.querySelector('.recipe-book')).not.toBeNull();
-    expect(root.querySelector<HTMLElement>('[data-slot-index="0"] .item-icon')?.getAttribute('style')).toContain('/textures/inventory/oak-log.svg');
+    expect(root.querySelector<HTMLElement>('[data-slot-index="27"] .item-icon')?.getAttribute('style')).toContain('/textures/inventory/oak-log.svg');
     expect(root.querySelector('.menu-modal')?.hasAttribute('hidden')).toBe(true);
     expect(root.querySelector('.touch-ui')?.classList.contains('active')).toBe(true);
     expect(root.querySelector('[data-look-surface]')?.classList.contains('active')).toBe(true);
@@ -108,7 +108,7 @@ describe('createAppShell', () => {
     expect(root.textContent).toContain('crafting table');
     expect(root.textContent).toContain('Oak Log');
     expect(root.textContent).toContain('Renderer: WebGL 2 | software fallback | SwiftShader');
-    expect(root.querySelector('[data-slot-index="27"]')).not.toBeNull();
+    expect(root.querySelector<HTMLButtonElement>('[data-slot-index="27"]')?.dataset.itemType).toBe('oak-log');
 
     root.querySelector<HTMLButtonElement>('[data-recipe-id="crafting-table"]')?.click();
 
@@ -226,6 +226,16 @@ describe('createAppShell', () => {
       throw new Error('Expected #app test root.');
     }
 
+    window.localStorage.setItem('minecraft-clone:inventory-layout:v1', JSON.stringify([
+      { type: 'oak-log', count: 3 },
+      { type: 'cobblestone', count: 8 },
+      { type: 'stone-pickaxe', count: 1 },
+      null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+      null, null, null, null, null, null, null, null, null,
+    ]));
+
     createAppShell(root);
 
     if (!statusListener) {
@@ -289,6 +299,46 @@ describe('createAppShell', () => {
     expect(refreshedHotbarSlot?.dataset.itemType).toBe('oak-log');
     expect(refreshedHotbarSlot?.textContent).toContain('5');
     expect(refreshedHotbarSlot?.classList.contains('active')).toBe(true);
+  });
+
+  it('auto-populates the hotbar with visible inventory items when no hotbar layout is saved yet', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    createAppShell(root);
+
+    if (!statusListener) {
+      throw new Error('Expected scene status listener.');
+    }
+
+    statusListener({
+      locked: false,
+      activeItem: 'oak-log',
+      selectedBlock: 'oak-log',
+      coords: 'X 2.0 Y 8.0 Z 1.0',
+      target: 'Aim at terrain',
+      prompt: 'Click the viewport to capture the mouse and enter the world.',
+      touchDevice: false,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      renderer: 'WebGL 2 | hardware accelerated',
+      inventory: [
+        { type: 'oak-log', count: 3 },
+        { type: 'cobblestone', count: 8 },
+        { type: 'stone-pickaxe', count: 1 },
+      ],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    expect(root.querySelector<HTMLButtonElement>('[data-slot-index="27"]')?.dataset.itemType).toBe('oak-log');
+    expect(root.querySelector<HTMLButtonElement>('[data-slot-index="28"]')?.dataset.itemType).toBe('cobblestone');
+    expect(root.querySelector<HTMLButtonElement>('[data-slot-index="29"]')?.dataset.itemType).toBe('stone-pickaxe');
+    expect(root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.dataset.itemType).toBe('oak-log');
+    expect(root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.classList.contains('active')).toBe(true);
   });
 
   it('lets tool hotbar slots become active without treating them as placeable blocks', () => {

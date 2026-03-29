@@ -44,30 +44,6 @@ async function seedInventory(page: { addInitScript: (script: () => void) => Prom
   });
 }
 
-async function moveInventoryItemToSlot(page: Page, itemType: string, toIndex: number) {
-  const sourceIndexRaw = await page.locator(`[data-item-type="${itemType}"]`).first().getAttribute('data-slot-index');
-
-  if (!sourceIndexRaw) {
-    throw new Error(`Expected inventory slot for ${itemType}.`);
-  }
-
-  const fromIndex = Number(sourceIndexRaw);
-
-  await page.evaluate(([from, to]) => {
-    const qa = (window as Window & {
-      __minecraftCloneQa?: {
-        moveInventorySlot: (sourceIndex: number, targetIndex: number) => void;
-      };
-    }).__minecraftCloneQa;
-
-    if (!qa) {
-      throw new Error('Expected QA harness.');
-    }
-
-    qa.moveInventorySlot(from, to);
-  }, [fromIndex, toIndex] as const);
-}
-
 async function clickButtonBySelector(page: Page, selector: string): Promise<void> {
   const button = page.locator(selector);
   await expect(button).toBeVisible();
@@ -124,6 +100,7 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expect(desktopPage.getByRole('button', { name: 'Inventory' })).toBeVisible();
   await expect(desktopPage.locator('[data-prompt]')).toBeVisible();
   await expect(desktopPage.locator('.hotbar-shell')).toBeVisible();
+  await expect(desktopPage.locator('[data-hud-hotbar-slot="0"] .item-icon')).toBeVisible();
   await desktopPage.screenshot({ path: testInfo.outputPath('desktop-shell.png') });
   await desktopPage.getByRole('button', { name: 'Inventory' }).click();
   await expect(desktopPage.getByRole('heading', { name: 'Inventory' })).toBeVisible();
@@ -134,8 +111,7 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expect
     .poll(() => desktopIconResponses.filter((response) => response.url.includes('oak-log.svg')).at(-1)?.status)
     .toBe(200);
-  await moveInventoryItemToSlot(desktopPage, 'oak-log', 27);
-  await expect(desktopPage.locator('[data-slot-index="27"][data-item-type="oak-log"]')).toBeVisible();
+  await expect(desktopPage.locator('[data-slot-index="27"] .item-icon')).toBeVisible();
   await expectVisibleInViewport(desktopPage.getByRole('button', { name: 'Reset world' }));
   await desktopPage.screenshot({ path: testInfo.outputPath('desktop-inventory.png') });
   await desktopContext.close();
@@ -161,6 +137,7 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expectVisibleInViewport(moveStick);
   await expectVisibleInViewport(jumpButton);
   await expectVisibleInViewport(inventoryButton);
+  await expect(mobilePage.locator('[data-hud-hotbar-slot="0"] .item-icon')).toBeVisible();
   await mobilePage.screenshot({ path: testInfo.outputPath('mobile-shell-390x844.png') });
 
   await clickButtonBySelector(mobilePage, '[data-open-help]');
@@ -179,8 +156,7 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expect
     .poll(() => mobileIconResponses.filter((response) => response.url.includes('oak-log.svg')).at(-1)?.status)
     .toBe(200);
-  await moveInventoryItemToSlot(mobilePage, 'oak-log', 27);
-  await expect(mobilePage.locator('[data-slot-index="27"][data-item-type="oak-log"]')).toBeVisible();
+  await expect(mobilePage.locator('[data-slot-index="27"] .item-icon')).toBeVisible();
   await expect(closeButton).toBeVisible();
   await expect(resetButton).toBeVisible();
   await expectVisibleInViewport(closeButton);

@@ -134,6 +134,16 @@ function findNextOpenInventorySlot(slots: readonly (InventoryLayoutSlot | null)[
   return -1;
 }
 
+function findNextOpenHotbarSlot(slots: readonly (InventoryLayoutSlot | null)[]): number {
+  for (let index = STORAGE_SLOT_COUNT; index < TOTAL_INVENTORY_SLOT_COUNT; index += 1) {
+    if (!slots[index]) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
 function reconcileInventoryLayout(
   currentSlots: readonly (InventoryLayoutSlot | null)[],
   entries: readonly InventoryStatusEntry[],
@@ -162,12 +172,17 @@ function reconcileInventoryLayout(
     assignedTypes.add(slot.type);
   }
 
+  const preferHotbarForNewItems = nextSlots.slice(STORAGE_SLOT_COUNT).every((slot) => slot === null);
+
   for (const entry of entries) {
     if (assignedTypes.has(entry.type)) {
       continue;
     }
 
-    const nextIndex = findNextOpenInventorySlot(nextSlots);
+    const nextHotbarIndex = findNextOpenHotbarSlot(nextSlots);
+    const nextIndex = preferHotbarForNewItems && nextHotbarIndex !== -1
+      ? nextHotbarIndex
+      : findNextOpenInventorySlot(nextSlots);
 
     if (nextIndex === -1) {
       break;

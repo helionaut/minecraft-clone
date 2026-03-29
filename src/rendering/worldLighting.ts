@@ -3,6 +3,9 @@ import type { WorldBlockType } from '../gameplay/blocks.ts';
 export type LightingFace = 'px' | 'nx' | 'py' | 'ny' | 'pz' | 'nz';
 
 export interface WorldLightingRigState {
+  readonly cycleProgress: number;
+  readonly daylight: number;
+  readonly horizonGlow: number;
   readonly sunPosition: {
     readonly x: number;
     readonly y: number;
@@ -21,7 +24,15 @@ export interface WorldLightingRigState {
     readonly near: number;
     readonly far: number;
   };
+  readonly ambientSkyColor: number;
+  readonly ambientGroundColor: number;
+  readonly ambientIntensity: number;
+  readonly sunColor: number;
+  readonly sunIntensity: number;
+  readonly exposure: number;
 }
+
+export const DAY_NIGHT_CYCLE_DURATION_SECONDS = 180;
 
 const FACE_LIGHT_MULTIPLIERS: Record<LightingFace, number> = {
   px: 0.88,
@@ -47,6 +58,32 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function lerp(start: number, end: number, factor: number): number {
+  return start + (end - start) * factor;
+}
+
+function lerpColor(start: number, end: number, factor: number): number {
+  const clampedFactor = clamp(factor, 0, 1);
+  const startR = (start >> 16) & 0xff;
+  const startG = (start >> 8) & 0xff;
+  const startB = start & 0xff;
+  const endR = (end >> 16) & 0xff;
+  const endG = (end >> 8) & 0xff;
+  const endB = end & 0xff;
+  const red = Math.round(lerp(startR, endR, clampedFactor));
+  const green = Math.round(lerp(startG, endG, clampedFactor));
+  const blue = Math.round(lerp(startB, endB, clampedFactor));
+
+  return (red << 16) | (green << 8) | blue;
+}
+
+export function getDayNightCycleProgress(elapsedSeconds: number): number {
+  const normalizedElapsed = ((elapsedSeconds % DAY_NIGHT_CYCLE_DURATION_SECONDS) + DAY_NIGHT_CYCLE_DURATION_SECONDS)
+    % DAY_NIGHT_CYCLE_DURATION_SECONDS;
+
+  return (normalizedElapsed / DAY_NIGHT_CYCLE_DURATION_SECONDS + 0.25) % 1;
+}
+
 export function getBlockFaceBrightness(
   type: WorldBlockType,
   brightness: number,
@@ -64,14 +101,25 @@ export function getWorldLightingRigState(
   playerX: number,
   playerZ: number,
   visibleRadius: number,
+  elapsedSeconds = 0,
 ): WorldLightingRigState {
+  const cycleProgress = getDayNightCycleProgress(elapsedSeconds);
+  const orbitAngle = cycleProgress * Math.PI * 2 - Math.PI / 6;
+  const solarElevation = Math.sin(cycleProgress * Math.PI * 2);
+  const daylight = clamp((solarElevation + 0.16) / 1.16, 0, 1);
+  const horizonGlow = Math.pow(clamp(1 - Math.abs(solarElevation) * 1.7, 0, 1), 1.3);
   const shadowRadius = Math.max(22, Math.round(visibleRadius * 0.9));
+  const orbitX = Math.cos(orbitAngle) * 26;
+  const orbitZ = Math.sin(orbitAngle) * 18;
 
   return {
+    cycleProgress,
+    daylight,
+    horizonGlow,
     sunPosition: {
-      x: playerX + 26,
-      y: 34,
-      z: playerZ + 18,
+      x: playerX + orbitX,
+      y: lerp(-18, 34, (solarElevation + 1) / 2),
+      z: playerZ + orbitZ,
     },
     targetPosition: {
       x: playerX,
@@ -86,5 +134,11 @@ export function getWorldLightingRigState(
       near: 1,
       far: shadowRadius * 3,
     },
+    ambientSkyColor: lerpColor(0x5b6f94, 0xdbefff, daylight),
+    ambientGroundColor: lerpColor(0x3a342c, 0x7f684f, daylight),
+    ambientIntensity: lerp(0.82, 1.45, daylight),
+    sunColor: lerpColor(0xc9d6ff, 0xfff1c2, Math.max(daylight, horizonGlow * 0.7)),
+    sunIntensity: lerp(0.55, 2.8, daylight),
+    exposure: lerp(1.08, 1.18, daylight),
   };
 }

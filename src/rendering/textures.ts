@@ -1,4 +1,5 @@
 import {
+  type ColorRepresentation,
   CanvasTexture,
   Color,
   MeshBasicMaterial,
@@ -9,8 +10,9 @@ import {
 } from 'three';
 
 import { BLOCK_DEFINITIONS, type WorldBlockType } from '../gameplay/blocks.ts';
+import { getBlockFaceBrightness, type LightingFace } from './worldLighting.ts';
 
-type TextureFace = 'px' | 'nx' | 'py' | 'ny' | 'pz' | 'nz';
+type TextureFace = LightingFace;
 export type FaceVisibilityMask = Record<TextureFace, boolean>;
 
 const FACE_ORDER: readonly TextureFace[] = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
@@ -239,7 +241,7 @@ function getFaceTextureId(type: WorldBlockType, face: TextureFace): string {
 export function createBlockMaterialFactory(): {
   getMaterials: (
     type: WorldBlockType,
-    brightness: number,
+    brightness: number | Partial<Record<TextureFace, number>>,
     visibleFaces?: FaceVisibilityMask,
   ) => Material[];
   dispose: () => void;
@@ -274,10 +276,22 @@ export function createBlockMaterialFactory(): {
 
   return {
     getMaterials: (type, brightness, visibleFaces) => {
-      const lightBucket =
-        type === 'water'
-          ? 14
-          : Math.max(2, Math.min(15, Math.round(brightness * 15)));
+      const brightnessByFace = (face: TextureFace): number => {
+        if (typeof brightness === 'number') {
+          return getBlockFaceBrightness(type, brightness, face);
+        }
+
+        return getBlockFaceBrightness(type, brightness[face] ?? 0.18, face);
+      };
+
+      const lightBucket = FACE_ORDER.reduce((bucket, face) => {
+        const nextBucket =
+          type === 'water'
+            ? 14
+            : Math.max(2, Math.min(15, Math.round(brightnessByFace(face) * 15)));
+
+        return `${bucket}${nextBucket}`;
+      }, '');
       const faceMask = FACE_ORDER.map((face) => Number(visibleFaces?.[face] ?? true)).join('');
       const cacheKey = `${type}:${lightBucket}:${faceMask}`;
       const cached = materialCache.get(cacheKey);
@@ -286,20 +300,22 @@ export function createBlockMaterialFactory(): {
         return cached;
       }
 
-      const tintBrightness = type === 'water' ? 0.98 : brightness;
-      const tint = new Color().setRGB(tintBrightness, tintBrightness, tintBrightness);
       const definition = BLOCK_DEFINITIONS[type];
       const materials = FACE_ORDER.map((face) => {
         if (visibleFaces && !visibleFaces[face]) {
           return hiddenMaterial;
         }
 
+        const tintBrightness = brightnessByFace(face);
+        const tint = new Color().setRGB(tintBrightness, tintBrightness, tintBrightness);
+        const emissive: ColorRepresentation = type === 'lava' ? 0xff8844 : 0x000000;
+
         return new MeshStandardMaterial({
           map: getTexture(type, face),
           color: tint,
           transparent: !definition.opaque,
           opacity: type === 'water' ? 0.76 : type === 'lava' ? 0.92 : 1,
-          emissive: type === 'lava' ? new Color(0xff8844) : new Color(0x000000),
+          emissive,
           emissiveIntensity: type === 'lava' ? 0.75 : 0,
           roughness: type === 'water' ? 0.16 : 0.92,
           metalness: type === 'water' ? 0.02 : 0,

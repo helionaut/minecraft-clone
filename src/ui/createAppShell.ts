@@ -1031,8 +1031,15 @@ export function createAppShell(root: HTMLDivElement): void {
     },
   };
 
-  const sandbox = createPlayableScene(viewport, applyStatus, touchControls, hotbarControls);
   const exposeQaHarness = new URLSearchParams(window.location.search).has('qaHarness');
+  const freezeAtSpawnFrame = exposeQaHarness && new URLSearchParams(window.location.search).has('freezeScene');
+  const sandbox = createPlayableScene(
+    viewport,
+    applyStatus,
+    touchControls,
+    hotbarControls,
+    { freezeAtSpawnFrame },
+  );
 
   if (exposeQaHarness) {
     window.__minecraftCloneQa = {

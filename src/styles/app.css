@@ -734,7 +734,7 @@ button {
 
 .recipe-book-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 0.7rem;
   min-height: 0;
 }
@@ -742,6 +742,49 @@ button {
 .recipe-book-header {
   display: grid;
   gap: 0.2rem;
+}
+
+.crafting-guide {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.55rem;
+  border-top: 3px solid rgba(255, 255, 255, 0.9);
+  border-left: 3px solid rgba(255, 255, 255, 0.9);
+  border-right: 3px solid rgba(76, 76, 76, 0.95);
+  border-bottom: 3px solid rgba(76, 76, 76, 0.95);
+  border-radius: 4px;
+  background:
+    linear-gradient(180deg, rgba(117, 184, 92, 0.18), rgba(255, 255, 255, 0.12));
+}
+
+.crafting-guide-kicker,
+.crafting-guide-title,
+.crafting-guide-body,
+.crafting-guide-hint {
+  margin: 0;
+}
+
+.crafting-guide-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--inventory-muted);
+}
+
+.crafting-guide-title {
+  font-weight: 700;
+  color: var(--inventory-copy);
+}
+
+.crafting-guide-body,
+.crafting-guide-hint {
+  color: var(--inventory-copy);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.crafting-guide-hint {
+  color: var(--inventory-muted);
 }
 
 .recipe-book {
@@ -1080,6 +1123,10 @@ button {
     padding: 0.38rem;
   }
 
+  .crafting-guide {
+    padding: 0.46rem;
+  }
+
   .recipe-row-output {
     gap: 0.38rem;
   }
@@ -1183,11 +1230,18 @@ button {
 
   .menu-subtitle,
   .inventory-window-note,
+  .crafting-guide-body,
+  .crafting-guide-hint,
   .recipe-book-note,
   .world-panel-copy,
   .recipe-row-meta,
   .recipe-book-empty p {
     font-size: 0.74rem;
+  }
+
+  .crafting-guide-kicker,
+  .crafting-guide-title {
+    font-size: 0.76rem;
   }
 
   .hotbar-shell {
@@ -1264,6 +1318,11 @@ button {
   .recipe-row {
     gap: 0.28rem;
     padding: 0.28rem;
+    border-width: 2px;
+  }
+
+  .crafting-guide {
+    padding: 0.34rem;
     border-width: 2px;
   }
 

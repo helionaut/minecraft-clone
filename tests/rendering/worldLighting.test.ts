@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DAY_NIGHT_CYCLE_DURATION_SECONDS,
   getBlockFaceBrightness,
+  getDayNightCycleProgress,
   getWorldLightingRigState,
 } from '../../src/rendering/worldLighting.ts';
 
@@ -22,6 +23,11 @@ describe('getBlockFaceBrightness', () => {
 });
 
 describe('getWorldLightingRigState', () => {
+  it('uses a slower full day-night duration for a more natural pace', () => {
+    expect(DAY_NIGHT_CYCLE_DURATION_SECONDS).toBe(600);
+    expect(getDayNightCycleProgress(150)).toBeCloseTo(0.5);
+  });
+
   it('centers the sunlight target on the player and keeps a stable shadow frustum', () => {
     const state = getWorldLightingRigState(14, -6, 32);
 

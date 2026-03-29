@@ -1,16 +1,20 @@
 import {
-  AmbientLight,
+  ACESFilmicToneMapping,
   Color,
   DirectionalLight,
   EdgesGeometry,
   Fog,
   Group,
+  HemisphereLight,
   LineBasicMaterial,
   LineSegments,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   PointLight,
+  SRGBColorSpace,
   Scene,
   WebGLRenderer,
   BoxGeometry,
@@ -52,6 +56,10 @@ import {
   normalizeStickVector,
 } from '../gameplay/touchControls.ts';
 import {
+  computeVoxelLighting,
+  type VoxelLightResult,
+} from '../gameplay/lighting.ts';
+import {
   DEFAULT_WORLD_CONFIG,
   VoxelWorld,
   parseWorldPersistence,
@@ -76,6 +84,7 @@ import {
   type FaceVisibilityMask,
 } from './textures.ts';
 import { type CellTarget, getLookDirection, traceVoxelTarget } from './voxelRaycast.ts';
+import { getWorldLightingRigState } from './worldLighting.ts';
 
 export interface InventoryStatusEntry {
   readonly type: string;
@@ -189,16 +198,8 @@ function createVisibleFaces(): FaceVisibilityMask {
   return { px: true, nx: true, py: true, ny: true, pz: true, nz: true };
 }
 
-function getRenderBrightness(block: CellTarget, bounds: ReturnType<typeof getVisibleBoundsForPlayer>): number {
-  const emittedLight = BLOCK_DEFINITIONS[block.type].emittedLight;
-
-  if (emittedLight > 0) {
-    return 1;
-  }
-
-  const verticalSpan = Math.max(1, bounds.maxY - bounds.minY);
-  const heightFactor = (block.y - bounds.minY) / verticalSpan;
-  return 0.55 + heightFactor * 0.3;
+function getRenderBrightness(block: CellTarget, lighting: VoxelLightResult): number {
+  return lighting.getBlockBrightness(block.x, block.y, block.z);
 }
 
 function inventoryStorageKey(): string {
@@ -288,6 +289,11 @@ export function createPlayableScene(
     alpha: true,
     canvas,
   });
+  renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.18;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
 
   const scene = new Scene();
   const skyBackdrop = createSkyBackdrop();
@@ -302,11 +308,33 @@ export function createPlayableScene(
   camera.rotation.order = 'YXZ';
   scene.add(camera);
 
-  const ambient = new AmbientLight(0xc7def0, 0.42);
-  const sun = new DirectionalLight(0xfff3c8, 2.7);
-  sun.position.set(18, 28, 10);
+  const ambient = new HemisphereLight(0xdbefff, 0x7f684f, 1.45);
+  const sun = new DirectionalLight(0xfff1c2, 2.8);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.00022;
+  sun.shadow.normalBias = 0.03;
+  const sunTarget = new Object3D();
+  const initialLightingRig = getWorldLightingRigState(0, 0, DEFAULT_WORLD_CONFIG.chunkSize * 2);
+  sun.position.set(
+    initialLightingRig.sunPosition.x,
+    initialLightingRig.sunPosition.y,
+    initialLightingRig.sunPosition.z,
+  );
+  sunTarget.position.set(
+    initialLightingRig.targetPosition.x,
+    initialLightingRig.targetPosition.y,
+    initialLightingRig.targetPosition.z,
+  );
+  sun.target = sunTarget;
+  sun.shadow.camera.left = initialLightingRig.shadowBounds.left;
+  sun.shadow.camera.right = initialLightingRig.shadowBounds.right;
+  sun.shadow.camera.top = initialLightingRig.shadowBounds.top;
+  sun.shadow.camera.bottom = initialLightingRig.shadowBounds.bottom;
+  sun.shadow.camera.near = initialLightingRig.shadowBounds.near;
+  sun.shadow.camera.far = initialLightingRig.shadowBounds.far;
   const playerLantern = new PointLight(0xffd6a0, 1.6, 14, 2);
-  scene.add(ambient, sun, playerLantern);
+  scene.add(ambient, sun, sunTarget, playerLantern);
   const gl = renderer.getContext();
   const debugRendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
   const rendererDiagnostics = buildRendererDiagnostics({
@@ -538,6 +566,7 @@ export function createPlayableScene(
     );
 
     const bounds = getVisibleBounds();
+    const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z));
     worldGroup.clear();
 
     world.forEachLoadedBlockInBounds(bounds, (block) => {
@@ -559,7 +588,7 @@ export function createPlayableScene(
         return;
       }
 
-      const brightness = getRenderBrightness(block, bounds);
+      const brightness = getRenderBrightness(block, lighting);
       const voxel = new Mesh(
         block.type === 'water' ? waterGeometry : blockGeometry,
         blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
@@ -570,6 +599,8 @@ export function createPlayableScene(
         block.z + 0.5,
       );
       voxel.userData.cell = block;
+      voxel.castShadow = block.type !== 'water' && block.type !== 'lava';
+      voxel.receiveShadow = block.type !== 'water';
       worldGroup.add(voxel);
     });
 
@@ -1148,6 +1179,29 @@ export function createPlayableScene(
       player.position.z,
     );
     playerLantern.position.copy(camera.position);
+    const lightingRig = getWorldLightingRigState(
+      player.position.x,
+      player.position.z,
+      DEFAULT_WORLD_CONFIG.chunkSize * (streamingProfile.renderChunkRadius * 2 + 1),
+    );
+    sun.position.set(
+      lightingRig.sunPosition.x,
+      lightingRig.sunPosition.y,
+      lightingRig.sunPosition.z,
+    );
+    sunTarget.position.set(
+      lightingRig.targetPosition.x,
+      lightingRig.targetPosition.y,
+      lightingRig.targetPosition.z,
+    );
+    sun.shadow.camera.left = lightingRig.shadowBounds.left;
+    sun.shadow.camera.right = lightingRig.shadowBounds.right;
+    sun.shadow.camera.top = lightingRig.shadowBounds.top;
+    sun.shadow.camera.bottom = lightingRig.shadowBounds.bottom;
+    sun.shadow.camera.near = lightingRig.shadowBounds.near;
+    sun.shadow.camera.far = lightingRig.shadowBounds.far;
+    sun.shadow.camera.updateProjectionMatrix();
+    sun.target.updateMatrixWorld();
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
     skyBackdrop.update(player.position.x, player.position.z);

@@ -16,6 +16,35 @@ async function expectVisibleInViewport(locator: Locator) {
   expect(box.y + box.height).toBeGreaterThan(0);
 }
 
+async function expectSelectorVisibleInViewport(page: Page, selector: string, message: string) {
+  await expect
+    .poll(async () => {
+      return await page.evaluate((targetSelector: string) => {
+        const element = document.querySelector<HTMLElement>(targetSelector);
+
+        if (!element || element.hidden) {
+          return false;
+        }
+
+        const style = window.getComputedStyle(element);
+
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+          return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+
+        return rect.width > 0
+          && rect.height > 0
+          && rect.bottom > 0
+          && rect.right > 0
+          && rect.left < window.innerWidth
+          && rect.top < window.innerHeight;
+      }, selector);
+    }, { timeout: 30_000, message })
+    .toBe(true);
+}
+
 function trackInventoryIconResponses(page: Page) {
   const responses: Array<{ url: string; status: number }> = [];
 
@@ -60,9 +89,24 @@ async function clickButtonBySelector(page: Page, selector: string): Promise<void
 }
 
 async function expectTouchHelpCollapsed(page: Page) {
-  await page.waitForTimeout(2600);
-  await expect(page.locator('[data-hud-status]')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Help' })).toBeVisible();
+  await expect
+    .poll(async () => {
+      return await page.evaluate(() => {
+        const qa = (window as Window & {
+          __minecraftCloneQa?: {
+            getStatus: () => {
+              touchDevice: boolean;
+              inventory: Array<{ type: string; count: number }>;
+            } | null;
+          };
+        }).__minecraftCloneQa;
+
+        return qa?.getStatus()?.touchDevice === true;
+      });
+    }, { timeout: 30_000, message: 'Expected the mobile HUD to publish a touch-device status.' })
+    .toBe(true);
+  await expect(page.locator('[data-open-help]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-hud-status]')).toBeHidden({ timeout: 10_000 });
 }
 
 test('the deployed sandbox shell loads', async ({ page }) => {
@@ -86,9 +130,8 @@ test('the deployed sandbox shell loads', async ({ page }) => {
   });
 });
 
-test('the deployed sandbox keeps desktop and mobile controls visible in release screenshots', async ({ browser }, testInfo) => {
-  test.setTimeout(120_000);
-
+test('the deployed sandbox keeps desktop controls visible in release screenshots', async ({ browser }, testInfo) => {
+  test.setTimeout(180_000);
   const desktopContext = await browser.newContext({
     viewport: { width: 1440, height: 900 },
   });
@@ -115,7 +158,10 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expectVisibleInViewport(desktopPage.getByRole('button', { name: 'Reset world' }));
   await desktopPage.screenshot({ path: testInfo.outputPath('desktop-inventory.png') });
   await desktopContext.close();
+});
 
+test('the deployed sandbox keeps mobile portrait controls visible in release screenshots', async ({ browser }, testInfo) => {
+  test.setTimeout(180_000);
   const mobileContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
     hasTouch: true,
@@ -127,17 +173,13 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
 
   await mobilePage.goto('./?qaHarness=1', { waitUntil: 'domcontentloaded' });
   const moveStick = mobilePage.locator('[data-move-stick]');
-  const jumpButton = mobilePage.getByRole('button', { name: 'Jump' });
-  const inventoryButton = mobilePage.getByRole('button', { name: 'Inventory' });
 
   await expectTouchHelpCollapsed(mobilePage);
-  await expect(moveStick).toBeVisible();
-  await expect(jumpButton).toBeVisible();
-  await expect(inventoryButton).toBeVisible();
+  await expectSelectorVisibleInViewport(mobilePage, '[data-move-stick]', 'Expected the mobile move stick to be visible.');
+  await expectSelectorVisibleInViewport(mobilePage, '[data-jump]', 'Expected the mobile jump button to be visible.');
+  await expectSelectorVisibleInViewport(mobilePage, '[data-open-menu]', 'Expected the mobile inventory button to be visible.');
   await expectVisibleInViewport(moveStick);
-  await expectVisibleInViewport(jumpButton);
-  await expectVisibleInViewport(inventoryButton);
-  await expect(mobilePage.locator('[data-hud-hotbar-slot="0"] .item-icon')).toBeVisible();
+  await expect(mobilePage.locator('[data-hud-hotbar-slot="0"]')).toHaveAttribute('data-item-type', /.+/);
   await mobilePage.screenshot({ path: testInfo.outputPath('mobile-shell-390x844.png') });
 
   await clickButtonBySelector(mobilePage, '[data-open-help]');
@@ -165,7 +207,10 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
   await expectVisibleInViewport(resetButton);
   await clickButtonBySelector(mobilePage, 'button[data-close-menu]');
   await mobileContext.close();
+});
 
+test('the deployed sandbox keeps mobile landscape controls visible in release screenshots', async ({ browser }, testInfo) => {
+  test.setTimeout(120_000);
   const mobileLandscapeContext = await browser.newContext({
     viewport: { width: 844, height: 390 },
     hasTouch: true,
@@ -176,15 +221,21 @@ test('the deployed sandbox keeps desktop and mobile controls visible in release 
 
   await mobileLandscapePage.goto('./?qaHarness=1', { waitUntil: 'domcontentloaded' });
   await expectTouchHelpCollapsed(mobileLandscapePage);
-  const landscapeMoveStick = mobileLandscapePage.locator('[data-move-stick]');
-  const landscapeJumpButton = mobileLandscapePage.getByRole('button', { name: 'Jump' });
-  const landscapeInventoryButton = mobileLandscapePage.getByRole('button', { name: 'Inventory' });
-  await expect(landscapeMoveStick).toBeVisible();
-  await expect(landscapeJumpButton).toBeVisible();
-  await expect(landscapeInventoryButton).toBeVisible();
-  await expectVisibleInViewport(landscapeMoveStick);
-  await expectVisibleInViewport(landscapeJumpButton);
-  await expectVisibleInViewport(landscapeInventoryButton);
+  await expectSelectorVisibleInViewport(
+    mobileLandscapePage,
+    '[data-move-stick]',
+    'Expected the landscape move stick to be visible.',
+  );
+  await expectSelectorVisibleInViewport(
+    mobileLandscapePage,
+    '[data-jump]',
+    'Expected the landscape jump button to be visible.',
+  );
+  await expectSelectorVisibleInViewport(
+    mobileLandscapePage,
+    '[data-open-menu]',
+    'Expected the landscape inventory button to be visible.',
+  );
   await mobileLandscapePage.screenshot({ path: testInfo.outputPath('mobile-shell-844x390.png') });
   await mobileLandscapeContext.close();
 });

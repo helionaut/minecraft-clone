@@ -69,7 +69,7 @@ import { getVisibleBoundsForPlayer } from './renderBounds.ts';
 import { buildRendererDiagnostics, shouldPublishSandboxStatus } from './sandboxStatus.ts';
 import { createCloudLayer } from './clouds.ts';
 import { createGodRaysEffect } from './godRays.ts';
-import { createSkyBackdrop } from './skyBackdrop.ts';
+import { createSkyBackdrop, getSkyBackdropTheme } from './skyBackdrop.ts';
 import {
   createHeldItemModel,
   disposeHeldItemModel,
@@ -295,33 +295,41 @@ export function createPlayableScene(
     alpha: true,
     canvas,
   });
+  const initialLightingRig = getWorldLightingRigState(0, 0, DEFAULT_WORLD_CONFIG.chunkSize * 2);
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18;
+  renderer.toneMappingExposure = initialLightingRig.exposure;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = PCFSoftShadowMap;
 
   const scene = new Scene();
-  const skyBackdrop = createSkyBackdrop();
-  scene.background = new Color(skyBackdrop.theme.backgroundColor);
-  scene.fog = new Fog(
+  const skyBackdrop = createSkyBackdrop(
+    getSkyBackdropTheme(initialLightingRig.daylight, initialLightingRig.horizonGlow),
+  );
+  const sceneBackground = new Color(skyBackdrop.theme.backgroundColor);
+  scene.background = sceneBackground;
+  const sceneFog = new Fog(
     skyBackdrop.theme.fogColor,
     skyBackdrop.theme.fogNear,
     skyBackdrop.theme.fogFar,
   );
+  scene.fog = sceneFog;
 
   const camera = new PerspectiveCamera(75, 1, 0.1, 180);
   camera.rotation.order = 'YXZ';
   scene.add(camera);
 
-  const ambient = new HemisphereLight(0xdbefff, 0x7f684f, 1.45);
-  const sun = new DirectionalLight(0xfff1c2, 2.8);
+  const ambient = new HemisphereLight(
+    initialLightingRig.ambientSkyColor,
+    initialLightingRig.ambientGroundColor,
+    initialLightingRig.ambientIntensity,
+  );
+  const sun = new DirectionalLight(initialLightingRig.sunColor, initialLightingRig.sunIntensity);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.00022;
   sun.shadow.normalBias = 0.03;
   const sunTarget = new Object3D();
-  const initialLightingRig = getWorldLightingRigState(0, 0, DEFAULT_WORLD_CONFIG.chunkSize * 2);
   sun.position.set(
     initialLightingRig.sunPosition.x,
     initialLightingRig.sunPosition.y,
@@ -367,7 +375,12 @@ export function createPlayableScene(
   const worldGroup = new Group();
   const clouds = createCloudLayer(DEFAULT_WORLD_CONFIG.seed);
   const godRays = createGodRaysEffect();
-  skyBackdrop.update(player.position.x, player.position.z);
+  skyBackdrop.update(
+    player.position.x,
+    player.position.z,
+    initialLightingRig.daylight,
+    initialLightingRig.horizonGlow,
+  );
   clouds.update(player.position.x, player.position.z, 0);
   scene.add(skyBackdrop.group);
   scene.add(clouds.group);
@@ -1157,7 +1170,14 @@ export function createPlayableScene(
       player.position.x,
       player.position.z,
       DEFAULT_WORLD_CONFIG.chunkSize * (streamingProfile.renderChunkRadius * 2 + 1),
+      elapsedTime,
     );
+    ambient.color.setHex(lightingRig.ambientSkyColor);
+    ambient.groundColor.setHex(lightingRig.ambientGroundColor);
+    ambient.intensity = lightingRig.ambientIntensity;
+    sun.color.setHex(lightingRig.sunColor);
+    sun.intensity = lightingRig.sunIntensity;
+    renderer.toneMappingExposure = lightingRig.exposure;
     sun.position.set(
       lightingRig.sunPosition.x,
       lightingRig.sunPosition.y,
@@ -1178,7 +1198,16 @@ export function createPlayableScene(
     sun.target.updateMatrixWorld();
     camera.rotation.y = player.yaw;
     camera.rotation.x = player.pitch;
-    skyBackdrop.update(player.position.x, player.position.z);
+    skyBackdrop.update(
+      player.position.x,
+      player.position.z,
+      lightingRig.daylight,
+      lightingRig.horizonGlow,
+    );
+    sceneBackground.setHex(skyBackdrop.theme.backgroundColor);
+    sceneFog.color.setHex(skyBackdrop.theme.fogColor);
+    sceneFog.near = skyBackdrop.theme.fogNear;
+    sceneFog.far = skyBackdrop.theme.fogFar;
     clouds.update(player.position.x, player.position.z, elapsedTime);
     godRays.update({
       playerPosition: player.position,

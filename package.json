@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:deploy-smoke": "playwright test --config=playwright.deploy.config.ts",
-    "profile:webgpu-startup": "playwright test --config=playwright.profile.config.ts",
+    "profile:webgpu-startup": "node scripts/runWebGpuStartupProfile.mjs",
     "verify:release-blockers": "playwright test --config=playwright.deploy.config.ts",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },

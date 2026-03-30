@@ -82,12 +82,14 @@ Expected post-cleanup result:
   - Windows `nvidia-smi.exe` exists at `/mnt/c/Windows/System32/nvidia-smi.exe`
   - `nvidia-smi.exe` reports `NVIDIA GeForce GTX 965M` on driver `582.28`, so the visible adapter is desktop-class NVIDIA hardware but still not RTX-class
   - not every WSL runner can execute mounted Windows binaries directly; in this session both `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe` and `/mnt/c/Windows/System32/cmd.exe` returned `Invalid argument`, so the Windows-local runtime bundle from the prior pass could not be relaunched here even though `/dev/dxg` and the Chrome path are visible
+  - `WSL_INTEROP` is empty in this runner, and manually pointing it at `/run/WSL/1_interop`, `/run/WSL/2_interop`, or `/run/WSL/449_interop` does not restore execution; `cmd.exe`, `powershell.exe`, and `chrome.exe` still fail with `Invalid argument`
   - the committed Playwright wrapper cannot launch that Windows Chrome binary directly from WSL because Chrome exits on `--remote-debugging-pipe` with `Remote debugging pipe file descriptors are not open`
   - manually launching Windows Chrome with `--remote-debugging-port=9222` leaves the browser listening on the Windows side, but this WSL session cannot reach that listener over either `127.0.0.1` or the Windows host IP from `/etc/resolv.conf`
   - the Windows host also lacks `node` and `npm` in PATH, so unattended profiling from Windows requires a portable `node.exe` toolchain rather than relying on a preinstalled runtime
   - Windows can still reach the WSL preview URL (`http://127.0.0.1:4174/minecraft-clone/` returned HTTP 200 in this pass), so a same-OS browser run is possible once the Node/runtime packaging issue is handled
   - a portable Windows Node v22.22.1 zip from `nodejs.org` can be unpacked under the shared cache and used to run repo scripts from Windows
   - direct execution from the UNC workspace still fails to resolve Playwright package/module entrypoints under Windows Node, so this pass used a minimal Windows-local runtime bundle (`scripts/captureWebGpuStartupProfileOverCdp.mjs` plus `node_modules/playwright-core`) staged under `/mnt/c/Temp/hel142-startup-runtime`
+  - the repo now includes `npm run profile:webgpu-startup:stage-windows-runtime` to regenerate that Windows-local runtime bundle, including a `run-startup-profile.cmd` launcher and `README.txt`, from WSL before handing off to Windows-side execution
   - that Windows-local runtime bundle successfully captured startup artifacts back into the workspace under `reports/startup-profiling/test-results/windows-host-runtime-attempt/`
   - the resulting runtime is still not the requested target surface: Chrome reported `WebGL 2 | hardware accelerated` on `ANGLE (Intel, Intel(R) HD Graphics 4600...)` with `volumetric lighting disabled (webgpu-fallback-adapter)`
 - Remote surface limitation: no MCP-provided browser/GPU execution surface is attached in this environment.

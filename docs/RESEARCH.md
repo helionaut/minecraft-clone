@@ -28,6 +28,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=/mnt/c/Program Files/Google/Chrome/Application/chrome.exe npm run profile:webgpu-startup:local-preview` fails before navigation because Playwright launches Chrome with `--remote-debugging-pipe`, and Windows Chrome exits with `Remote debugging pipe file descriptors are not open`
   - manually launching Windows Chrome with `--remote-debugging-port=9222` succeeds on the Windows side, but WSL cannot connect to that endpoint on either `127.0.0.1` or the Windows host IP, so `connectOverCDP` is not currently reachable from this session either
   - the Windows host does not have `node` or `npm`, so the profiling wrapper cannot be moved wholesale to the Windows side without extra bootstrap work
+  - this WSL session also exposes no usable Windows interop bridge of its own: `WSL_INTEROP` is empty, and directly invoking `/mnt/c/Windows/System32/cmd.exe`, `powershell.exe`, or `chrome.exe` still fails with `Invalid argument` even when `WSL_INTEROP` is set manually to the discovered `/run/WSL/*_interop` sockets
 - Even if that transport problem were removed, the visible adapter on this machine is GTX 965M rather than the RTX-class hardware named in the issue
 - The attached Playwright MCP browser surface was also checked and is not usable here: it is configured for system Chrome at `/opt/google/chrome/chrome`, that binary is missing, and an unattended `npx playwright install chrome` attempt fails because it requires `sudo`.
 - The profiling wrapper has since been hardened to accept `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH`, so the eventual RTX run can point directly at a Chrome-for-Testing or locally installed Chrome binary without depending on Playwright channel discovery.
@@ -41,6 +42,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - Changed variable:
   - kept the preview/build on WSL, but moved the profiling runtime itself onto Windows by using a portable Windows Node v22.22.1 toolchain from the shared cache
   - bypassed the UNC workspace limitations by staging a minimal Windows-local runtime bundle under `/mnt/c/Temp/hel142-startup-runtime/` containing `scripts/captureWebGpuStartupProfileOverCdp.mjs` plus `node_modules/playwright-core`
+  - the repo now includes `npm run profile:webgpu-startup:stage-windows-runtime` to regenerate that Windows-local runtime bundle from WSL without recreating the copy steps manually
 - Result:
   - the Windows-local runtime bundle successfully launched `C:\Program Files\Google\Chrome\Application\chrome.exe`, hit the WSL preview URL `http://127.0.0.1:4174/minecraft-clone/`, and wrote a new artifact bundle to `reports/startup-profiling/test-results/windows-host-runtime-attempt/`
   - generated artifacts now include:
@@ -74,7 +76,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - this machine still does not satisfy the issue's RTX requirement
   - the visible NVIDIA adapter from WSL is GTX 965M, while the successful hardware-accelerated browser run actually bound to Intel HD 4600
   - the previously prepared SwiftShader control comparison could not be regenerated automatically in this pass because the baseline `startup-profile-report.json` is no longer present in the current workspace; only a stale `trace.zip` remains under `webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/`
-  - a follow-up WSL session on 2026-03-31 confirmed an additional transport limit: `/dev/dxg` and the Windows Chrome path are visible, but direct execution of `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe` and `/mnt/c/Windows/System32/cmd.exe` failed with `Invalid argument`, so the previously working Windows-local runtime bundle cannot be relaunched from every runner
+  - a follow-up WSL session on 2026-03-31 confirmed an additional transport limit: `/dev/dxg` and the Windows Chrome path are visible, but direct execution of `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`, `cmd.exe`, and `chrome.exe` failed with `Invalid argument`, so the previously working Windows-local runtime bundle cannot be relaunched from every runner
 
 ### Code-backed startup suspects to profile on the next pass
 
@@ -163,6 +165,15 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    PLAYWRIGHT_PROFILE_EXECUTABLE_PATH="/absolute/path/to/chrome" \
    npm run profile:webgpu-startup
    ```
+
+   If the operator is starting from WSL on a Windows-backed machine and needs to recreate the minimal Windows-local runtime bundle first, run:
+
+   ```bash
+   PLAYWRIGHT_PROFILE_DRY_RUN=1 npm run profile:webgpu-startup:stage-windows-runtime
+   npm run profile:webgpu-startup:stage-windows-runtime
+   ```
+
+   That stages `scripts/captureWebGpuStartupProfileOverCdp.mjs`, `node_modules/playwright-core`, `README.txt`, and `run-startup-profile.cmd` under `/mnt/c/Temp/hel142-startup-runtime/`. Launch `C:\Temp\hel142-startup-runtime\run-startup-profile.cmd` from Windows, then copy `C:\Temp\hel142-startup-runtime\artifacts\` back into `reports/startup-profiling/test-results/windows-host-runtime-attempt/`.
 
    If the RTX machine needs explicit Chrome flags to stay on the high-performance adapter or expose the desired WebGPU path, pass them through `PLAYWRIGHT_PROFILE_BROWSER_ARGS`. Separate flags with newlines or `;;`, for example:
 

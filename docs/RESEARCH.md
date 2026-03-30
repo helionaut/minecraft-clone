@@ -116,8 +116,20 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile.json`
    - `startup-profile-summary.json`
    - `startup-shell.png`
-5. Record whether the app falls back to safe mode after device loss.
-6. Break down startup cost across:
+5. After the raw artifacts exist, generate a review-ready findings bundle:
+
+   ```bash
+   STARTUP_PROFILE_ARTIFACT_DIR="reports/startup-profiling/test-results/<playwright-output-dir>" \
+   npm run profile:webgpu-startup:report
+   ```
+
+   This writes:
+   - `startup-profile-report.json`
+   - `startup-profile-report.md`
+
+   The report summarizes top startup phases, long-frame counts, console warnings/errors, and remediation candidates so the RTX machine operator only has to upload the generated artifact directory.
+6. Record whether the app falls back to safe mode after device loss.
+7. Break down startup cost across:
    - `createSceneRenderer()` / `renderer.init()`
    - volumetric light volume creation
    - first `rebuildWorld()`

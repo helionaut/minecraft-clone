@@ -644,56 +644,72 @@ export async function createPlayableScene(
     heldItemSwingIntensity = intensity;
   };
 
-  const rebuildWorld = () => {
-    world.loadChunksAround(
-      Math.floor(player.position.x),
-      Math.floor(player.position.z),
-      streamingProfile.renderChunkRadius,
-      streamingProfile.maxLoadedChunks,
-    );
-    world.pruneLoadedChunks(
-      Math.floor(player.position.x),
-      Math.floor(player.position.z),
-      streamingProfile.keepLoadedChunkRadius,
-    );
+  const rebuildWorld = (profilePhasePrefix?: string) => {
+    const measureRebuildStep = <T,>(name: string, run: () => T): T => {
+      if (!profilePhasePrefix) {
+        return run();
+      }
+
+      return startupProfiler.measureSync(`${profilePhasePrefix}:${name}`, run);
+    };
+
+    measureRebuildStep('sync-chunks', () => {
+      world.loadChunksAround(
+        Math.floor(player.position.x),
+        Math.floor(player.position.z),
+        streamingProfile.renderChunkRadius,
+        streamingProfile.maxLoadedChunks,
+      );
+      world.pruneLoadedChunks(
+        Math.floor(player.position.x),
+        Math.floor(player.position.z),
+        streamingProfile.keepLoadedChunkRadius,
+      );
+    });
 
     const bounds = getVisibleBounds();
-    const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z));
-    worldGroup.clear();
+    const lighting = measureRebuildStep(
+      'compute-lighting',
+      () => computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z)),
+    );
 
-    world.forEachLoadedBlockInBounds(bounds, (block) => {
-      const visibleFaces = createVisibleFaces();
-      let hasVisibleFace = false;
+    measureRebuildStep('rebuild-visible-meshes', () => {
+      worldGroup.clear();
 
-      for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
-        const neighbor = world.getLoadedBlock(block.x + dx, block.y + dy, block.z + dz);
-        const visible = !neighbor || (
-          block.type === 'water' || block.type === 'lava'
-            ? neighbor !== block.type
-            : !BLOCK_DEFINITIONS[neighbor].opaque
+      world.forEachLoadedBlockInBounds(bounds, (block) => {
+        const visibleFaces = createVisibleFaces();
+        let hasVisibleFace = false;
+
+        for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
+          const neighbor = world.getLoadedBlock(block.x + dx, block.y + dy, block.z + dz);
+          const visible = !neighbor || (
+            block.type === 'water' || block.type === 'lava'
+              ? neighbor !== block.type
+              : !BLOCK_DEFINITIONS[neighbor].opaque
+          );
+          visibleFaces[face] = visible;
+          hasVisibleFace ||= visible;
+        }
+
+        if (!hasVisibleFace) {
+          return;
+        }
+
+        const brightness = getRenderBrightness(block, lighting);
+        const voxel = new Mesh(
+          block.type === 'water' ? waterGeometry : blockGeometry,
+          blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
         );
-        visibleFaces[face] = visible;
-        hasVisibleFace ||= visible;
-      }
-
-      if (!hasVisibleFace) {
-        return;
-      }
-
-      const brightness = getRenderBrightness(block, lighting);
-      const voxel = new Mesh(
-        block.type === 'water' ? waterGeometry : blockGeometry,
-        blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
-      );
-      voxel.position.set(
-        block.x + 0.5,
-        block.y + (block.type === 'water' ? 0.44 : 0.5),
-        block.z + 0.5,
-      );
-      voxel.userData.cell = block;
-      voxel.castShadow = block.type !== 'water' && block.type !== 'lava';
-      voxel.receiveShadow = block.type !== 'water';
-      worldGroup.add(voxel);
+        voxel.position.set(
+          block.x + 0.5,
+          block.y + (block.type === 'water' ? 0.44 : 0.5),
+          block.z + 0.5,
+        );
+        voxel.userData.cell = block;
+        voxel.castShadow = block.type !== 'water' && block.type !== 'lava';
+        voxel.receiveShadow = block.type !== 'water';
+        worldGroup.add(voxel);
+      });
     });
 
     worldDirty = false;
@@ -1200,7 +1216,7 @@ export async function createPlayableScene(
     updateTargeting();
   };
 
-  startupProfiler.measureSync('initial-rebuild-world', rebuildWorld);
+  startupProfiler.measureSync('initial-rebuild-world', () => rebuildWorld('initial-rebuild-world'));
   startupProfiler.measureSync('initial-sync-size', syncSize);
   startupProfiler.measureSync('initial-status-publish', updateStatus);
 

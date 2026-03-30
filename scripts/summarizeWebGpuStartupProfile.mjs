@@ -53,9 +53,49 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
   const candidates = [];
   const topPhase = startupSummary?.topPhases?.[0];
   const renderer = String(runtimeStatus?.webglRenderer ?? '');
+  const hasCandidate = (suspect) => candidates.some((candidate) => candidate.suspect === suspect);
+  const pushCandidate = (candidate) => {
+    if (!hasCandidate(candidate.suspect)) {
+      candidates.push(candidate);
+    }
+  };
+  const hasLightingSubphase = startupSummary?.topPhases?.some((phase) => phase.name === 'initial-rebuild-world:compute-lighting');
+  const hasMeshSubphase = startupSummary?.topPhases?.some((phase) => phase.name === 'initial-rebuild-world:rebuild-visible-meshes');
+
+  if (topPhase?.name === 'initial-rebuild-world:compute-lighting') {
+    pushCandidate({
+      priority: 'high',
+      suspect: 'initial-rebuild-world:compute-lighting',
+      rationale: 'Lighting recomputation dominates startup time; inspect computeVoxelLighting breadth, propagation work, and whether lighting can be cached or incrementally updated.',
+    });
+  }
+
+  if (topPhase?.name === 'initial-rebuild-world:rebuild-visible-meshes') {
+    pushCandidate({
+      priority: 'high',
+      suspect: 'initial-rebuild-world:rebuild-visible-meshes',
+      rationale: 'Visible block mesh reconstruction dominates startup time; inspect worldGroup.clear(), per-block Mesh creation, and material reuse before first interaction.',
+    });
+  }
+
+  if (hasLightingSubphase) {
+    pushCandidate({
+      priority: 'high',
+      suspect: 'initial-rebuild-world:compute-lighting',
+      rationale: 'Lighting recomputation is large enough to appear among top startup phases; compare computeVoxelLighting cost against the full rebuild-world span.',
+    });
+  }
+
+  if (hasMeshSubphase) {
+    pushCandidate({
+      priority: 'high',
+      suspect: 'initial-rebuild-world:rebuild-visible-meshes',
+      rationale: 'Visible mesh reconstruction is large enough to appear among top startup phases; compare scene clearing and per-block mesh rebuild cost against lighting and renderer init.',
+    });
+  }
 
   if (topPhase?.name === 'initial-rebuild-world') {
-    candidates.push({
+    pushCandidate({
       priority: 'high',
       suspect: 'initial-rebuild-world',
       rationale: 'Initial world rebuild dominates startup time; inspect voxel iteration, mesh creation, and lighting work before first interaction.',
@@ -63,7 +103,7 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
   }
 
   if (topPhase?.name === 'create-scene-renderer') {
-    candidates.push({
+    pushCandidate({
       priority: 'high',
       suspect: 'create-scene-renderer',
       rationale: 'Renderer bootstrap dominates startup time; inspect adapter/device acquisition, renderer.init(), and pipeline/material setup.',
@@ -71,7 +111,7 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
   }
 
   if (startupSummary?.topPhases?.some((phase) => phase.name === 'create-desktop-volumetric-light-volume')) {
-    candidates.push({
+    pushCandidate({
       priority: 'medium',
       suspect: 'create-desktop-volumetric-light-volume',
       rationale: 'Desktop volumetric setup is expensive enough to appear in top startup phases; compare startup cost with and without volumetric material initialization.',
@@ -79,7 +119,7 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
   }
 
   if ((startupSummary?.longFrameCount ?? 0) > 0) {
-    candidates.push({
+    pushCandidate({
       priority: 'medium',
       suspect: 'post-startup frame loop',
       rationale: `Observed ${startupSummary.longFrameCount} long frames after startup; correlate Chrome trace main-thread slices against world rebuild and render-loop work.`,
@@ -87,7 +127,7 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
   }
 
   if (/swiftshader|llvmpipe|software/i.test(renderer)) {
-    candidates.push({
+    pushCandidate({
       priority: 'high',
       suspect: 'invalid-runtime-surface',
       rationale: `Captured renderer is software-backed (${renderer}); treat this run as a control only, not proof of RTX Chrome behavior.`,

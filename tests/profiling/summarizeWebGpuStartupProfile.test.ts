@@ -98,4 +98,35 @@ describe('summarizeWebGpuStartupProfile', () => {
     ]);
     expect(report.markdown).toContain('create-scene-renderer: 480.0ms');
   });
+
+  it('surfaces rebuild-world subphases as the leading suspect when they dominate', () => {
+    const report = buildStartupProfilingReport({
+      startupSummary: {
+        totalDurationMs: 1840,
+        longFrameCount: 12,
+        maxFrameDurationMs: 610,
+        topPhases: [
+          { name: 'initial-rebuild-world', durationMs: 1830 },
+          { name: 'initial-rebuild-world:compute-lighting', durationMs: 1090 },
+          { name: 'initial-rebuild-world:rebuild-visible-meshes', durationMs: 620 },
+        ],
+      },
+      runtimeStatus: {
+        browserSupportsWebGpu: true,
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',
+      },
+      consoleEntries: [],
+      traceData: {
+        traceEvents: [],
+      },
+    });
+
+    expect(report.json.remediationCandidates.map((candidate) => candidate.suspect)).toEqual([
+      'initial-rebuild-world:compute-lighting',
+      'initial-rebuild-world:rebuild-visible-meshes',
+      'initial-rebuild-world',
+      'post-startup frame loop',
+    ]);
+    expect(report.markdown).toContain('initial-rebuild-world:compute-lighting: 1090.0ms');
+  });
 });

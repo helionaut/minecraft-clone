@@ -1,5 +1,51 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import process from 'node:process';
+
+const LINUX_CHANNEL_EXECUTABLES = {
+  chrome: [
+    '/opt/google/chrome/chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+  ],
+  'chrome-beta': [
+    '/opt/google/chrome-beta/chrome',
+    '/usr/bin/google-chrome-beta',
+  ],
+  'msedge': [
+    '/opt/microsoft/msedge/msedge',
+    '/usr/bin/microsoft-edge',
+    '/usr/bin/microsoft-edge-stable',
+  ],
+  'msedge-beta': [
+    '/opt/microsoft/msedge-beta/msedge',
+    '/usr/bin/microsoft-edge-beta',
+  ],
+};
+
+export function validateBrowserChannel(env = process.env, browserChannel) {
+  if (!browserChannel) {
+    return null;
+  }
+
+  if (process.platform !== 'linux') {
+    return null;
+  }
+
+  const candidatePaths = LINUX_CHANNEL_EXECUTABLES[browserChannel];
+
+  if (!candidatePaths) {
+    return null;
+  }
+
+  if (candidatePaths.some((candidatePath) => existsSync(candidatePath))) {
+    return null;
+  }
+
+  const browsersPath = env.PLAYWRIGHT_BROWSERS_PATH?.trim() ?? '(default Playwright cache)';
+
+  return `Requested browser channel "${browserChannel}" is not installed on this host. Install that browser on the RTX machine or unset PLAYWRIGHT_PROFILE_BROWSER_CHANNEL to use bundled Chromium from PLAYWRIGHT_BROWSERS_PATH=${browsersPath}.`;
+}
 
 export function buildWebGpuStartupProfileRun(env = process.env) {
   const baseURL = env.PLAYWRIGHT_BASE_URL?.trim() ?? '';
@@ -11,6 +57,15 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     return {
       ok: false,
       error: 'PLAYWRIGHT_BASE_URL is required. Point it at the RTX Chrome target host or preview URL.',
+    };
+  }
+
+  const browserChannelError = validateBrowserChannel(env, browserChannel);
+
+  if (browserChannelError) {
+    return {
+      ok: false,
+      error: browserChannelError,
     };
   }
 

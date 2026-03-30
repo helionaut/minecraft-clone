@@ -23,7 +23,7 @@ const LINUX_CHANNEL_EXECUTABLES = {
   ],
 };
 
-export function validateBrowserChannel(env = process.env, browserChannel) {
+export function validateBrowserChannel(env = process.env, browserChannel, pathExists = existsSync) {
   if (!browserChannel) {
     return null;
   }
@@ -38,7 +38,7 @@ export function validateBrowserChannel(env = process.env, browserChannel) {
     return null;
   }
 
-  if (candidatePaths.some((candidatePath) => existsSync(candidatePath))) {
+  if (candidatePaths.some((candidatePath) => pathExists(candidatePath))) {
     return null;
   }
 

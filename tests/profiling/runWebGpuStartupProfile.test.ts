@@ -43,19 +43,12 @@ describe('runWebGpuStartupProfile', () => {
   });
 
   it('fails early when a requested Chrome channel is missing on Linux', () => {
-    const plan = buildWebGpuStartupProfileRun({
-      PLAYWRIGHT_BASE_URL: 'https://example.invalid',
-      PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: 'chrome',
+    const error = validateBrowserChannel({
       PLAYWRIGHT_BROWSERS_PATH: '.cache/ms-playwright',
-    });
+    }, 'chrome', () => false);
 
-    expect(plan.ok).toBe(false);
-    if (plan.ok) {
-      throw new Error('expected plan to fail');
-    }
-
-    expect(plan.error).toContain('Requested browser channel "chrome" is not installed');
-    expect(plan.error).toContain('unset PLAYWRIGHT_PROFILE_BROWSER_CHANNEL to use bundled Chromium');
+    expect(error).toContain('Requested browser channel "chrome" is not installed');
+    expect(error).toContain('unset PLAYWRIGHT_PROFILE_BROWSER_CHANNEL to use bundled Chromium');
   });
 
   it('allows bundled Chromium when the browser channel is explicitly empty', () => {

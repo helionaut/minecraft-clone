@@ -15,6 +15,7 @@
     "profile:webgpu-startup": "node scripts/runWebGpuStartupProfile.mjs",
     "profile:webgpu-startup:local-preview": "node scripts/runWebGpuStartupProfileLocalPreview.mjs",
     "profile:webgpu-startup:report": "node scripts/summarizeWebGpuStartupProfile.mjs",
+    "profile:webgpu-startup:compare": "node scripts/compareWebGpuStartupProfiles.mjs",
     "verify:release-blockers": "playwright test --config=playwright.deploy.config.ts",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },

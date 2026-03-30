@@ -144,8 +144,20 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile-report.md`
 
    The report summarizes top startup phases, long-frame counts, console warnings/errors, top Chrome trace hotspots from `chrome-performance-trace.json`, and remediation candidates so the RTX machine operator only has to upload the generated artifact directory.
-6. Record whether the app falls back to safe mode after device loss.
-7. Break down startup cost across:
+6. Compare the RTX report bundle against the published SwiftShader control baseline from this workspace:
+
+   ```bash
+   STARTUP_PROFILE_CANDIDATE_REPORT="reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-report.json" \
+   npm run profile:webgpu-startup:compare
+   ```
+
+   By default, this compares against `reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/startup-profile-report.json` and writes:
+   - `startup-profile-comparison.json`
+   - `startup-profile-comparison.md`
+
+   Use that comparison output to separate true RTX-only hotspots from the already known SwiftShader control costs such as `initial-rebuild-world` and `ReadPixels`-driven stalls.
+7. Record whether the app falls back to safe mode after device loss.
+8. Break down startup cost across:
    - `createSceneRenderer()` / `renderer.init()`
    - volumetric light volume creation
    - first `rebuildWorld()`

@@ -109,6 +109,15 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
    On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json` and `startup-profile-report.md`.
 
+   For the lowest-ceremony path on the RTX machine, the repo also now exposes a one-command local-preview flow:
+
+   ```bash
+   PLAYWRIGHT_PROFILE_EXECUTABLE_PATH="/absolute/path/to/chrome" \
+   npm run profile:webgpu-startup:local-preview
+   ```
+
+   That command runs `npm run build`, starts `vite preview` on `127.0.0.1:4173`, waits for `http://127.0.0.1:4173/minecraft-clone/`, runs the existing Playwright capture wrapper, then stops the preview server.
+
 3. If a hosted preview is preferred instead of a local preview, first loosen the `github-pages` environment branch policy or merge the profiling branch to `main`; the current Pages site at `https://helionaut.github.io/minecraft-clone/` serves `main`, not PR #52.
 
 4. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts under `reports/startup-profiling/` including:

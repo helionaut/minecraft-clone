@@ -96,6 +96,13 @@ npm run preview -- --host 127.0.0.1 --port 4173
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:4173/minecraft-clone/ npm run profile:webgpu-startup
 ```
 
+Equivalent one-command local-preview flow on the RTX machine:
+
+```bash
+PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=/absolute/path/to/chrome \
+npm run profile:webgpu-startup:local-preview
+```
+
 Optional portable browser path:
 
 ```bash

@@ -65,6 +65,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - `longFrameCount`: `44`
   - `maxFrameDurationMs`: about `3133.2ms`
 - The Chrome trace and console export from that same control run also showed repeated `GPU stall due to ReadPixels` warnings and multiple main-thread `RunTask` spans between roughly `544ms` and `2707ms`.
+- A manually generated control report now exists in the same artifact directory as `startup-profile-report.json` and `startup-profile-report.md`. Its top GPU/compositor hotspots were `GLES2::ReadPixels` and command-buffer wait calls around `570-579ms`, which makes the current local trace a useful software-rendered baseline for later RTX comparison.
 - This does not prove the RTX behavior, but it does eliminate one weak hypothesis on the local control surface: browser/bootstrap overhead was not the dominant startup cost there; world rebuild work still dominated even after the harness could run against real desktop Chrome.
 
 ### Instrumentation prepared in this pass

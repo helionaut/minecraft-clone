@@ -4,6 +4,7 @@ import {
   WEBGPU_SAFE_MODE_STORAGE_KEY,
   attachWebGpuDeviceLossHandler,
   clearWebGpuSafeMode,
+  getAutoWebGpuRendererGate,
   getWebGpuPreference,
   isUsableWebGpuAdapter,
   persistWebGpuSafeMode,
@@ -51,6 +52,38 @@ describe('getWebGpuPreference', () => {
       getItem: () => null,
     })).toEqual({
       mode: 'auto',
+      reason: null,
+    });
+  });
+});
+
+describe('getAutoWebGpuRendererGate', () => {
+  it('keeps automatic WebGPU disabled until an environment is explicitly allowlisted', () => {
+    expect(getAutoWebGpuRendererGate({
+      browserSupportsWebGpu: true,
+      preferenceMode: 'auto',
+      rendererDiagnostics: {
+        mode: 'hardware-accelerated',
+        summary: 'WebGL 2 | hardware accelerated | ANGLE (NVIDIA, NVIDIA GeForce RTX 3070, OpenGL 4.6)',
+      },
+      userAgent: 'Mozilla/5.0 Chrome/135.0.0.0 Safari/537.36',
+    })).toEqual({
+      allowed: false,
+      reason: 'webgpu-stability-gated',
+    });
+  });
+
+  it('preserves the query-string retry override for WebGPU experiments', () => {
+    expect(getAutoWebGpuRendererGate({
+      browserSupportsWebGpu: true,
+      preferenceMode: 'force-webgpu',
+      rendererDiagnostics: {
+        mode: 'hardware-accelerated',
+        summary: 'WebGL 2 | hardware accelerated | ANGLE (NVIDIA, NVIDIA GeForce RTX 3070, OpenGL 4.6)',
+      },
+      userAgent: 'Mozilla/5.0 Chrome/135.0.0.0 Safari/537.36',
+    })).toEqual({
+      allowed: true,
       reason: null,
     });
   });

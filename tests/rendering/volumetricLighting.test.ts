@@ -64,6 +64,19 @@ describe('getVolumetricLightingDecision', () => {
     });
   });
 
+  it('keeps the effect off when automatic WebGPU is gated pending stable validation', () => {
+    expect(getVolumetricLightingDecision({
+      touchDevice: false,
+      rendererMode: 'hardware-accelerated',
+      browserSupportsWebGpu: true,
+      hasRtxVolumetricPipeline: true,
+      reasonOverride: 'webgpu-stability-gated',
+    })).toEqual({
+      enabled: false,
+      reason: 'webgpu-stability-gated',
+    });
+  });
+
   it('surfaces a fallback-adapter blocker after WebGPU preflight succeeds', () => {
     expect(getVolumetricLightingDecision({
       touchDevice: false,

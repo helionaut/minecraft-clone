@@ -25,6 +25,11 @@ export interface WebGpuPreference {
   readonly reason: VolumetricLightingDisableReason | null;
 }
 
+export interface WebGpuAutoRendererGate {
+  readonly allowed: boolean;
+  readonly reason: VolumetricLightingDisableReason | null;
+}
+
 interface WebGpuSafeModeStorage {
   readonly getItem: (key: string) => string | null;
   readonly setItem: (key: string, value: string) => void;
@@ -48,8 +53,17 @@ interface CreateSceneRendererOptions {
   readonly touchDevice: boolean;
   readonly rendererDiagnostics: RendererDiagnostics;
   readonly webGpuPreference?: WebGpuPreference;
+  readonly userAgent?: string;
   readonly onWebGpuDeviceLost?: (info: WebGpuDeviceLossInfo) => void;
 }
+
+interface StableWebGpuEnvironmentRule {
+  readonly id: string;
+  readonly browserSubstrings: readonly string[];
+  readonly rendererSubstrings: readonly string[];
+}
+
+const STABLE_WEBGPU_ENVIRONMENT_ALLOWLIST: readonly StableWebGpuEnvironmentRule[] = [];
 
 export function isUsableWebGpuAdapter(
   adapter: { readonly isFallbackAdapter?: boolean } | null,
@@ -100,6 +114,39 @@ export function clearWebGpuSafeMode(
   storage: Pick<WebGpuSafeModeStorage, 'removeItem'>,
 ): void {
   storage.removeItem(WEBGPU_SAFE_MODE_STORAGE_KEY);
+}
+
+export function getAutoWebGpuRendererGate(input: {
+  readonly browserSupportsWebGpu: boolean;
+  readonly preferenceMode: WebGpuPreferenceMode;
+  readonly rendererDiagnostics: RendererDiagnostics;
+  readonly userAgent: string;
+}): WebGpuAutoRendererGate {
+  if (!input.browserSupportsWebGpu || input.preferenceMode === 'force-webgpu') {
+    return {
+      allowed: true,
+      reason: null,
+    };
+  }
+
+  const normalizedUserAgent = input.userAgent.toLowerCase();
+  const normalizedRendererSummary = input.rendererDiagnostics.summary.toLowerCase();
+  const matchedRule = STABLE_WEBGPU_ENVIRONMENT_ALLOWLIST.find((rule) => (
+    rule.browserSubstrings.every((substring) => normalizedUserAgent.includes(substring))
+      && rule.rendererSubstrings.every((substring) => normalizedRendererSummary.includes(substring))
+  ));
+
+  if (matchedRule) {
+    return {
+      allowed: true,
+      reason: null,
+    };
+  }
+
+  return {
+    allowed: false,
+    reason: 'webgpu-stability-gated',
+  };
 }
 
 function createWebGlRenderer(canvas: HTMLCanvasElement): WebGLRenderer {
@@ -160,6 +207,12 @@ export async function createSceneRenderer(
     reason: null,
   };
   const browserSupportsWebGpu = typeof navigator.gpu !== 'undefined';
+  const autoWebGpuGate = getAutoWebGpuRendererGate({
+    browserSupportsWebGpu,
+    preferenceMode: webGpuPreference.mode,
+    rendererDiagnostics,
+    userAgent: options.userAgent ?? navigator.userAgent,
+  });
   const preflightDecision = getVolumetricLightingDecision({
     touchDevice,
     rendererMode: rendererDiagnostics.mode,
@@ -173,6 +226,15 @@ export async function createSceneRenderer(
       touchDevice,
       rendererDiagnostics,
       webGpuPreference.reason ?? preflightDecision.reason ?? undefined,
+    );
+  }
+
+  if (!autoWebGpuGate.allowed) {
+    return fallbackSelection(
+      canvas,
+      touchDevice,
+      rendererDiagnostics,
+      autoWebGpuGate.reason ?? undefined,
     );
   }
 

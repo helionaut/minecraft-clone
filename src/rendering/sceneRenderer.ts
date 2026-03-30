@@ -10,23 +10,91 @@ import type { RendererDiagnostics } from './sandboxStatus.ts';
 
 export type SceneRenderer = WebGLRenderer | WebGPURenderer;
 export type SceneRendererBackend = 'webgl' | 'webgpu';
+export type WebGpuPreferenceMode = 'auto' | 'force-webgl' | 'force-webgpu';
+
+export const WEBGPU_SAFE_MODE_STORAGE_KEY = 'minecraft-clone:webgpu-safe-mode:v1';
+
+export interface WebGpuDeviceLossInfo {
+  readonly api?: string;
+  readonly message: string;
+  readonly reason?: string | null;
+}
+
+export interface WebGpuPreference {
+  readonly mode: WebGpuPreferenceMode;
+  readonly reason: VolumetricLightingDisableReason | null;
+}
+
+interface WebGpuSafeModeStorage {
+  readonly getItem: (key: string) => string | null;
+  readonly setItem: (key: string, value: string) => void;
+  readonly removeItem: (key: string) => void;
+}
 
 export interface SceneRendererSelection {
   readonly renderer: SceneRenderer;
   readonly backend: SceneRendererBackend;
   readonly volumetricLighting: VolumetricLightingDecision;
+  readonly fallbackReason: VolumetricLightingDisableReason | null;
 }
 
 interface CreateSceneRendererOptions {
   readonly canvas: HTMLCanvasElement;
   readonly touchDevice: boolean;
   readonly rendererDiagnostics: RendererDiagnostics;
+  readonly webGpuPreference?: WebGpuPreference;
+  readonly onWebGpuDeviceLost?: (info: WebGpuDeviceLossInfo) => void;
 }
 
 export function isUsableWebGpuAdapter(
   adapter: { readonly isFallbackAdapter?: boolean } | null,
 ): boolean {
   return adapter !== null && adapter.isFallbackAdapter !== true;
+}
+
+export function getWebGpuPreference(
+  search: string,
+  storage: Pick<WebGpuSafeModeStorage, 'getItem'> | null,
+): WebGpuPreference {
+  const searchParams = new URLSearchParams(search);
+
+  if (searchParams.get('renderer') === 'webgpu') {
+    return {
+      mode: 'force-webgpu',
+      reason: null,
+    };
+  }
+
+  const storedSafeMode = storage?.getItem(WEBGPU_SAFE_MODE_STORAGE_KEY);
+
+  if (storedSafeMode) {
+    return {
+      mode: 'force-webgl',
+      reason: 'webgpu-device-lost',
+    };
+  }
+
+  return {
+    mode: 'auto',
+    reason: null,
+  };
+}
+
+export function persistWebGpuSafeMode(
+  storage: Pick<WebGpuSafeModeStorage, 'setItem'>,
+  info: WebGpuDeviceLossInfo,
+): void {
+  storage.setItem(WEBGPU_SAFE_MODE_STORAGE_KEY, JSON.stringify({
+    detectedAt: new Date().toISOString(),
+    message: info.message,
+    reason: info.reason ?? null,
+  }));
+}
+
+export function clearWebGpuSafeMode(
+  storage: Pick<WebGpuSafeModeStorage, 'removeItem'>,
+): void {
+  storage.removeItem(WEBGPU_SAFE_MODE_STORAGE_KEY);
 }
 
 function createWebGlRenderer(canvas: HTMLCanvasElement): WebGLRenderer {
@@ -53,6 +121,7 @@ function fallbackSelection(
       hasRtxVolumetricPipeline: false,
       reasonOverride,
     }),
+    fallbackReason: reasonOverride ?? null,
   };
 }
 
@@ -60,6 +129,10 @@ export async function createSceneRenderer(
   options: CreateSceneRendererOptions,
 ): Promise<SceneRendererSelection> {
   const { canvas, touchDevice, rendererDiagnostics } = options;
+  const webGpuPreference = options.webGpuPreference ?? {
+    mode: 'auto',
+    reason: null,
+  };
   const browserSupportsWebGpu = typeof navigator.gpu !== 'undefined';
   const preflightDecision = getVolumetricLightingDecision({
     touchDevice,
@@ -68,8 +141,13 @@ export async function createSceneRenderer(
     hasRtxVolumetricPipeline: true,
   });
 
-  if (!preflightDecision.enabled) {
-    return fallbackSelection(canvas, touchDevice, rendererDiagnostics);
+  if (!preflightDecision.enabled || webGpuPreference.mode === 'force-webgl') {
+    return fallbackSelection(
+      canvas,
+      touchDevice,
+      rendererDiagnostics,
+      webGpuPreference.reason ?? preflightDecision.reason ?? undefined,
+    );
   }
 
   const adapter = await navigator.gpu.requestAdapter({
@@ -90,6 +168,12 @@ export async function createSceneRenderer(
     alpha: true,
     canvas,
   });
+  const defaultOnDeviceLost = renderer.onDeviceLost.bind(renderer);
+
+  renderer.onDeviceLost = (info) => {
+    defaultOnDeviceLost(info);
+    options.onWebGpuDeviceLost?.(info as WebGpuDeviceLossInfo);
+  };
 
   try {
     await renderer.init();
@@ -112,5 +196,6 @@ export async function createSceneRenderer(
       browserSupportsWebGpu,
       hasRtxVolumetricPipeline: true,
     }),
+    fallbackReason: null,
   };
 }

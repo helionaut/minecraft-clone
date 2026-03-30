@@ -77,6 +77,19 @@ describe('getVolumetricLightingDecision', () => {
     });
   });
 
+  it('keeps the effect off after a previous WebGPU device loss forced safe mode', () => {
+    expect(getVolumetricLightingDecision({
+      touchDevice: false,
+      rendererMode: 'hardware-accelerated',
+      browserSupportsWebGpu: true,
+      hasRtxVolumetricPipeline: true,
+      reasonOverride: 'webgpu-device-lost',
+    })).toEqual({
+      enabled: false,
+      reason: 'webgpu-device-lost',
+    });
+  });
+
   it('surfaces a backend mismatch blocker after WebGPU initialization', () => {
     expect(getVolumetricLightingDecision({
       touchDevice: false,

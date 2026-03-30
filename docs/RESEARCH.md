@@ -88,7 +88,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `e5dd177` instead of the `main` GitHub Pages site:
+1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `972aa47` instead of the `main` GitHub Pages site:
 
    ```bash
    git checkout eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene
@@ -114,7 +114,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    npm run profile:webgpu-startup
    ```
 
-   On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json` and `startup-profile-report.md`.
+   On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` and `npm run profile:webgpu-startup:compare` against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json`, `startup-profile-report.md`, `startup-profile-comparison.json`, and `startup-profile-comparison.md`.
 
    For the lowest-ceremony path on the RTX machine, the repo also now exposes a one-command local-preview flow:
 
@@ -148,7 +148,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile-report.md`
 
    The report summarizes top startup phases, long-frame counts, console warnings/errors, top Chrome trace hotspots from `chrome-performance-trace.json`, and remediation candidates so the RTX machine operator only has to upload the generated artifact directory.
-6. Compare the RTX report bundle against the published SwiftShader control baseline from this workspace:
+6. If the auto-generated comparison files are missing for any reason, compare the RTX report bundle against the published SwiftShader control baseline from this workspace:
 
    ```bash
    STARTUP_PROFILE_CANDIDATE_REPORT="reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-report.json" \

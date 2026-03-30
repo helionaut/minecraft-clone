@@ -3,6 +3,29 @@ import { existsSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import process from 'node:process';
 
+/**
+ * @typedef {{
+ *   ok: false,
+ *   error: string,
+ * }} WebGpuStartupProfileRunError
+ *
+ * @typedef {{
+ *   ok: true,
+ *   baseURL: string,
+ *   browserChannel: string,
+ *   executablePath: string,
+ *   dryRun: boolean,
+ *   artifactDir: string,
+ *   artifactResultsDir: string,
+ *   command: string,
+ *   args: string[],
+ *   reportCommand: string,
+ *   reportArgs: string[],
+ *   compareCommand: string,
+ *   compareArgs: string[],
+ * }} WebGpuStartupProfileRunPlan
+ */
+
 const LINUX_CHANNEL_EXECUTABLES = {
   chrome: [
     '/opt/google/chrome/chrome',
@@ -68,6 +91,7 @@ export function validateBrowserExecutablePath(env = process.env, pathExists = ex
   return `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH points to a missing browser binary: ${executablePath}`;
 }
 
+/** @returns {WebGpuStartupProfileRunPlan | WebGpuStartupProfileRunError} */
 export function buildWebGpuStartupProfileRun(env = process.env) {
   const baseURL = env.PLAYWRIGHT_BASE_URL?.trim() ?? '';
   const executablePath = env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
@@ -113,6 +137,8 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     args: ['playwright', 'test', '--config=playwright.profile.config.ts'],
     reportCommand: 'npm',
     reportArgs: ['run', 'profile:webgpu-startup:report'],
+    compareCommand: 'npm',
+    compareArgs: ['run', 'profile:webgpu-startup:compare'],
   };
 }
 
@@ -150,7 +176,7 @@ async function runPostCaptureReport(plan) {
 
   if (!artifactOutputDir) {
     console.warn(`[webgpu-startup-profile] no Playwright output directory found under ${plan.artifactResultsDir}; skipping report generation`);
-    return;
+    return null;
   }
 
   console.info(`[webgpu-startup-profile] generating report for ${artifactOutputDir}`);
@@ -179,6 +205,37 @@ async function runPostCaptureReport(plan) {
       resolve(undefined);
     });
   });
+
+  return artifactOutputDir;
+}
+
+async function runPostCaptureComparison(plan, artifactOutputDir) {
+  console.info(`[webgpu-startup-profile] generating baseline comparison for ${artifactOutputDir}`);
+
+  await new Promise((resolve, reject) => {
+    const compareChild = spawn(plan.compareCommand, plan.compareArgs, {
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+      env: {
+        ...process.env,
+        STARTUP_PROFILE_CANDIDATE_REPORT: `${artifactOutputDir}/startup-profile-report.json`,
+      },
+    });
+
+    compareChild.on('exit', (code, signal) => {
+      if (signal) {
+        reject(new Error(`startup profile comparison exited via signal ${signal}`));
+        return;
+      }
+
+      if ((code ?? 1) !== 0) {
+        reject(new Error(`startup profile comparison failed with exit code ${code ?? 1}`));
+        return;
+      }
+
+      resolve(undefined);
+    });
+  });
 }
 
 async function main() {
@@ -195,6 +252,7 @@ async function main() {
   console.info(`[webgpu-startup-profile] browser executable: ${plan.executablePath}`);
   console.info(`[webgpu-startup-profile] artifacts: ${plan.artifactDir}`);
   console.info(`[webgpu-startup-profile] report command: ${plan.reportCommand} ${plan.reportArgs.join(' ')}`);
+  console.info('[webgpu-startup-profile] comparison is auto-generated after a successful capture');
 
   if (plan.dryRun) {
     console.info(`[webgpu-startup-profile] dry run command: ${plan.command} ${plan.args.join(' ')}`);
@@ -230,7 +288,10 @@ async function main() {
   }
 
   try {
-    await runPostCaptureReport(plan);
+    const artifactOutputDir = await runPostCaptureReport(plan);
+    if (artifactOutputDir) {
+      await runPostCaptureComparison(plan, artifactOutputDir);
+    }
   } catch (error) {
     console.error(`[webgpu-startup-profile] ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;

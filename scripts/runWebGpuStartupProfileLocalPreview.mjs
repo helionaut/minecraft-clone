@@ -94,6 +94,7 @@ async function main() {
   console.info(`[webgpu-startup-profile:local-preview] build command: ${plan.buildCommand} ${plan.buildArgs.join(' ')}`);
   console.info(`[webgpu-startup-profile:local-preview] preview command: ${plan.previewCommand} ${plan.previewArgs.join(' ')}`);
   console.info(`[webgpu-startup-profile:local-preview] capture command: ${plan.captureCommand} ${plan.captureArgs.join(' ')}`);
+  console.info('[webgpu-startup-profile:local-preview] comparison is auto-generated after a successful capture');
 
   if (plan.dryRun) {
     return;

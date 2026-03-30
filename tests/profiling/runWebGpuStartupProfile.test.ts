@@ -84,10 +84,17 @@ describe('runWebGpuStartupProfile', () => {
       throw new Error('expected plan to succeed');
     }
 
+    const comparePlan = plan as typeof plan & {
+      compareCommand: string;
+      compareArgs: string[];
+    };
+
     expect(plan.browserChannel).toBe('');
     expect(plan.artifactResultsDir).toBe('reports/startup-profiling/test-results');
     expect(plan.reportCommand).toBe('npm');
     expect(plan.reportArgs).toEqual(['run', 'profile:webgpu-startup:report']);
+    expect(comparePlan.compareCommand).toBe('npm');
+    expect(comparePlan.compareArgs).toEqual(['run', 'profile:webgpu-startup:compare']);
     expect(plan.executablePath).toBe(process.execPath);
   });
 

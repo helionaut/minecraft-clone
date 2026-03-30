@@ -47,6 +47,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 - The scene startup path now supports `?startupProfile=1`.
 - The existing QA harness now exposes `window.__minecraftCloneQa.getStartupProfile()`.
+- A dedicated Playwright profiling lane now exists via `npm run profile:webgpu-startup`.
 - The startup profile records phase timings for:
   - `create-scene-renderer`
   - `create-desktop-volumetric-light-volume`
@@ -58,15 +59,23 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Start the app on the issue branch and force the WebGPU path with `?renderer=webgpu&qaHarness=1&startupProfile=1`.
-2. Capture a Chrome Performance trace covering:
-   - initial load
-   - first render
-   - first 5-10 interactive seconds
-3. Export console output, including any WebGPU warnings or device-loss events.
-4. After startup settles, export `window.__minecraftCloneQa.getStartupProfile()` from DevTools.
-5. Record whether the app falls back to safe mode after device loss.
-6. Break down startup cost across:
+1. Run the committed profiling lane against the RTX Chrome target:
+
+   ```bash
+   PLAYWRIGHT_BASE_URL="https://<target-host-or-preview>" \
+   PLAYWRIGHT_PROFILE_BROWSER_CHANNEL=chrome \
+   npm run profile:webgpu-startup
+   ```
+
+2. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts under `reports/startup-profiling/` including:
+   - `chrome-performance-trace.json`
+   - `console-messages.json`
+   - `runtime-status.json`
+   - `startup-profile.json`
+   - `startup-profile-summary.json`
+   - `startup-shell.png`
+3. Record whether the app falls back to safe mode after device loss.
+4. Break down startup cost across:
    - `createSceneRenderer()` / `renderer.init()`
    - volumetric light volume creation
    - first `rebuildWorld()`

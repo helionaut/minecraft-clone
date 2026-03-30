@@ -21,6 +21,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - Repo-local Chrome-for-Testing could be downloaded and launched from the issue workspace, but default headless and flagged/headed `xvfb-run` launches both still reported `navigator.gpu === false`.
 - The flagged headed probe reported WebGL renderer `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, which confirms software rendering rather than RTX-backed acceleration on this host.
 - The attached Playwright MCP browser surface was also checked and is not usable here: it is configured for system Chrome at `/opt/google/chrome/chrome`, that binary is missing, and an unattended `npx playwright install chrome` attempt fails because it requires `sudo`.
+- The profiling wrapper has since been hardened to accept `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH`, so the eventual RTX run can point directly at a Chrome-for-Testing or locally installed Chrome binary without depending on Playwright channel discovery.
 - MCP discovery returned zero configured resources and zero resource templates, so there is no off-host browser or GPU execution surface hidden behind the current environment.
 - That makes the ticket's requested execution surface unavailable on this machine before any profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
@@ -93,11 +94,18 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
    ```bash
    PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173/minecraft-clone/" \
-   PLAYWRIGHT_PROFILE_BROWSER_CHANNEL=chrome \
    npm run profile:webgpu-startup
    ```
 
    The wrapper validates `PLAYWRIGHT_BASE_URL`, defaults the browser channel to `chrome`, and prints the artifact directory before launching Playwright. Use `PLAYWRIGHT_PROFILE_DRY_RUN=1` for a preflight check without starting the browser.
+
+   If the RTX machine does not expose Chrome as a Playwright channel, point the wrapper at an explicit binary instead:
+
+   ```bash
+   PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173/minecraft-clone/" \
+   PLAYWRIGHT_PROFILE_EXECUTABLE_PATH="/absolute/path/to/chrome" \
+   npm run profile:webgpu-startup
+   ```
 
 3. If a hosted preview is preferred instead of a local preview, first loosen the `github-pages` environment branch policy or merge the profiling branch to `main`; the current Pages site at `https://helionaut.github.io/minecraft-clone/` serves `main`, not PR #52.
 

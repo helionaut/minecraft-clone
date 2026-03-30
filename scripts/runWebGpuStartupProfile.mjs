@@ -24,6 +24,12 @@ const LINUX_CHANNEL_EXECUTABLES = {
 };
 
 export function validateBrowserChannel(env = process.env, browserChannel, pathExists = existsSync) {
+  const executablePath = env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
+
+  if (executablePath) {
+    return null;
+  }
+
   if (!browserChannel) {
     return null;
   }
@@ -47,9 +53,24 @@ export function validateBrowserChannel(env = process.env, browserChannel, pathEx
   return `Requested browser channel "${browserChannel}" is not installed on this host. Install that browser on the RTX machine or unset PLAYWRIGHT_PROFILE_BROWSER_CHANNEL to use bundled Chromium from PLAYWRIGHT_BROWSERS_PATH=${browsersPath}.`;
 }
 
+export function validateBrowserExecutablePath(env = process.env, pathExists = existsSync) {
+  const executablePath = env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
+
+  if (!executablePath) {
+    return null;
+  }
+
+  if (pathExists(executablePath)) {
+    return null;
+  }
+
+  return `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH points to a missing browser binary: ${executablePath}`;
+}
+
 export function buildWebGpuStartupProfileRun(env = process.env) {
   const baseURL = env.PLAYWRIGHT_BASE_URL?.trim() ?? '';
-  const browserChannel = env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL?.trim() ?? 'chrome';
+  const executablePath = env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
+  const requestedBrowserChannel = env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL?.trim() ?? 'chrome';
   const dryRun = env.PLAYWRIGHT_PROFILE_DRY_RUN === '1';
   const artifactDir = 'reports/startup-profiling';
 
@@ -60,6 +81,16 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     };
   }
 
+  const browserExecutablePathError = validateBrowserExecutablePath(env);
+
+  if (browserExecutablePathError) {
+    return {
+      ok: false,
+      error: browserExecutablePathError,
+    };
+  }
+
+  const browserChannel = executablePath ? '' : requestedBrowserChannel;
   const browserChannelError = validateBrowserChannel(env, browserChannel);
 
   if (browserChannelError) {
@@ -73,6 +104,7 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     ok: true,
     baseURL,
     browserChannel,
+    executablePath,
     dryRun,
     artifactDir,
     command: 'npx',
@@ -91,6 +123,7 @@ async function main() {
 
   console.info(`[webgpu-startup-profile] base URL: ${plan.baseURL}`);
   console.info(`[webgpu-startup-profile] browser channel: ${plan.browserChannel}`);
+  console.info(`[webgpu-startup-profile] browser executable: ${plan.executablePath}`);
   console.info(`[webgpu-startup-profile] artifacts: ${plan.artifactDir}`);
 
   if (plan.dryRun) {
@@ -105,6 +138,7 @@ async function main() {
       ...process.env,
       PLAYWRIGHT_BASE_URL: plan.baseURL,
       PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: plan.browserChannel,
+      PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: plan.executablePath,
     },
   });
 

@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL;
+const executablePath = process.env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() || undefined;
 
 if (!baseURL) {
   throw new Error('PLAYWRIGHT_BASE_URL is required for startup profiling runs.');
@@ -16,7 +17,10 @@ export default defineConfig({
   use: {
     baseURL,
     browserName: 'chromium',
-    channel: process.env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL || undefined,
+    channel: executablePath ? undefined : (process.env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL || undefined),
+    launchOptions: executablePath
+      ? { executablePath }
+      : undefined,
     trace: 'retain-on-failure',
     viewport: { width: 1600, height: 900 },
   },

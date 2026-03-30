@@ -2,8 +2,11 @@ import { execFileSync } from 'node:child_process';
 
 import { describe, expect, it } from 'vitest';
 
-// @ts-expect-error importing untyped ESM helper for direct wrapper-plan tests
-import { buildWebGpuStartupProfileRun, validateBrowserChannel } from '../../scripts/runWebGpuStartupProfile.mjs';
+import {
+  buildWebGpuStartupProfileRun,
+  validateBrowserChannel,
+  validateBrowserExecutablePath,
+} from '../../scripts/runWebGpuStartupProfile.mjs';
 
 const scriptPath = 'scripts/runWebGpuStartupProfile.mjs';
 
@@ -39,6 +42,7 @@ describe('runWebGpuStartupProfile', () => {
 
     expect(output).toContain('base URL: https://example.invalid');
     expect(output).toContain('browser channel: ');
+    expect(output).toContain('browser executable: ');
     expect(output).toContain('dry run command: npx playwright test --config=playwright.profile.config.ts');
   });
 
@@ -64,6 +68,30 @@ describe('runWebGpuStartupProfile', () => {
     }
 
     expect(plan.browserChannel).toBe('');
+  });
+
+  it('accepts an explicit browser executable path without requiring a channel install', () => {
+    const plan = buildWebGpuStartupProfileRun({
+      PLAYWRIGHT_BASE_URL: 'https://example.invalid',
+      PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: 'chrome',
+      PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: process.execPath,
+    });
+
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) {
+      throw new Error('expected plan to succeed');
+    }
+
+    expect(plan.browserChannel).toBe('');
+    expect(plan.executablePath).toBe(process.execPath);
+  });
+
+  it('fails early when the configured executable path does not exist', () => {
+    const error = validateBrowserExecutablePath({
+      PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: '/missing/chrome',
+    }, () => false);
+
+    expect(error).toContain('PLAYWRIGHT_PROFILE_EXECUTABLE_PATH points to a missing browser binary');
   });
 
   it('ignores unknown channels in the Linux preflight', () => {

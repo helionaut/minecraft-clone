@@ -20,6 +20,8 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - No NVIDIA tooling was present: `nvidia-smi` was not available on this host.
 - Repo-local Chrome-for-Testing could be downloaded and launched from the issue workspace, but default headless and flagged/headed `xvfb-run` launches both still reported `navigator.gpu === false`.
 - The flagged headed probe reported WebGL renderer `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, which confirms software rendering rather than RTX-backed acceleration on this host.
+- The attached Playwright MCP browser surface was also checked and is not usable here: it is configured for system Chrome at `/opt/google/chrome/chrome`, that binary is missing, and an unattended `npx playwright install chrome` attempt fails because it requires `sudo`.
+- MCP discovery returned zero configured resources and zero resource templates, so there is no off-host browser or GPU execution surface hidden behind the current environment.
 - That makes the ticket's requested execution surface unavailable on this machine before any profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 

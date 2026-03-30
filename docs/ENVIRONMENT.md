@@ -78,6 +78,7 @@ Expected post-cleanup result:
   - headed launch under `xvfb-run` with `--enable-unsafe-webgpu --ignore-gpu-blocklist --enable-features=Vulkan,UseSkiaRenderer` still reports `navigator.gpu === false`
   - the same headed probe reports `WEBGL_debug_renderer_info` as `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, so this host is still software-rendered rather than RTX-backed
 - Remote surface limitation: no MCP-provided browser/GPU execution surface is attached in this environment.
+- Attached browser-tool limitation: the available Playwright MCP browser wrapper is configured for system Chrome at `/opt/google/chrome/chrome`; that binary is missing on this host, and `npx playwright install chrome` cannot complete unattended because it requires `sudo`.
 - Hosted preview limitation: the shared GitHub Pages site serves `main`, and the `github-pages` environment branch policy rejects PR-branch deploys for PR #52.
 
 Required execution surface for the remaining proof:

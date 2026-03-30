@@ -164,6 +164,15 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    npm run profile:webgpu-startup
    ```
 
+   If the RTX machine needs explicit Chrome flags to stay on the high-performance adapter or expose the desired WebGPU path, pass them through `PLAYWRIGHT_PROFILE_BROWSER_ARGS`. Separate flags with newlines or `;;`, for example:
+
+   ```bash
+   PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173/minecraft-clone/" \
+   PLAYWRIGHT_PROFILE_EXECUTABLE_PATH="/absolute/path/to/chrome" \
+   PLAYWRIGHT_PROFILE_BROWSER_ARGS=$'--force_high_performance_gpu\n--enable-unsafe-webgpu\n--ignore-gpu-blocklist' \
+   npm run profile:webgpu-startup
+   ```
+
    On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` and `npm run profile:webgpu-startup:compare`, then writes an upload manifest against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json`, `startup-profile-report.md`, `startup-profile-comparison.json`, `startup-profile-comparison.md`, `startup-profile-upload-manifest.json`, and `startup-profile-upload-manifest.md`.
 
    For the lowest-ceremony path on the RTX machine, the repo also now exposes a one-command local-preview flow:

@@ -23,6 +23,19 @@ function buildArtifactOutputDir(env = process.env) {
   return `reports/startup-profiling/test-results/webgpuStartup.cdp-${stamp}`;
 }
 
+export function parseBrowserArgs(env = process.env) {
+  const rawArgs = env.PLAYWRIGHT_PROFILE_BROWSER_ARGS?.trim() ?? '';
+
+  if (!rawArgs) {
+    return [];
+  }
+
+  return rawArgs
+    .split(/\r?\n|;;/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function summarizeStartupProfile(snapshot) {
   return {
     totalDurationMs: snapshot.totalDurationMs,
@@ -128,6 +141,7 @@ async function main() {
   const baseURL = process.env.PLAYWRIGHT_BASE_URL?.trim() ?? '';
   const executablePath = process.env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
   const browserChannel = process.env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL?.trim() ?? '';
+  const browserArgs = parseBrowserArgs();
 
   if (!baseURL) {
     throw new Error('PLAYWRIGHT_BASE_URL is required for startup profiling runs.');
@@ -143,6 +157,7 @@ async function main() {
   console.info(`[webgpu-startup-profile:capture] endpoint: ${cdpEndpointUrl}`);
   console.info(`[webgpu-startup-profile:capture] browser channel: ${browserChannel}`);
   console.info(`[webgpu-startup-profile:capture] browser executable: ${executablePath}`);
+  console.info(`[webgpu-startup-profile:capture] browser args: ${browserArgs.join(' ')}`);
   console.info(`[webgpu-startup-profile:cdp] base URL: ${baseURL}`);
   console.info(`[webgpu-startup-profile:cdp] output: ${artifactOutputDir}`);
 
@@ -152,6 +167,7 @@ async function main() {
       channel: executablePath ? undefined : (browserChannel || undefined),
       executablePath: executablePath || undefined,
       headless: true,
+      args: browserArgs,
     });
 
   const context = cdpEndpointUrl
@@ -267,4 +283,8 @@ async function main() {
   }
 }
 
-await main();
+const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).pathname : '';
+
+if (import.meta.url.endsWith(scriptPath)) {
+  await main();
+}

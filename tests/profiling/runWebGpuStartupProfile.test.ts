@@ -1,4 +1,7 @@
 import { execFileSync } from 'node:child_process';
+import { mkdtemp, mkdir, rm, utimes } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -136,13 +139,23 @@ describe('runWebGpuStartupProfile', () => {
   });
 
   it('finds the newest Playwright output directory for post-processing', async () => {
-    const newestDir = await findLatestArtifactOutputDir('reports/startup-profiling/test-results');
+    const tempRoot = await mkdtemp(join(tmpdir(), 'hel-142-profile-results-'));
+    const oldestDir = join(tempRoot, 'oldest');
+    const newestExpectedDir = join(tempRoot, 'newest');
 
-    expect([
-      null,
-      'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path',
-      'reports/startup-profiling/test-results/windows-host-runtime-attempt',
-    ]).toContain(newestDir);
+    try {
+      await mkdir(oldestDir);
+      await mkdir(newestExpectedDir);
+
+      await utimes(oldestDir, new Date('2026-03-30T00:00:00.000Z'), new Date('2026-03-30T00:00:00.000Z'));
+      await utimes(newestExpectedDir, new Date('2026-03-31T00:00:00.000Z'), new Date('2026-03-31T00:00:00.000Z'));
+
+      const newestDir = await findLatestArtifactOutputDir(tempRoot);
+
+      expect(newestDir).toBe(newestExpectedDir);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it('builds an upload manifest for the generated artifact bundle', () => {

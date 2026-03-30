@@ -6,9 +6,16 @@ const scriptPath = 'scripts/runWebGpuStartupProfile.mjs';
 
 describe('runWebGpuStartupProfile', () => {
   it('fails with a clear error when PLAYWRIGHT_BASE_URL is missing', () => {
+    const env = {
+      ...process.env,
+    };
+    delete env.PLAYWRIGHT_BASE_URL;
+    delete env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL;
+    delete env.PLAYWRIGHT_PROFILE_DRY_RUN;
+
     expect(() => execFileSync('node', [scriptPath], {
       cwd: process.cwd(),
-      env: {},
+      env,
       encoding: 'utf8',
       stdio: 'pipe',
     })).toThrowError(/PLAYWRIGHT_BASE_URL is required/);

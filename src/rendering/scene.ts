@@ -84,7 +84,13 @@ import {
 } from './textures.ts';
 import { type CellTarget, getLookDirection, traceVoxelTarget } from './voxelRaycast.ts';
 import { getWorldLightingRigState } from './worldLighting.ts';
-import { createSceneRenderer, type SceneRenderer } from './sceneRenderer.ts';
+import {
+  clearWebGpuSafeMode,
+  createSceneRenderer,
+  getWebGpuPreference,
+  persistWebGpuSafeMode,
+  type SceneRenderer,
+} from './sceneRenderer.ts';
 import { createDesktopVolumetricLightVolume } from './desktopVolumetricLighting.ts';
 
 export interface InventoryStatusEntry {
@@ -365,11 +371,22 @@ export async function createPlayableScene(
     'ontouchstart' in window ||
     navigator.maxTouchPoints > 0
   );
+  const webGpuPreference = getWebGpuPreference(window.location.search, window.localStorage);
   const rendererSelection = await createSceneRenderer({
     canvas,
     touchDevice,
     rendererDiagnostics,
+    webGpuPreference,
+    onWebGpuDeviceLost: (info) => {
+      persistWebGpuSafeMode(window.localStorage, info);
+      window.location.reload();
+    },
   });
+
+  if (rendererSelection.backend === 'webgpu') {
+    clearWebGpuSafeMode(window.localStorage);
+  }
+
   const renderer = rendererSelection.renderer;
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = ACESFilmicToneMapping;
@@ -381,10 +398,13 @@ export async function createPlayableScene(
   const rendererSummary = [
     rendererSelection.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2',
     rendererDeviceSummary || rendererDiagnostics.summary,
+    rendererSelection.fallbackReason === 'webgpu-device-lost'
+      ? 'safe mode after previous WebGPU device loss'
+      : null,
     volumetricLighting.enabled
       ? 'volumetric lighting enabled'
       : `volumetric lighting disabled (${volumetricLighting.reason ?? 'unknown'})`,
-  ].join(' | ');
+  ].filter((value): value is string => Boolean(value)).join(' | ');
   let player = createPlayerState(world.getSpawnPoint());
   const worldGroup = new Group();
   const clouds = createCloudLayer(DEFAULT_WORLD_CONFIG.seed);
@@ -660,10 +680,12 @@ export async function createPlayableScene(
       Math.floor(player.position.z),
     );
     const prompt = locked
-      ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch items, craft from the inventory panel`
+      ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch items, craft from the inventory panel${rendererSelection.fallbackReason === 'webgpu-device-lost' ? ', stable graphics mode enabled after a previous WebGPU reset on this device' : ''}`
       : touchDevice
         ? 'Use the left thumbstick to move, drag anywhere to aim, mine blocks for drops, and craft tools or stations from the drawer.'
-        : 'Click the viewport to capture the mouse and enter the world.';
+        : rendererSelection.fallbackReason === 'webgpu-device-lost'
+          ? 'Running in stable graphics mode after a previous WebGPU reset on this device. Click the viewport to capture the mouse and enter the world.'
+          : 'Click the viewport to capture the mouse and enter the world.';
     const target = currentTarget
       ? `Target ${currentTarget.type} @ ${currentTarget.x}, ${currentTarget.y}, ${currentTarget.z}${
           currentPlacement && activePlaceableBlock

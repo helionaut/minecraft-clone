@@ -1077,8 +1077,10 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
     },
   };
 
-  const exposeQaHarness = new URLSearchParams(window.location.search).has('qaHarness');
-  const freezeAtSpawnFrame = exposeQaHarness && new URLSearchParams(window.location.search).has('freezeScene');
+  const searchParams = new URLSearchParams(window.location.search);
+  const exposeQaHarness = searchParams.has('qaHarness');
+  const freezeAtSpawnFrame = exposeQaHarness && searchParams.has('freezeScene');
+  const autoOpenMenu = exposeQaHarness && searchParams.has('autoOpenMenu');
   const sandbox = await createPlayableScene(
     viewport,
     applyStatus,
@@ -1104,6 +1106,10 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
       },
       setMenuOpen,
     };
+  }
+
+  if (autoOpenMenu) {
+    setMenuOpen(true);
   }
 
   openMenuButton.addEventListener('click', () => {

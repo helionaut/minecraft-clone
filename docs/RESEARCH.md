@@ -82,7 +82,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the profiling instrumentation from `5bcf209` instead of the `main` GitHub Pages site:
+1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `992e69a` instead of the `main` GitHub Pages site:
 
    ```bash
    git checkout eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene

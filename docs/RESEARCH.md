@@ -23,6 +23,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - The attached Playwright MCP browser surface was also checked and is not usable here: it is configured for system Chrome at `/opt/google/chrome/chrome`, that binary is missing, and an unattended `npx playwright install chrome` attempt fails because it requires `sudo`.
 - The profiling wrapper has since been hardened to accept `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH`, so the eventual RTX run can point directly at a Chrome-for-Testing or locally installed Chrome binary without depending on Playwright channel discovery.
 - MCP discovery returned zero configured resources and zero resource templates, so there is no off-host browser or GPU execution surface hidden behind the current environment.
+- GitHub Actions also does not provide a hidden fallback execution lane here: the repo currently has zero registered self-hosted runners, and `.github/workflows/ci.yml` runs PR validation only on `ubuntu-latest`.
 - That makes the ticket's requested execution surface unavailable on this machine before any profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 

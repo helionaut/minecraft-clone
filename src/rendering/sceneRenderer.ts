@@ -38,6 +38,11 @@ export interface SceneRendererSelection {
   readonly fallbackReason: VolumetricLightingDisableReason | null;
 }
 
+interface WebGpuLossAwareRenderer<TInfo> {
+  onDeviceLost: (info: TInfo) => void;
+  setAnimationLoop: (callback: ((time: number) => void) | null) => void;
+}
+
 interface CreateSceneRendererOptions {
   readonly canvas: HTMLCanvasElement;
   readonly touchDevice: boolean;
@@ -105,6 +110,27 @@ function createWebGlRenderer(canvas: HTMLCanvasElement): WebGLRenderer {
   });
 }
 
+export function attachWebGpuDeviceLossHandler<TInfo>(
+  renderer: WebGpuLossAwareRenderer<TInfo>,
+  onDeviceLost?: (info: WebGpuDeviceLossInfo) => void,
+  normalizeInfo?: (info: TInfo) => WebGpuDeviceLossInfo,
+): void {
+  const defaultOnDeviceLost = renderer.onDeviceLost.bind(renderer);
+  let handled = false;
+
+  renderer.onDeviceLost = (info) => {
+    defaultOnDeviceLost(info);
+
+    if (handled) {
+      return;
+    }
+
+    handled = true;
+    renderer.setAnimationLoop(null);
+    onDeviceLost?.(normalizeInfo ? normalizeInfo(info) : (info as WebGpuDeviceLossInfo));
+  };
+}
+
 function fallbackSelection(
   canvas: HTMLCanvasElement,
   touchDevice: boolean,
@@ -168,12 +194,11 @@ export async function createSceneRenderer(
     alpha: true,
     canvas,
   });
-  const defaultOnDeviceLost = renderer.onDeviceLost.bind(renderer);
-
-  renderer.onDeviceLost = (info) => {
-    defaultOnDeviceLost(info);
-    options.onWebGpuDeviceLost?.(info as WebGpuDeviceLossInfo);
-  };
+  attachWebGpuDeviceLossHandler(renderer, options.onWebGpuDeviceLost, (info) => ({
+    api: info.api,
+    message: info.message,
+    reason: typeof info.reason === 'string' || info.reason === null ? info.reason : null,
+  }));
 
   try {
     await renderer.init();

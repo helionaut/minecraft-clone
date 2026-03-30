@@ -292,6 +292,9 @@ export async function createPlayableScene(
   hotbarControls?: HotbarSelectionControls,
   options: PlayableSceneOptions = {},
 ): Promise<PlayableScene> {
+  let renderer: SceneRenderer | null = null;
+  let webGpuDeviceLost = false;
+  let recoveryReloadQueued = false;
   const canvas = document.createElement('canvas');
   canvas.setAttribute('aria-label', 'Minecraft clone sandbox viewport');
   container.append(canvas);
@@ -378,8 +381,21 @@ export async function createPlayableScene(
     rendererDiagnostics,
     webGpuPreference,
     onWebGpuDeviceLost: (info) => {
+      if (webGpuDeviceLost) {
+        return;
+      }
+
+      webGpuDeviceLost = true;
+      renderer?.setAnimationLoop(null);
       persistWebGpuSafeMode(window.localStorage, info);
-      window.location.reload();
+      if (recoveryReloadQueued) {
+        return;
+      }
+
+      recoveryReloadQueued = true;
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 0);
     },
   });
 
@@ -387,7 +403,7 @@ export async function createPlayableScene(
     clearWebGpuSafeMode(window.localStorage);
   }
 
-  const renderer = rendererSelection.renderer;
+  renderer = rendererSelection.renderer;
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = initialLightingRig.exposure;
@@ -1200,6 +1216,10 @@ export async function createPlayableScene(
   let elapsedTime = 0;
 
   const syncFrameVisuals = (previousPlayer: typeof player, delta: number) => {
+    if (webGpuDeviceLost) {
+      return;
+    }
+
     camera.position.set(
       player.position.x,
       player.position.y + DEFAULT_PLAYER_CONFIG.eyeHeight,
@@ -1286,6 +1306,10 @@ export async function createPlayableScene(
   };
 
   const tick = (now: DOMHighResTimeStamp) => {
+    if (webGpuDeviceLost) {
+      return;
+    }
+
     const delta = (now - previousTime) / 1000;
     previousTime = now;
     elapsedTime += delta;

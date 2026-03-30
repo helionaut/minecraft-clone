@@ -114,8 +114,10 @@ npm run profile:webgpu-startup
 
 Expected artifacts from that machine:
 
-- `reports/startup-profiling/chrome-performance-trace.json`
-- `reports/startup-profiling/console-messages.json`
-- `reports/startup-profiling/runtime-status.json`
-- `reports/startup-profiling/startup-profile.json`
-- `reports/startup-profiling/startup-profile-summary.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/chrome-performance-trace.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/console-messages.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/runtime-status.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-summary.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-report.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-report.md`

@@ -121,12 +121,14 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 3. If a hosted preview is preferred instead of a local preview, first loosen the `github-pages` environment branch policy or merge the profiling branch to `main`; the current Pages site at `https://helionaut.github.io/minecraft-clone/` serves `main`, not PR #52.
 
-4. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts under `reports/startup-profiling/` including:
+4. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts into the newest Playwright output directory under `reports/startup-profiling/test-results/<playwright-output-dir>/`, including:
    - `chrome-performance-trace.json`
    - `console-messages.json`
    - `runtime-status.json`
    - `startup-profile.json`
    - `startup-profile-summary.json`
+   - `startup-profile-report.json`
+   - `startup-profile-report.md`
    - `startup-shell.png`
 5. If the wrapper cannot auto-generate the report for any reason, generate the findings bundle manually:
 

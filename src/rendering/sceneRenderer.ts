@@ -23,6 +23,12 @@ interface CreateSceneRendererOptions {
   readonly rendererDiagnostics: RendererDiagnostics;
 }
 
+export function isUsableWebGpuAdapter(
+  adapter: { readonly isFallbackAdapter?: boolean } | null,
+): boolean {
+  return adapter !== null && adapter.isFallbackAdapter !== true;
+}
+
 function createWebGlRenderer(canvas: HTMLCanvasElement): WebGLRenderer {
   return new WebGLRenderer({
     antialias: true,
@@ -66,9 +72,11 @@ export async function createSceneRenderer(
     return fallbackSelection(canvas, touchDevice, rendererDiagnostics);
   }
 
-  const adapter = await navigator.gpu.requestAdapter();
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: 'high-performance',
+  });
 
-  if (!adapter) {
+  if (!isUsableWebGpuAdapter(adapter as { readonly isFallbackAdapter?: boolean } | null)) {
     return fallbackSelection(canvas, touchDevice, rendererDiagnostics, 'rtx-pipeline-unavailable');
   }
 

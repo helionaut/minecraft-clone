@@ -4,6 +4,9 @@ export type VolumetricLightingDisableReason =
   | 'mobile'
   | 'software-renderer'
   | 'webgpu-unavailable'
+  | 'webgpu-fallback-adapter'
+  | 'webgpu-init-failed'
+  | 'webgpu-backend-mismatch'
   | 'rtx-pipeline-unavailable';
 
 export interface VolumetricLightingDecision {

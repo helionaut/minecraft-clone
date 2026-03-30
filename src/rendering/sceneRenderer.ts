@@ -77,7 +77,12 @@ export async function createSceneRenderer(
   });
 
   if (!isUsableWebGpuAdapter(adapter as { readonly isFallbackAdapter?: boolean } | null)) {
-    return fallbackSelection(canvas, touchDevice, rendererDiagnostics, 'rtx-pipeline-unavailable');
+    return fallbackSelection(
+      canvas,
+      touchDevice,
+      rendererDiagnostics,
+      'webgpu-fallback-adapter',
+    );
   }
 
   const renderer = new WebGPURenderer({
@@ -90,12 +95,12 @@ export async function createSceneRenderer(
     await renderer.init();
   } catch {
     renderer.dispose();
-    return fallbackSelection(canvas, touchDevice, rendererDiagnostics, 'rtx-pipeline-unavailable');
+    return fallbackSelection(canvas, touchDevice, rendererDiagnostics, 'webgpu-init-failed');
   }
 
   if ((renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend !== true) {
     renderer.dispose();
-    return fallbackSelection(canvas, touchDevice, rendererDiagnostics, 'rtx-pipeline-unavailable');
+    return fallbackSelection(canvas, touchDevice, rendererDiagnostics, 'webgpu-backend-mismatch');
   }
 
   return {

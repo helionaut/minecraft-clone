@@ -57,10 +57,36 @@ describe('getVolumetricLightingDecision', () => {
       rendererMode: 'hardware-accelerated',
       browserSupportsWebGpu: true,
       hasRtxVolumetricPipeline: true,
-      reasonOverride: 'rtx-pipeline-unavailable',
+      reasonOverride: 'webgpu-init-failed',
     })).toEqual({
       enabled: false,
-      reason: 'rtx-pipeline-unavailable',
+      reason: 'webgpu-init-failed',
+    });
+  });
+
+  it('surfaces a fallback-adapter blocker after WebGPU preflight succeeds', () => {
+    expect(getVolumetricLightingDecision({
+      touchDevice: false,
+      rendererMode: 'hardware-accelerated',
+      browserSupportsWebGpu: true,
+      hasRtxVolumetricPipeline: true,
+      reasonOverride: 'webgpu-fallback-adapter',
+    })).toEqual({
+      enabled: false,
+      reason: 'webgpu-fallback-adapter',
+    });
+  });
+
+  it('surfaces a backend mismatch blocker after WebGPU initialization', () => {
+    expect(getVolumetricLightingDecision({
+      touchDevice: false,
+      rendererMode: 'hardware-accelerated',
+      browserSupportsWebGpu: true,
+      hasRtxVolumetricPipeline: true,
+      reasonOverride: 'webgpu-backend-mismatch',
+    })).toEqual({
+      enabled: false,
+      reason: 'webgpu-backend-mismatch',
     });
   });
 });

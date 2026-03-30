@@ -1,6 +1,5 @@
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
@@ -91,7 +90,7 @@ export function buildWindowsRuntimeCommand(plan) {
     `if "%PLAYWRIGHT_BASE_URL%"=="" set "PLAYWRIGHT_BASE_URL=${plan.baseURL}"`,
     `set "PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=${plan.windowsChromeExe}"`,
     `set "STARTUP_PROFILE_ARTIFACT_DIR=${plan.windowsRuntimeDir}\\artifacts"`,
-    `\"${plan.windowsNodeExe}\" \"${plan.windowsRuntimeDir}\\scripts\\captureWebGpuStartupProfileOverCdp.mjs\"`,
+    `"${plan.windowsNodeExe}" "${plan.windowsRuntimeDir}\\scripts\\captureWebGpuStartupProfileOverCdp.mjs"`,
     'endlocal',
     '',
   ].join('\r\n');

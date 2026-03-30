@@ -127,7 +127,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile-report.json`
    - `startup-profile-report.md`
 
-   The report summarizes top startup phases, long-frame counts, console warnings/errors, and remediation candidates so the RTX machine operator only has to upload the generated artifact directory.
+   The report summarizes top startup phases, long-frame counts, console warnings/errors, top Chrome trace hotspots from `chrome-performance-trace.json`, and remediation candidates so the RTX machine operator only has to upload the generated artifact directory.
 6. Record whether the app falls back to safe mode after device loss.
 7. Break down startup cost across:
    - `createSceneRenderer()` / `renderer.init()`

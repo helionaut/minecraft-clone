@@ -28,10 +28,38 @@ describe('summarizeWebGpuStartupProfile', () => {
         { type: 'error', text: 'device lost', location: 'https://example.invalid' },
         { type: 'info', text: 'ignore me', location: 'https://example.invalid' },
       ],
+      traceData: {
+        traceEvents: [
+          { ph: 'M', name: 'thread_name', pid: 1, tid: 10, args: { name: 'CrRendererMain' } },
+          { ph: 'M', name: 'thread_name', pid: 1, tid: 20, args: { name: 'GpuMain' } },
+          {
+            ph: 'X',
+            name: 'FunctionCall',
+            cat: 'devtools.timeline',
+            dur: 520_835,
+            ts: 123_000,
+            pid: 1,
+            tid: 10,
+            args: { data: { functionName: 'i', url: 'http://127.0.0.1:4173/assets/index.js' } },
+          },
+          {
+            ph: 'X',
+            name: 'GLES2::ReadPixels',
+            cat: 'gpu',
+            dur: 1_027_101,
+            ts: 124_000,
+            pid: 1,
+            tid: 20,
+            args: {},
+          },
+        ],
+      },
     });
 
     expect(report.json.startupTotalDurationMs).toBe(2332.3);
     expect(report.json.topConsoleErrors).toHaveLength(2);
+    expect(report.json.traceSummary.topMainThreadTasks[0]?.name).toBe('FunctionCall');
+    expect(report.json.traceSummary.topGpuTasks[0]?.name).toBe('GLES2::ReadPixels');
     expect(report.json.remediationCandidates.map((candidate) => candidate.suspect)).toEqual([
       'initial-rebuild-world',
       'post-startup frame loop',
@@ -39,6 +67,8 @@ describe('summarizeWebGpuStartupProfile', () => {
     ]);
     expect(report.markdown).toContain('initial-rebuild-world: 2178.3ms');
     expect(report.markdown).toContain('[error] device lost');
+    expect(report.markdown).toContain('FunctionCall: 520.8ms');
+    expect(report.markdown).toContain('GLES2::ReadPixels: 1027.1ms');
   });
 
   it('surfaces renderer initialization and volumetric setup as suspects when they dominate', () => {
@@ -57,6 +87,9 @@ describe('summarizeWebGpuStartupProfile', () => {
         webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',
       },
       consoleEntries: [],
+      traceData: {
+        traceEvents: [],
+      },
     });
 
     expect(report.json.remediationCandidates.map((candidate) => candidate.suspect)).toEqual([

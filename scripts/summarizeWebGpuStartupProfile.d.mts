@@ -22,6 +22,9 @@ export interface StartupProfilingReportInput {
     text?: string;
     location?: string | null;
   }>;
+  traceData?: {
+    traceEvents?: Array<Record<string, unknown>>;
+  };
 }
 
 export interface StartupProfilingReport {
@@ -46,6 +49,32 @@ export interface StartupProfilingReport {
       text: string;
       location: string | null;
     }>;
+    traceSummary: {
+      topMainThreadTasks: Array<{
+        name: string;
+        cat: string;
+        durMs: number;
+        tsMs: number;
+        pid: number;
+        tid: number;
+        threadName: string | null;
+        url: string | null;
+        functionName: string | null;
+        srcFunc: string | null;
+      }>;
+      topGpuTasks: Array<{
+        name: string;
+        cat: string;
+        durMs: number;
+        tsMs: number;
+        pid: number;
+        tid: number;
+        threadName: string | null;
+        url: string | null;
+        functionName: string | null;
+        srcFunc: string | null;
+      }>;
+    };
     remediationCandidates: Array<{
       priority: string;
       suspect: string;

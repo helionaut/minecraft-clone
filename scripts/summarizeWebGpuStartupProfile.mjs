@@ -97,13 +97,84 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
   return candidates;
 }
 
+function getTraceThreadNames(traceEvents) {
+  const threadNames = new Map();
+
+  for (const event of traceEvents) {
+    if (event?.ph !== 'M' || event?.name !== 'thread_name') {
+      continue;
+    }
+
+    const threadName = event?.args?.name;
+
+    if (typeof threadName !== 'string') {
+      continue;
+    }
+
+    threadNames.set(`${event.pid}:${event.tid}`, threadName);
+  }
+
+  return threadNames;
+}
+
+function summarizeTrace(traceData) {
+  const traceEvents = Array.isArray(traceData?.traceEvents) ? traceData.traceEvents : [];
+
+  if (traceEvents.length === 0) {
+    return {
+      topMainThreadTasks: [],
+      topGpuTasks: [],
+    };
+  }
+
+  const threadNames = getTraceThreadNames(traceEvents);
+  const longDurationEvents = traceEvents
+    .filter((event) => event?.ph === 'X' && Number.isFinite(event?.dur) && Number(event.dur) >= 50_000);
+
+  const enrichEvent = (event) => ({
+    name: String(event.name ?? 'unknown'),
+    cat: String(event.cat ?? ''),
+    durMs: Number(event.dur) / 1000,
+    tsMs: Number(event.ts ?? 0) / 1000,
+    pid: Number(event.pid ?? 0),
+    tid: Number(event.tid ?? 0),
+    threadName: threadNames.get(`${event.pid}:${event.tid}`) ?? null,
+    url: typeof event?.args?.data?.url === 'string' ? event.args.data.url : null,
+    functionName: typeof event?.args?.data?.functionName === 'string' ? event.args.data.functionName : null,
+    srcFunc: typeof event?.args?.src_func === 'string' ? event.args.src_func : null,
+  });
+
+  const topMainThreadTasks = longDurationEvents
+    .filter((event) => {
+      const category = String(event.cat ?? '');
+      const threadName = threadNames.get(`${event.pid}:${event.tid}`) ?? '';
+      return /devtools\.timeline|toplevel|v8\.execute/.test(category) || /CrRendererMain|CrBrowserMain/.test(threadName);
+    })
+    .sort((left, right) => right.dur - left.dur)
+    .slice(0, 10)
+    .map(enrichEvent);
+
+  const topGpuTasks = longDurationEvents
+    .filter((event) => /gpu/i.test(String(event.cat ?? '')) || /gpu/i.test(String(event.name ?? '')))
+    .sort((left, right) => right.dur - left.dur)
+    .slice(0, 10)
+    .map(enrichEvent);
+
+  return {
+    topMainThreadTasks,
+    topGpuTasks,
+  };
+}
+
 export function buildStartupProfilingReport({
   startupSummary,
   runtimeStatus,
   consoleEntries,
+  traceData,
 }) {
   const topPhases = Array.isArray(startupSummary?.topPhases) ? startupSummary.topPhases : [];
   const topConsoleErrors = collectTopConsoleErrors(Array.isArray(consoleEntries) ? consoleEntries : []);
+  const traceSummary = summarizeTrace(traceData);
   const report = {
     generatedAt: new Date().toISOString(),
     startupTotalDurationMs: startupSummary?.totalDurationMs ?? null,
@@ -118,6 +189,7 @@ export function buildStartupProfilingReport({
     },
     topPhases,
     topConsoleErrors,
+    traceSummary,
     remediationCandidates: collectRemediationCandidates(startupSummary, runtimeStatus),
   };
 
@@ -144,6 +216,20 @@ export function buildStartupProfilingReport({
         : ['- none']
     ),
     '',
+    '## Trace hotspots',
+    '### Main thread',
+    ...(
+      traceSummary.topMainThreadTasks.length > 0
+        ? traceSummary.topMainThreadTasks.slice(0, 5).map((event) => `- ${event.name}: ${formatNumber(event.durMs)}ms${event.functionName ? ` (${event.functionName})` : ''}${event.srcFunc ? ` [${event.srcFunc}]` : ''}`)
+        : ['- none']
+    ),
+    '### GPU / compositor',
+    ...(
+      traceSummary.topGpuTasks.length > 0
+        ? traceSummary.topGpuTasks.slice(0, 5).map((event) => `- ${event.name}: ${formatNumber(event.durMs)}ms${event.threadName ? ` [${event.threadName}]` : ''}`)
+        : ['- none']
+    ),
+    '',
     '## Remediation candidates',
     ...(
       report.remediationCandidates.length > 0
@@ -166,10 +252,11 @@ async function main() {
   const outputMarkdownPath = process.env.STARTUP_PROFILE_REPORT_MARKDOWN?.trim()
     ?? `${artifactDir}/startup-profile-report.md`;
 
-  const [startupSummaryFile, runtimeStatus, consoleEntries] = await Promise.all([
+  const [startupSummaryFile, runtimeStatus, consoleEntries, traceData] = await Promise.all([
     parseOptionalJsonFile(`${artifactDir}/startup-profile-summary.json`),
     parseJsonFile(`${artifactDir}/runtime-status.json`),
     parseJsonFile(`${artifactDir}/console-messages.json`),
+    parseOptionalJsonFile(`${artifactDir}/chrome-performance-trace.json`),
   ]);
 
   const startupSummary = startupSummaryFile
@@ -183,6 +270,7 @@ async function main() {
     startupSummary,
     runtimeStatus,
     consoleEntries,
+    traceData,
   });
 
   await Promise.all([

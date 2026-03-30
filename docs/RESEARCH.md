@@ -107,6 +107,8 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    npm run profile:webgpu-startup
    ```
 
+   On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json` and `startup-profile-report.md`.
+
 3. If a hosted preview is preferred instead of a local preview, first loosen the `github-pages` environment branch policy or merge the profiling branch to `main`; the current Pages site at `https://helionaut.github.io/minecraft-clone/` serves `main`, not PR #52.
 
 4. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts under `reports/startup-profiling/` including:
@@ -116,7 +118,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile.json`
    - `startup-profile-summary.json`
    - `startup-shell.png`
-5. After the raw artifacts exist, generate a review-ready findings bundle:
+5. If the wrapper cannot auto-generate the report for any reason, generate the findings bundle manually:
 
    ```bash
    STARTUP_PROFILE_ARTIFACT_DIR="reports/startup-profiling/test-results/<playwright-output-dir>" \

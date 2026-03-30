@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import process from 'node:process';
 
 const LINUX_CHANNEL_EXECUTABLES = {
@@ -107,9 +108,77 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     executablePath,
     dryRun,
     artifactDir,
+    artifactResultsDir: `${artifactDir}/test-results`,
     command: 'npx',
     args: ['playwright', 'test', '--config=playwright.profile.config.ts'],
+    reportCommand: 'npm',
+    reportArgs: ['run', 'profile:webgpu-startup:report'],
   };
+}
+
+export async function findLatestArtifactOutputDir(resultsDir) {
+  let entries;
+
+  try {
+    entries = await readdir(resultsDir, { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+
+    throw error;
+  }
+
+  const directories = await Promise.all(entries
+    .filter((entry) => entry.isDirectory())
+    .map(async (entry) => {
+      const path = `${resultsDir}/${entry.name}`;
+      const metadata = await stat(path);
+      return {
+        path,
+        mtimeMs: metadata.mtimeMs,
+      };
+    }));
+
+  directories.sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+  return directories[0]?.path ?? null;
+}
+
+async function runPostCaptureReport(plan) {
+  const artifactOutputDir = await findLatestArtifactOutputDir(plan.artifactResultsDir);
+
+  if (!artifactOutputDir) {
+    console.warn(`[webgpu-startup-profile] no Playwright output directory found under ${plan.artifactResultsDir}; skipping report generation`);
+    return;
+  }
+
+  console.info(`[webgpu-startup-profile] generating report for ${artifactOutputDir}`);
+
+  await new Promise((resolve, reject) => {
+    const reportChild = spawn(plan.reportCommand, plan.reportArgs, {
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+      env: {
+        ...process.env,
+        STARTUP_PROFILE_ARTIFACT_DIR: artifactOutputDir,
+      },
+    });
+
+    reportChild.on('exit', (code, signal) => {
+      if (signal) {
+        reject(new Error(`profile report generation exited via signal ${signal}`));
+        return;
+      }
+
+      if ((code ?? 1) !== 0) {
+        reject(new Error(`profile report generation failed with exit code ${code ?? 1}`));
+        return;
+      }
+
+      resolve(undefined);
+    });
+  });
 }
 
 async function main() {
@@ -125,31 +194,47 @@ async function main() {
   console.info(`[webgpu-startup-profile] browser channel: ${plan.browserChannel}`);
   console.info(`[webgpu-startup-profile] browser executable: ${plan.executablePath}`);
   console.info(`[webgpu-startup-profile] artifacts: ${plan.artifactDir}`);
+  console.info(`[webgpu-startup-profile] report command: ${plan.reportCommand} ${plan.reportArgs.join(' ')}`);
 
   if (plan.dryRun) {
     console.info(`[webgpu-startup-profile] dry run command: ${plan.command} ${plan.args.join(' ')}`);
     return;
   }
 
-  const child = spawn(plan.command, plan.args, {
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    env: {
-      ...process.env,
-      PLAYWRIGHT_BASE_URL: plan.baseURL,
-      PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: plan.browserChannel,
-      PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: plan.executablePath,
-    },
+  const childExitCode = await new Promise((resolve, reject) => {
+    const child = spawn(plan.command, plan.args, {
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+      env: {
+        ...process.env,
+        PLAYWRIGHT_BASE_URL: plan.baseURL,
+        PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: plan.browserChannel,
+        PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: plan.executablePath,
+      },
+    });
+
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        reject(new Error(`profiling capture exited via signal ${signal}`));
+        return;
+      }
+
+      resolve(code ?? 1);
+    });
   });
 
-  child.on('exit', (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
-      return;
-    }
+  process.exitCode = childExitCode;
 
-    process.exitCode = code ?? 1;
-  });
+  if (childExitCode !== 0) {
+    return;
+  }
+
+  try {
+    await runPostCaptureReport(plan);
+  } catch (error) {
+    console.error(`[webgpu-startup-profile] ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
 }
 
 const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).pathname : '';

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildWebGpuStartupProfileRun,
+  findLatestArtifactOutputDir,
   validateBrowserChannel,
   validateBrowserExecutablePath,
 } from '../../scripts/runWebGpuStartupProfile.mjs';
@@ -43,6 +44,7 @@ describe('runWebGpuStartupProfile', () => {
     expect(output).toContain('base URL: https://example.invalid');
     expect(output).toContain('browser channel: ');
     expect(output).toContain('browser executable: ');
+    expect(output).toContain('report command: npm run profile:webgpu-startup:report');
     expect(output).toContain('dry run command: npx playwright test --config=playwright.profile.config.ts');
   });
 
@@ -83,6 +85,9 @@ describe('runWebGpuStartupProfile', () => {
     }
 
     expect(plan.browserChannel).toBe('');
+    expect(plan.artifactResultsDir).toBe('reports/startup-profiling/test-results');
+    expect(plan.reportCommand).toBe('npm');
+    expect(plan.reportArgs).toEqual(['run', 'profile:webgpu-startup:report']);
     expect(plan.executablePath).toBe(process.execPath);
   });
 
@@ -98,5 +103,14 @@ describe('runWebGpuStartupProfile', () => {
     expect(validateBrowserChannel({
       PLAYWRIGHT_BROWSERS_PATH: '.cache/ms-playwright',
     }, 'chromium')).toBeNull();
+  });
+
+  it('finds the newest Playwright output directory for post-processing', async () => {
+    const newestDir = await findLatestArtifactOutputDir('reports/startup-profiling/test-results');
+
+    expect([
+      null,
+      'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path',
+    ]).toContain(newestDir);
   });
 });

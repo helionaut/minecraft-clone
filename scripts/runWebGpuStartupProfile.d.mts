@@ -5,8 +5,11 @@ export interface WebGpuStartupProfileRunPlan {
   executablePath: string;
   dryRun: boolean;
   artifactDir: string;
+  artifactResultsDir: string;
   command: string;
   args: string[];
+  reportCommand: string;
+  reportArgs: string[];
 }
 
 export interface WebGpuStartupProfileRunError {
@@ -28,3 +31,7 @@ export function validateBrowserExecutablePath(
 export function buildWebGpuStartupProfileRun(
   env?: NodeJS.ProcessEnv,
 ): WebGpuStartupProfileRunPlan | WebGpuStartupProfileRunError;
+
+export function findLatestArtifactOutputDir(
+  resultsDir: string,
+): Promise<string | null>;

@@ -46,8 +46,11 @@ describe('runWebGpuStartupProfile', () => {
     expect(output).toContain('base URL: https://example.invalid');
     expect(output).toContain('browser channel: ');
     expect(output).toContain('browser executable: ');
-    expect(output).toContain('report command: npm run profile:webgpu-startup:report');
-    expect(output).toContain('dry run command: npx playwright test --config=playwright.profile.config.ts');
+    expect(output).toContain('CDP endpoint: ');
+    expect(output).toContain(`report command: ${process.execPath} `);
+    expect(output).toContain('summarizeWebGpuStartupProfile.mjs');
+    expect(output).toContain(`dry run command: ${process.execPath} `);
+    expect(output).toContain('captureWebGpuStartupProfileOverCdp.mjs');
   });
 
   it('fails early when a requested Chrome channel is missing on Linux', () => {
@@ -93,11 +96,29 @@ describe('runWebGpuStartupProfile', () => {
 
     expect(plan.browserChannel).toBe('');
     expect(plan.artifactResultsDir).toBe('reports/startup-profiling/test-results');
-    expect(plan.reportCommand).toBe('npm');
-    expect(plan.reportArgs).toEqual(['run', 'profile:webgpu-startup:report']);
-    expect(comparePlan.compareCommand).toBe('npm');
-    expect(comparePlan.compareArgs).toEqual(['run', 'profile:webgpu-startup:compare']);
+    expect(plan.reportCommand).toBe(process.execPath);
+    expect(plan.reportArgs[0]).toContain('summarizeWebGpuStartupProfile.mjs');
+    expect(comparePlan.compareCommand).toBe(process.execPath);
+    expect(comparePlan.compareArgs[0]).toContain('compareWebGpuStartupProfiles.mjs');
+    expect(plan.args[0]).toContain('captureWebGpuStartupProfileOverCdp.mjs');
     expect(plan.executablePath).toBe(process.execPath);
+    expect(plan.cdpEndpointUrl).toBe('');
+  });
+
+  it('switches to the CDP capture command when a CDP endpoint is configured', () => {
+    const plan = buildWebGpuStartupProfileRun({
+      PLAYWRIGHT_BASE_URL: 'https://example.invalid',
+      PLAYWRIGHT_PROFILE_CDP_ENDPOINT_URL: 'http://127.0.0.1:9333',
+    });
+
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) {
+      throw new Error('expected plan to succeed');
+    }
+
+    expect(plan.cdpEndpointUrl).toBe('http://127.0.0.1:9333');
+    expect(plan.command).toBe(process.execPath);
+    expect(plan.args[0]).toContain('captureWebGpuStartupProfileOverCdp.mjs');
   });
 
   it('fails early when the configured executable path does not exist', () => {
@@ -120,6 +141,7 @@ describe('runWebGpuStartupProfile', () => {
     expect([
       null,
       'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path',
+      'reports/startup-profiling/test-results/windows-host-runtime-attempt',
     ]).toContain(newestDir);
   });
 

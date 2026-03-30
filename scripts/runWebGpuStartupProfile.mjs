@@ -1,7 +1,13 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readdir, stat, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import process from 'node:process';
+
+const REPO_ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
+const CDP_CAPTURE_SCRIPT_PATH = fileURLToPath(new URL('./captureWebGpuStartupProfileOverCdp.mjs', import.meta.url));
+const REPORT_SCRIPT_PATH = fileURLToPath(new URL('./summarizeWebGpuStartupProfile.mjs', import.meta.url));
+const COMPARE_SCRIPT_PATH = fileURLToPath(new URL('./compareWebGpuStartupProfiles.mjs', import.meta.url));
 
 /**
  * @typedef {{
@@ -14,6 +20,7 @@ import process from 'node:process';
  *   baseURL: string,
  *   browserChannel: string,
  *   executablePath: string,
+ *   cdpEndpointUrl: string,
  *   dryRun: boolean,
  *   artifactDir: string,
  *   artifactResultsDir: string,
@@ -95,6 +102,7 @@ export function validateBrowserExecutablePath(env = process.env, pathExists = ex
 export function buildWebGpuStartupProfileRun(env = process.env) {
   const baseURL = env.PLAYWRIGHT_BASE_URL?.trim() ?? '';
   const executablePath = env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
+  const cdpEndpointUrl = env.PLAYWRIGHT_PROFILE_CDP_ENDPOINT_URL?.trim() ?? '';
   const requestedBrowserChannel = env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL?.trim() ?? 'chrome';
   const dryRun = env.PLAYWRIGHT_PROFILE_DRY_RUN === '1';
   const artifactDir = 'reports/startup-profiling';
@@ -115,7 +123,7 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     };
   }
 
-  const browserChannel = executablePath ? '' : requestedBrowserChannel;
+  const browserChannel = (executablePath || cdpEndpointUrl) ? '' : requestedBrowserChannel;
   const browserChannelError = validateBrowserChannel(env, browserChannel);
 
   if (browserChannelError) {
@@ -130,15 +138,16 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     baseURL,
     browserChannel,
     executablePath,
+    cdpEndpointUrl,
     dryRun,
     artifactDir,
     artifactResultsDir: `${artifactDir}/test-results`,
-    command: 'npx',
-    args: ['playwright', 'test', '--config=playwright.profile.config.ts'],
-    reportCommand: 'npm',
-    reportArgs: ['run', 'profile:webgpu-startup:report'],
-    compareCommand: 'npm',
-    compareArgs: ['run', 'profile:webgpu-startup:compare'],
+    command: process.execPath,
+    args: [CDP_CAPTURE_SCRIPT_PATH],
+    reportCommand: process.execPath,
+    reportArgs: [REPORT_SCRIPT_PATH],
+    compareCommand: process.execPath,
+    compareArgs: [COMPARE_SCRIPT_PATH],
   };
 }
 
@@ -237,7 +246,7 @@ async function runPostCaptureReport(plan) {
   await new Promise((resolve, reject) => {
     const reportChild = spawn(plan.reportCommand, plan.reportArgs, {
       stdio: 'inherit',
-      shell: process.platform === 'win32',
+      cwd: REPO_ROOT_DIR,
       env: {
         ...process.env,
         STARTUP_PROFILE_ARTIFACT_DIR: artifactOutputDir,
@@ -268,7 +277,7 @@ async function runPostCaptureComparison(plan, artifactOutputDir) {
   await new Promise((resolve, reject) => {
     const compareChild = spawn(plan.compareCommand, plan.compareArgs, {
       stdio: 'inherit',
-      shell: process.platform === 'win32',
+      cwd: REPO_ROOT_DIR,
       env: {
         ...process.env,
         STARTUP_PROFILE_CANDIDATE_REPORT: `${artifactOutputDir}/startup-profile-report.json`,
@@ -303,6 +312,7 @@ async function main() {
   console.info(`[webgpu-startup-profile] base URL: ${plan.baseURL}`);
   console.info(`[webgpu-startup-profile] browser channel: ${plan.browserChannel}`);
   console.info(`[webgpu-startup-profile] browser executable: ${plan.executablePath}`);
+  console.info(`[webgpu-startup-profile] CDP endpoint: ${plan.cdpEndpointUrl}`);
   console.info(`[webgpu-startup-profile] artifacts: ${plan.artifactDir}`);
   console.info(`[webgpu-startup-profile] report command: ${plan.reportCommand} ${plan.reportArgs.join(' ')}`);
   console.info('[webgpu-startup-profile] comparison is auto-generated after a successful capture');
@@ -316,12 +326,13 @@ async function main() {
   const childExitCode = await new Promise((resolve, reject) => {
     const child = spawn(plan.command, plan.args, {
       stdio: 'inherit',
-      shell: process.platform === 'win32',
+      cwd: REPO_ROOT_DIR,
       env: {
         ...process.env,
         PLAYWRIGHT_BASE_URL: plan.baseURL,
         PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: plan.browserChannel,
         PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: plan.executablePath,
+        PLAYWRIGHT_PROFILE_CDP_ENDPOINT_URL: plan.cdpEndpointUrl,
       },
     });
 

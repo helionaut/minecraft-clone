@@ -3,6 +3,7 @@ export interface WebGpuStartupProfileRunPlan {
   baseURL: string;
   browserChannel: string;
   executablePath: string;
+  cdpEndpointUrl: string;
   dryRun: boolean;
   artifactDir: string;
   artifactResultsDir: string;

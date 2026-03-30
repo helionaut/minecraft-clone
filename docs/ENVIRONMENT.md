@@ -83,7 +83,12 @@ Expected post-cleanup result:
   - `nvidia-smi.exe` reports `NVIDIA GeForce GTX 965M` on driver `582.28`, so the visible adapter is desktop-class NVIDIA hardware but still not RTX-class
   - the committed Playwright wrapper cannot launch that Windows Chrome binary directly from WSL because Chrome exits on `--remote-debugging-pipe` with `Remote debugging pipe file descriptors are not open`
   - manually launching Windows Chrome with `--remote-debugging-port=9222` leaves the browser listening on the Windows side, but this WSL session cannot reach that listener over either `127.0.0.1` or the Windows host IP from `/etc/resolv.conf`
-  - the Windows host also lacks `node` and `npm`, so the profiling wrapper cannot simply be re-run entirely on the Windows side against the same workspace
+  - the Windows host also lacks `node` and `npm` in PATH, so unattended profiling from Windows requires a portable `node.exe` toolchain rather than relying on a preinstalled runtime
+  - Windows can still reach the WSL preview URL (`http://127.0.0.1:4174/minecraft-clone/` returned HTTP 200 in this pass), so a same-OS browser run is possible once the Node/runtime packaging issue is handled
+  - a portable Windows Node v22.22.1 zip from `nodejs.org` can be unpacked under the shared cache and used to run repo scripts from Windows
+  - direct execution from the UNC workspace still fails to resolve Playwright package/module entrypoints under Windows Node, so this pass used a minimal Windows-local runtime bundle (`scripts/captureWebGpuStartupProfileOverCdp.mjs` plus `node_modules/playwright-core`) staged under `/mnt/c/Temp/hel142-startup-runtime`
+  - that Windows-local runtime bundle successfully captured startup artifacts back into the workspace under `reports/startup-profiling/test-results/windows-host-runtime-attempt/`
+  - the resulting runtime is still not the requested target surface: Chrome reported `WebGL 2 | hardware accelerated` on `ANGLE (Intel, Intel(R) HD Graphics 4600...)` with `volumetric lighting disabled (webgpu-fallback-adapter)`
 - Remote surface limitation: no MCP-provided browser/GPU execution surface is attached in this environment.
 - GitHub runner limitation: the repository currently has zero registered self-hosted Actions runners, and the only CI workflow for PR branches runs on `ubuntu-latest`, so there is no repo-managed remote GPU execution path available from GitHub either.
 - Attached browser-tool limitation: the available Playwright MCP browser wrapper is configured for system Chrome at `/opt/google/chrome/chrome`; that binary is missing on this host, and `npx playwright install chrome` cannot complete unattended because it requires `sudo`.
@@ -96,6 +101,7 @@ Required execution surface for the remaining proof:
 - desktop Chrome with WebGPU enabled and hardware acceleration working
 - local checkout of branch `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`
 - browser automation running on the same OS/network surface as that Chrome instance, or a reachable remote debugging endpoint
+- if the host lacks a preinstalled Windows Node runtime, a portable `node.exe` plus a Windows-local copy of the profiling runtime bundle is sufficient
 - ability to run:
 
 ```bash

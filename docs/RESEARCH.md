@@ -36,6 +36,45 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - That leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 
+### Windows-side host capture from this pass
+
+- Changed variable:
+  - kept the preview/build on WSL, but moved the profiling runtime itself onto Windows by using a portable Windows Node v22.22.1 toolchain from the shared cache
+  - bypassed the UNC workspace limitations by staging a minimal Windows-local runtime bundle under `/mnt/c/Temp/hel142-startup-runtime/` containing `scripts/captureWebGpuStartupProfileOverCdp.mjs` plus `node_modules/playwright-core`
+- Result:
+  - the Windows-local runtime bundle successfully launched `C:\Program Files\Google\Chrome\Application\chrome.exe`, hit the WSL preview URL `http://127.0.0.1:4174/minecraft-clone/`, and wrote a new artifact bundle to `reports/startup-profiling/test-results/windows-host-runtime-attempt/`
+  - generated artifacts now include:
+    - `chrome-performance-trace.json`
+    - `console-messages.json`
+    - `runtime-status.json`
+    - `startup-profile.json`
+    - `startup-profile-summary.json`
+    - `startup-profile-report.json`
+    - `startup-profile-report.md`
+    - `startup-shell.png`
+- Runtime classification:
+  - `navigator.gpu` was available
+  - the app did not stay on desktop WebGPU rendering; status text reported `WebGL 2 | hardware accelerated | ANGLE (Intel, Intel(R) HD Graphics 4600 ...) | volumetric lighting disabled (webgpu-fallback-adapter)`
+  - `webglRenderer` was `ANGLE (Intel, Intel(R) HD Graphics 4600 (0x00000416) Direct3D11 vs_5_0 ps_5_0, D3D11)`
+  - that makes this run a truthful hardware-accelerated desktop control on integrated Intel graphics, not the requested RTX Chrome proof
+- Findings from `startup-profile-report.json`:
+  - startup total duration: about `2762.3ms`
+  - long frames after startup: `19`
+  - max frame duration: about `2527.5ms`
+  - dominant startup bucket remained `initial-rebuild-world` at about `2142.7ms`
+  - the largest measured subphase inside that bucket was `initial-rebuild-world:compute-lighting` at about `1302.0ms`
+  - `create-scene-renderer` was materially smaller at about `480.8ms`
+  - `initial-rebuild-world:rebuild-visible-meshes` was about `437.7ms`
+  - `initial-rebuild-world:sync-chunks` was about `402.5ms`
+  - top trace hotspots were still main-thread `RunTask`/microtask spans, with the top GPU/compositor setup hotspot around `GpuChannelHost::CreateViewCommandBuffer` / `CommandBufferProxyImpl::Initialize` at about `170ms`
+- What this eliminates:
+  - on a real hardware-accelerated desktop Chrome surface, even outside SwiftShader, the strongest startup suspect is still synchronous world rebuild work rather than pure renderer bootstrap
+  - the leading sub-suspect is now narrower than the original hypothesis: `computeVoxelLighting(...)` inside the first `rebuildWorld()` pass is the largest measured startup subphase on this host run
+- What still remains unproven:
+  - this machine still does not satisfy the issue's RTX requirement
+  - the visible NVIDIA adapter from WSL is GTX 965M, while the successful hardware-accelerated browser run actually bound to Intel HD 4600
+  - the previously prepared SwiftShader control comparison could not be regenerated automatically in this pass because the baseline `startup-profile-report.json` is no longer present in the current workspace; only a stale `trace.zip` remains under `webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/`
+
 ### Code-backed startup suspects to profile on the next pass
 
 1. WebGPU renderer initialization in `src/rendering/sceneRenderer.ts`

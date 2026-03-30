@@ -62,12 +62,12 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 1. Run the committed profiling lane against the RTX Chrome target:
 
    ```bash
-   PLAYWRIGHT_BASE_URL="https://<target-host-or-preview>" \
+   PLAYWRIGHT_BASE_URL="https://helionaut.github.io/minecraft-clone/" \
    PLAYWRIGHT_PROFILE_BROWSER_CHANNEL=chrome \
    npm run profile:webgpu-startup
    ```
 
-   The wrapper validates `PLAYWRIGHT_BASE_URL`, defaults the browser channel to `chrome`, and prints the artifact directory before launching Playwright. Use `PLAYWRIGHT_PROFILE_DRY_RUN=1` for a preflight check without starting the browser.
+   The wrapper validates `PLAYWRIGHT_BASE_URL`, defaults the browser channel to `chrome`, and prints the artifact directory before launching Playwright. The GitHub Pages target above was verified from this pass with an HTTP 200 app-shell response. Use `PLAYWRIGHT_PROFILE_DRY_RUN=1` for a preflight check without starting the browser.
 
 2. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts under `reports/startup-profiling/` including:
    - `chrome-performance-trace.json`

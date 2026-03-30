@@ -20,6 +20,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - No NVIDIA tooling was present: `nvidia-smi` was not available on this host.
 - A local Playwright Chromium probe succeeded, but reported `navigator.gpu === false`, so the browser runtime available here does not expose WebGPU.
 - That makes the ticket's requested execution surface unavailable on this machine before any profiler trace can be captured.
+- A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 
 ### Code-backed startup suspects to profile on the next pass
 
@@ -59,25 +60,36 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Run the committed profiling lane against the RTX Chrome target:
+1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the profiling instrumentation from `98e49ac` instead of the `main` GitHub Pages site:
 
    ```bash
-   PLAYWRIGHT_BASE_URL="https://helionaut.github.io/minecraft-clone/" \
+   git checkout eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene
+   npm ci
+   npm run build
+   npm run preview -- --host 127.0.0.1 --port 4173
+   ```
+
+2. In a second shell on the same RTX machine, run the committed profiling lane against that local preview:
+
+   ```bash
+   PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173/minecraft-clone/" \
    PLAYWRIGHT_PROFILE_BROWSER_CHANNEL=chrome \
    npm run profile:webgpu-startup
    ```
 
-   The wrapper validates `PLAYWRIGHT_BASE_URL`, defaults the browser channel to `chrome`, and prints the artifact directory before launching Playwright. The GitHub Pages target above was verified from this pass with an HTTP 200 app-shell response. Use `PLAYWRIGHT_PROFILE_DRY_RUN=1` for a preflight check without starting the browser.
+   The wrapper validates `PLAYWRIGHT_BASE_URL`, defaults the browser channel to `chrome`, and prints the artifact directory before launching Playwright. Use `PLAYWRIGHT_PROFILE_DRY_RUN=1` for a preflight check without starting the browser.
 
-2. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts under `reports/startup-profiling/` including:
+3. If a hosted preview is preferred instead of a local preview, first loosen the `github-pages` environment branch policy or merge the profiling branch to `main`; the current Pages site at `https://helionaut.github.io/minecraft-clone/` serves `main`, not PR #52.
+
+4. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts under `reports/startup-profiling/` including:
    - `chrome-performance-trace.json`
    - `console-messages.json`
    - `runtime-status.json`
    - `startup-profile.json`
    - `startup-profile-summary.json`
    - `startup-shell.png`
-3. Record whether the app falls back to safe mode after device loss.
-4. Break down startup cost across:
+5. Record whether the app falls back to safe mode after device loss.
+6. Break down startup cost across:
    - `createSceneRenderer()` / `renderer.init()`
    - volumetric light volume creation
    - first `rebuildWorld()`
@@ -87,4 +99,5 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 - Desktop Chrome with WebGPU available
 - RTX-class GPU with working hardware acceleration and driver visibility
+- A local checkout of PR #52 on that RTX machine, or a hosted preview path that is allowed to deploy this branch
 - Ability to collect Chrome Performance traces and browser console exports from that machine

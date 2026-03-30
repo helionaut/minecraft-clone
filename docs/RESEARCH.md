@@ -64,9 +64,13 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - `initial-status-publish`: about `16.8ms`
   - `longFrameCount`: `44`
   - `maxFrameDurationMs`: about `3133.2ms`
+- The current desktop startup configuration makes that `initial-rebuild-world` phase broad enough to hide several expensive substeps inside one measurement:
+  - visible bounds at spawn cover `3 x 3` chunks (`renderChunkRadius: 1` with `chunkSize: 16`), or a `48 x 48` horizontal footprint
+  - lighting expands that volume by one cell on `x/z` and one level above `y`, so `computeVoxelLighting()` can scan roughly `50 x 35 x 50` cells near spawn before propagation work even begins
+  - the same phase then calls `worldGroup.clear()` and recreates one `Mesh` per visible loaded block inside `world.forEachLoadedBlockInBounds(...)`
 - The Chrome trace and console export from that same control run also showed repeated `GPU stall due to ReadPixels` warnings and multiple main-thread `RunTask` spans between roughly `544ms` and `2707ms`.
 - A manually generated control report now exists in the same artifact directory as `startup-profile-report.json` and `startup-profile-report.md`. Its top GPU/compositor hotspots were `GLES2::ReadPixels` and command-buffer wait calls around `570-579ms`, which makes the current local trace a useful software-rendered baseline for later RTX comparison.
-- This does not prove the RTX behavior, but it does eliminate one weak hypothesis on the local control surface: browser/bootstrap overhead was not the dominant startup cost there; world rebuild work still dominated even after the harness could run against real desktop Chrome.
+- This does not prove the RTX behavior, but it does eliminate one weak hypothesis on the local control surface: browser/bootstrap overhead was not the dominant startup cost there. The first remediation candidate to compare on RTX is the synchronous `rebuildWorld()` path in `src/rendering/scene.ts`, especially `computeVoxelLighting(...)`, `worldGroup.clear()`, and the per-block `new Mesh(...)` rebuild loop.
 
 ### Instrumentation prepared in this pass
 
@@ -84,7 +88,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `06c5242` instead of the `main` GitHub Pages site:
+1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `e5dd177` instead of the `main` GitHub Pages site:
 
    ```bash
    git checkout eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene
@@ -156,6 +160,10 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile-comparison.md`
 
    Use that comparison output to separate true RTX-only hotspots from the already known SwiftShader control costs such as `initial-rebuild-world` and `ReadPixels`-driven stalls.
+   Compare the RTX deltas against these code paths first:
+   - `computeVoxelLighting(...)` in `src/gameplay/lighting.ts`
+   - `worldGroup.clear()` plus the `world.forEachLoadedBlockInBounds(...)` loop in `src/rendering/scene.ts`
+   - per-block `new Mesh(...)` creation through `blockMaterialFactory.getMaterials(...)` in the same rebuild loop
 7. Record whether the app falls back to safe mode after device loss.
 8. Break down startup cost across:
    - `createSceneRenderer()` / `renderer.init()`

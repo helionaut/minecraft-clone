@@ -45,6 +45,23 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - Chrome/WebGPU diagnostics and Chrome Performance traces could not be captured truthfully here.
 - Any conclusion about RTX-specific startup spikes would be speculative from this machine.
 
+### Control experiment on the invalid local browser surface
+
+- The published profiling lane was run end-to-end against a local preview on this host using bundled Chromium with `PLAYWRIGHT_PROFILE_BROWSER_CHANNEL=''`.
+- Result: the run failed at the new runtime guard, not at startup-profile collection. `runtime-status.json` reported:
+  - `browserSupportsWebGpu: true`
+  - renderer status string: `WebGL 2 | software fallback | ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver) | volumetric lighting disabled (software-renderer)`
+  - WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`
+- The run still emitted control artifacts under `reports/startup-profiling/test-results/...`, including `chrome-performance-trace.json`, `console-messages.json`, `runtime-status.json`, `startup-shell.png`, and `trace.zip`.
+- Control-only startup profile summary on that invalid surface:
+  - `initial-rebuild-world`: about `2178.3ms`
+  - `create-scene-renderer`: about `29.5ms`
+  - `initial-sync-size`: about `18.1ms`
+  - `initial-status-publish`: about `16.2ms`
+  - `longFrameCount`: `30`
+  - `maxFrameDurationMs`: about `2566.4ms`
+- This does not prove the RTX behavior, but it does eliminate one weak hypothesis on the local control surface: browser/bootstrap overhead was not the dominant startup cost there; world rebuild work dominated instead.
+
 ### Instrumentation prepared in this pass
 
 - The scene startup path now supports `?startupProfile=1`.

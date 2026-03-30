@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getInvalidProfilingRuntimeReason,
   isStartupProfileSnapshot,
   STARTUP_PROFILE_QUERY,
   summarizeStartupProfile,
@@ -47,5 +48,26 @@ describe('startupProfileCaptureHelper', () => {
   it('rejects incomplete values', () => {
     expect(isStartupProfileSnapshot(null)).toBe(false);
     expect(isStartupProfileSnapshot({ phases: [] })).toBe(false);
+  });
+
+  it('rejects non-WebGPU runtimes with a clear reason', () => {
+    expect(getInvalidProfilingRuntimeReason({
+      browserSupportsWebGpu: false,
+      userAgent: 'Chrome/145.0.0.0',
+    })).toContain('navigator.gpu was unavailable');
+  });
+
+  it('rejects software-rendered runtimes with a clear reason', () => {
+    expect(getInvalidProfilingRuntimeReason({
+      browserSupportsWebGpu: true,
+      webglRenderer: 'ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)',
+    })).toContain('hardware-accelerated graphics');
+  });
+
+  it('accepts a WebGPU-capable hardware runtime', () => {
+    expect(getInvalidProfilingRuntimeReason({
+      browserSupportsWebGpu: true,
+      webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',
+    })).toBeNull();
   });
 });

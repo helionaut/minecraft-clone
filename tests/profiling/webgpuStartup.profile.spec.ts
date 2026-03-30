@@ -3,6 +3,7 @@ import type { CDPSession } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 
 import {
+  getInvalidProfilingRuntimeReason,
   isStartupProfileSnapshot,
   STARTUP_PROFILE_QUERY,
   summarizeStartupProfile,
@@ -136,24 +137,66 @@ test('captures startup profiling artifacts for the WebGPU scene startup path', a
       startupProfile: qa?.getStartupProfile() ?? null,
       status: qa?.getStatus() ?? null,
       userAgent: navigator.userAgent,
+      webglVendor: null as string | null,
+      webglRenderer: null as string | null,
     };
   });
 
+  const graphicsState = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    const gl = (
+      canvas.getContext('webgl')
+      || canvas.getContext('experimental-webgl')
+    ) as WebGLRenderingContext | null;
+
+    if (!gl) {
+      return {
+        webglVendor: null,
+        webglRenderer: null,
+      };
+    }
+
+    const debugRendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
+
+    if (!debugRendererInfo) {
+      return {
+        webglVendor: null,
+        webglRenderer: null,
+      };
+    }
+
+    return {
+      webglVendor: gl.getParameter(debugRendererInfo.UNMASKED_VENDOR_WEBGL) as string,
+      webglRenderer: gl.getParameter(debugRendererInfo.UNMASKED_RENDERER_WEBGL) as string,
+    };
+  });
+
+  const runtimeStatus = {
+    ...pageState,
+    ...graphicsState,
+  };
+
   await writeFile(consolePath, JSON.stringify(consoleEntries, null, 2), 'utf8');
-  await writeFile(statusPath, JSON.stringify(pageState, null, 2), 'utf8');
+  await writeFile(statusPath, JSON.stringify(runtimeStatus, null, 2), 'utf8');
   await stopChromeTrace(cdpSession, tracePath);
 
-  expect(pageState.browserSupportsWebGpu, 'Expected an RTX Chrome runtime with WebGPU enabled.').toBe(true);
-  expect(isStartupProfileSnapshot(pageState.startupProfile)).toBe(true);
+  const invalidRuntimeReason = getInvalidProfilingRuntimeReason(runtimeStatus);
 
-  if (!isStartupProfileSnapshot(pageState.startupProfile)) {
+  expect(invalidRuntimeReason).toBeNull();
+  expect(isStartupProfileSnapshot(runtimeStatus.startupProfile)).toBe(true);
+
+  if (invalidRuntimeReason) {
+    throw new Error(invalidRuntimeReason);
+  }
+
+  if (!isStartupProfileSnapshot(runtimeStatus.startupProfile)) {
     throw new Error('Expected a valid startup profile snapshot.');
   }
 
-  await writeFile(startupProfilePath, JSON.stringify(pageState.startupProfile, null, 2), 'utf8');
+  await writeFile(startupProfilePath, JSON.stringify(runtimeStatus.startupProfile, null, 2), 'utf8');
   await writeFile(
     startupSummaryPath,
-    JSON.stringify(summarizeStartupProfile(pageState.startupProfile), null, 2),
+    JSON.stringify(summarizeStartupProfile(runtimeStatus.startupProfile), null, 2),
     'utf8',
   );
 

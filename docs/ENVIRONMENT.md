@@ -67,3 +67,32 @@ Expected post-cleanup result:
 - the shared checkout is on `main` and `git status --short --branch` is clean
 - the runtime workflow reports `codexModel=gpt-5.4` and `codexReasoningEffort=medium`
 - the status/hygiene reports no longer flag actionable execution-environment drift for `minecraft-clone`
+
+## HEL-142 hardware contract
+
+- Ticket scope: profile WebGPU startup frame spikes on desktop Chrome with RTX-class hardware.
+- Current host limitation: the active Symphony host is WSL2 with no `google-chrome`/`chromium`, no `nvidia-smi`, and no WebGPU-capable Chrome runtime.
+- Remote surface limitation: no MCP-provided browser/GPU execution surface is attached in this environment.
+- Hosted preview limitation: the shared GitHub Pages site serves `main`, and the `github-pages` environment branch policy rejects PR-branch deploys for PR #52.
+
+Required execution surface for the remaining proof:
+
+- desktop machine with RTX-class NVIDIA GPU and working driver visibility
+- desktop Chrome with WebGPU enabled and hardware acceleration working
+- local checkout of branch `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`
+- ability to run:
+
+```bash
+npm ci
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4173
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:4173/minecraft-clone/ npm run profile:webgpu-startup
+```
+
+Expected artifacts from that machine:
+
+- `reports/startup-profiling/chrome-performance-trace.json`
+- `reports/startup-profiling/console-messages.json`
+- `reports/startup-profiling/runtime-status.json`
+- `reports/startup-profiling/startup-profile.json`
+- `reports/startup-profiling/startup-profile-summary.json`

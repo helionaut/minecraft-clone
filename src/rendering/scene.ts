@@ -92,6 +92,10 @@ import {
   type SceneRenderer,
 } from './sceneRenderer.ts';
 import { createDesktopVolumetricLightVolume } from './desktopVolumetricLighting.ts';
+import {
+  createStartupProfiler,
+  type StartupProfileSnapshot,
+} from './startupProfiling.ts';
 
 export interface InventoryStatusEntry {
   readonly type: string;
@@ -139,6 +143,7 @@ export interface PlayableScene {
   };
   readonly getBlockAt: (x: number, y: number, z: number) => WorldBlockType | null;
   readonly getStatusSnapshot: () => SandboxStatus | null;
+  readonly getStartupProfile: () => StartupProfileSnapshot | null;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
 }
@@ -157,6 +162,7 @@ export interface TouchUiControls {
 
 export interface PlayableSceneOptions {
   readonly freezeAtSpawnFrame?: boolean;
+  readonly startupProfilingEnabled?: boolean;
 }
 
 export interface HotbarSelectionControls {
@@ -292,6 +298,9 @@ export async function createPlayableScene(
   hotbarControls?: HotbarSelectionControls,
   options: PlayableSceneOptions = {},
 ): Promise<PlayableScene> {
+  const startupProfiler = createStartupProfiler({
+    enabled: options.startupProfilingEnabled === true,
+  });
   let renderer: SceneRenderer | null = null;
   let webGpuDeviceLost = false;
   let recoveryReloadQueued = false;
@@ -375,7 +384,7 @@ export async function createPlayableScene(
     navigator.maxTouchPoints > 0
   );
   const webGpuPreference = getWebGpuPreference(window.location.search, window.localStorage);
-  const rendererSelection = await createSceneRenderer({
+  const rendererSelection = await startupProfiler.measure('create-scene-renderer', () => createSceneRenderer({
     canvas,
     touchDevice,
     rendererDiagnostics,
@@ -397,7 +406,7 @@ export async function createPlayableScene(
         window.location.reload();
       }, 0);
     },
-  });
+  }));
 
   if (rendererSelection.backend === 'webgpu') {
     clearWebGpuSafeMode(window.localStorage);
@@ -477,7 +486,10 @@ export async function createPlayableScene(
   placementPreview.visible = false;
   scene.add(placementPreview);
   const volumetricLightVolume = volumetricLighting.enabled
-    ? createDesktopVolumetricLightVolume()
+    ? startupProfiler.measureSync(
+      'create-desktop-volumetric-light-volume',
+      () => createDesktopVolumetricLightVolume(),
+    )
     : null;
 
   if (volumetricLightVolume) {
@@ -1188,9 +1200,9 @@ export async function createPlayableScene(
     updateTargeting();
   };
 
-  rebuildWorld();
-  syncSize();
-  updateStatus();
+  startupProfiler.measureSync('initial-rebuild-world', rebuildWorld);
+  startupProfiler.measureSync('initial-sync-size', syncSize);
+  startupProfiler.measureSync('initial-status-publish', updateStatus);
 
   const resizeObserver = new ResizeObserver(syncSize);
   resizeObserver.observe(container);
@@ -1320,6 +1332,7 @@ export async function createPlayableScene(
     }
 
     const delta = (now - previousTime) / 1000;
+    startupProfiler.recordFrame(delta * 1000);
     previousTime = now;
     elapsedTime += delta;
     const previousPlayer = player;
@@ -1358,10 +1371,14 @@ export async function createPlayableScene(
 
   if (options.freezeAtSpawnFrame) {
     renderer.setAnimationLoop(null);
-    syncFrameVisuals(player, 0);
+    startupProfiler.measureSync('initial-sync-frame-visuals', () => {
+      syncFrameVisuals(player, 0);
+    });
   } else {
     renderer.setAnimationLoop(tick);
   }
+
+  startupProfiler.complete();
 
   return {
     canvas,
@@ -1391,6 +1408,7 @@ export async function createPlayableScene(
     placeSelectedBlockOnNearestSurface,
     getBlockAt: (x: number, y: number, z: number) => world.getBlock(x, y, z),
     getStatusSnapshot: () => lastPublishedStatus,
+    getStartupProfile: () => startupProfiler.snapshot(),
     resetWorld,
     dispose: () => {
       renderer.setAnimationLoop(null);

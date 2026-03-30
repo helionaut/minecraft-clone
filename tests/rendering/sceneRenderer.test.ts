@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   WEBGPU_SAFE_MODE_STORAGE_KEY,
+  attachWebGpuDeviceLossHandler,
   clearWebGpuSafeMode,
   getWebGpuPreference,
   isUsableWebGpuAdapter,
@@ -85,5 +86,34 @@ describe('WebGPU safe mode persistence', () => {
     });
 
     expect(removedKey).toBe(WEBGPU_SAFE_MODE_STORAGE_KEY);
+  });
+});
+
+describe('attachWebGpuDeviceLossHandler', () => {
+  it('stops the animation loop and forwards the first device-loss event', () => {
+    const loopChanges: Array<((time: number) => void) | null> = [];
+    const defaultEvents: unknown[] = [];
+    const forwardedEvents: unknown[] = [];
+    const renderer = {
+      onDeviceLost: (info: unknown) => {
+        defaultEvents.push(info);
+      },
+      setAnimationLoop: (callback: ((time: number) => void) | null) => {
+        loopChanges.push(callback);
+      },
+    };
+    const firstInfo = { message: 'GPU reset', reason: 'destroyed' };
+    const secondInfo = { message: 'Duplicate loss', reason: 'destroyed' };
+
+    attachWebGpuDeviceLossHandler(renderer, (info) => {
+      forwardedEvents.push(info);
+    });
+
+    renderer.onDeviceLost(firstInfo);
+    renderer.onDeviceLost(secondInfo);
+
+    expect(defaultEvents).toEqual([firstInfo, secondInfo]);
+    expect(loopChanges).toEqual([null]);
+    expect(forwardedEvents).toEqual([firstInfo]);
   });
 });

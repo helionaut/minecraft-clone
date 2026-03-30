@@ -466,7 +466,7 @@ function renderRecipes(recipes: readonly RecipeStatusEntry[], nearbyStations: re
   }).join('');
 }
 
-export function createAppShell(root: HTMLDivElement): void {
+export async function createAppShell(root: HTMLDivElement): Promise<void> {
   root.innerHTML = `
     <main class="shell">
       <section class="sandbox">
@@ -1077,9 +1077,11 @@ export function createAppShell(root: HTMLDivElement): void {
     },
   };
 
-  const exposeQaHarness = new URLSearchParams(window.location.search).has('qaHarness');
-  const freezeAtSpawnFrame = exposeQaHarness && new URLSearchParams(window.location.search).has('freezeScene');
-  const sandbox = createPlayableScene(
+  const searchParams = new URLSearchParams(window.location.search);
+  const exposeQaHarness = searchParams.has('qaHarness');
+  const freezeAtSpawnFrame = exposeQaHarness && searchParams.has('freezeScene');
+  const autoOpenMenu = exposeQaHarness && searchParams.has('autoOpenMenu');
+  const sandbox = await createPlayableScene(
     viewport,
     applyStatus,
     touchControls,
@@ -1104,6 +1106,10 @@ export function createAppShell(root: HTMLDivElement): void {
       },
       setMenuOpen,
     };
+  }
+
+  if (autoOpenMenu) {
+    setMenuOpen(true);
   }
 
   openMenuButton.addEventListener('click', () => {

@@ -4,6 +4,9 @@ export type VolumetricLightingDisableReason =
   | 'mobile'
   | 'software-renderer'
   | 'webgpu-unavailable'
+  | 'webgpu-fallback-adapter'
+  | 'webgpu-init-failed'
+  | 'webgpu-backend-mismatch'
   | 'rtx-pipeline-unavailable';
 
 export interface VolumetricLightingDecision {
@@ -16,11 +19,19 @@ export interface VolumetricLightingSupportInput {
   readonly rendererMode: RendererMode;
   readonly browserSupportsWebGpu: boolean;
   readonly hasRtxVolumetricPipeline: boolean;
+  readonly reasonOverride?: VolumetricLightingDisableReason;
 }
 
 export function getVolumetricLightingDecision(
   input: VolumetricLightingSupportInput,
 ): VolumetricLightingDecision {
+  if (input.reasonOverride) {
+    return {
+      enabled: false,
+      reason: input.reasonOverride,
+    };
+  }
+
   if (input.touchDevice) {
     return {
       enabled: false,

@@ -9,4 +9,4 @@ if (!root) {
 }
 
 installViewportLayout();
-createAppShell(root);
+void createAppShell(root);

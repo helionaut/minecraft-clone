@@ -16,7 +16,6 @@ import {
   PointLight,
   SRGBColorSpace,
   Scene,
-  WebGLRenderer,
   BoxGeometry,
 } from 'three';
 
@@ -84,8 +83,9 @@ import {
   type FaceVisibilityMask,
 } from './textures.ts';
 import { type CellTarget, getLookDirection, traceVoxelTarget } from './voxelRaycast.ts';
-import { getVolumetricLightingDecision } from './volumetricLighting.ts';
 import { getWorldLightingRigState } from './worldLighting.ts';
+import { createSceneRenderer, type SceneRenderer } from './sceneRenderer.ts';
+import { createDesktopVolumetricLightVolume } from './desktopVolumetricLighting.ts';
 
 export interface InventoryStatusEntry {
   readonly type: string;
@@ -120,7 +120,7 @@ export interface SandboxStatus {
 
 export interface PlayableScene {
   readonly canvas: HTMLCanvasElement;
-  readonly renderer: WebGLRenderer;
+  readonly renderer: SceneRenderer;
   readonly setSelectedBlock: (type: HotbarBlockType) => void;
   readonly craftRecipe: (recipeId: string) => void;
   readonly mineBlockAt: (x: number, y: number, z: number) => {
@@ -279,28 +279,18 @@ function findNearestPlacementCell(
   return bestCell;
 }
 
-export function createPlayableScene(
+export async function createPlayableScene(
   container: HTMLElement,
   onStatusChange: (status: SandboxStatus) => void,
   touchControls?: TouchUiControls,
   hotbarControls?: HotbarSelectionControls,
   options: PlayableSceneOptions = {},
-): PlayableScene {
+): Promise<PlayableScene> {
   const canvas = document.createElement('canvas');
   canvas.setAttribute('aria-label', 'Minecraft clone sandbox viewport');
   container.append(canvas);
 
-  const renderer = new WebGLRenderer({
-    antialias: true,
-    alpha: true,
-    canvas,
-  });
   const initialLightingRig = getWorldLightingRigState(0, 0, DEFAULT_WORLD_CONFIG.chunkSize * 2);
-  renderer.outputColorSpace = SRGBColorSpace;
-  renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = initialLightingRig.exposure;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = PCFSoftShadowMap;
 
   const scene = new Scene();
   const skyBackdrop = createSkyBackdrop(
@@ -349,14 +339,18 @@ export function createPlayableScene(
   sun.shadow.camera.far = initialLightingRig.shadowBounds.far;
   const playerLantern = new PointLight(0xffd6a0, 1.6, 14, 2);
   scene.add(ambient, sun, sunTarget, playerLantern);
-  const gl = renderer.getContext();
-  const debugRendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  const diagnosticsCanvas = document.createElement('canvas');
+  const gl = diagnosticsCanvas.getContext('webgl2', {
+    antialias: true,
+    alpha: true,
+  });
+  const debugRendererInfo = gl?.getExtension('WEBGL_debug_renderer_info') ?? null;
   const rendererDiagnostics = buildRendererDiagnostics({
-    version: typeof gl.getParameter === 'function' ? String(gl.getParameter(gl.VERSION)) : null,
-    vendor: typeof gl.getParameter === 'function'
+    version: gl && typeof gl.getParameter === 'function' ? String(gl.getParameter(gl.VERSION)) : null,
+    vendor: gl && typeof gl.getParameter === 'function'
       ? String(gl.getParameter(debugRendererInfo ? debugRendererInfo.UNMASKED_VENDOR_WEBGL : gl.VENDOR))
       : null,
-    renderer: typeof gl.getParameter === 'function'
+    renderer: gl && typeof gl.getParameter === 'function'
       ? String(gl.getParameter(debugRendererInfo ? debugRendererInfo.UNMASKED_RENDERER_WEBGL : gl.RENDERER))
       : null,
   });
@@ -371,12 +365,26 @@ export function createPlayableScene(
     'ontouchstart' in window ||
     navigator.maxTouchPoints > 0
   );
-  getVolumetricLightingDecision({
+  const rendererSelection = await createSceneRenderer({
+    canvas,
     touchDevice,
-    rendererMode: rendererDiagnostics.mode,
-    browserSupportsWebGpu: typeof navigator.gpu !== 'undefined',
-    hasRtxVolumetricPipeline: false,
+    rendererDiagnostics,
   });
+  const renderer = rendererSelection.renderer;
+  renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = initialLightingRig.exposure;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  const volumetricLighting = rendererSelection.volumetricLighting;
+  const rendererDeviceSummary = rendererDiagnostics.summary.split(' | ').slice(1).join(' | ');
+  const rendererSummary = [
+    rendererSelection.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2',
+    rendererDeviceSummary || rendererDiagnostics.summary,
+    volumetricLighting.enabled
+      ? 'volumetric lighting enabled'
+      : `volumetric lighting disabled (${volumetricLighting.reason ?? 'unknown'})`,
+  ].join(' | ');
   let player = createPlayerState(world.getSpawnPoint());
   const worldGroup = new Group();
   const clouds = createCloudLayer(DEFAULT_WORLD_CONFIG.seed);
@@ -428,6 +436,13 @@ export function createPlayableScene(
   );
   placementPreview.visible = false;
   scene.add(placementPreview);
+  const volumetricLightVolume = volumetricLighting.enabled
+    ? createDesktopVolumetricLightVolume()
+    : null;
+
+  if (volumetricLightVolume) {
+    scene.add(volumetricLightVolume);
+  }
 
   let selectedBlock: HotbarBlockType = 'grass';
   let selectedHotbarSlotIndex = normalizeHotbarSlotIndex(
@@ -672,7 +687,7 @@ export function createPlayableScene(
       selectedTool: selectedTool ? getReadableName(selectedTool) : 'hand',
       stations: nearbyStations.length > 0 ? nearbyStations.map(getReadableName).join(', ') : 'none nearby',
       nearbyStations: nearbyStations.map(getReadableName),
-      renderer: rendererDiagnostics.summary,
+      renderer: rendererSummary,
       inventory: inventoryEntries,
       recipes: RECIPES.map((recipe) => ({
         id: recipe.id,
@@ -1159,7 +1174,6 @@ export function createPlayableScene(
     touchControls.hotbarNextButton.addEventListener('pointerdown', onHotbarNextPointerDown);
   }
 
-  let frameId = 0;
   let previousTime = performance.now();
   let elapsedTime = 0;
 
@@ -1213,6 +1227,9 @@ export function createPlayableScene(
     sceneFog.near = skyBackdrop.theme.fogNear;
     sceneFog.far = skyBackdrop.theme.fogFar;
     clouds.update(player.position.x, player.position.z, elapsedTime);
+    if (volumetricLightVolume) {
+      volumetricLightVolume.position.set(player.position.x, 6, player.position.z);
+    }
     heldItemEquipTimer = Math.max(0, heldItemEquipTimer - delta);
     heldItemSwingTimer = Math.max(0, heldItemSwingTimer - delta);
 
@@ -1246,7 +1263,7 @@ export function createPlayableScene(
     renderer.render(scene, camera);
   };
 
-  const tick = (now: number) => {
+  const tick = (now: DOMHighResTimeStamp) => {
     const delta = (now - previousTime) / 1000;
     previousTime = now;
     elapsedTime += delta;
@@ -1282,15 +1299,13 @@ export function createPlayableScene(
     }
 
     syncFrameVisuals(previousPlayer, delta);
-    frameId = window.requestAnimationFrame(tick);
   };
 
-  frameId = window.requestAnimationFrame(tick);
-
   if (options.freezeAtSpawnFrame) {
-    window.cancelAnimationFrame(frameId);
-    frameId = 0;
+    renderer.setAnimationLoop(null);
     syncFrameVisuals(player, 0);
+  } else {
+    renderer.setAnimationLoop(tick);
   }
 
   return {
@@ -1323,7 +1338,7 @@ export function createPlayableScene(
     getStatusSnapshot: () => lastPublishedStatus,
     resetWorld,
     dispose: () => {
-      window.cancelAnimationFrame(frameId);
+      renderer.setAnimationLoop(null);
       resizeObserver.disconnect();
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       document.removeEventListener('mousemove', onMouseMove);
@@ -1352,6 +1367,8 @@ export function createPlayableScene(
       waterGeometry.dispose();
       highlightGeometry.dispose();
       blockMaterialFactory.dispose();
+      volumetricLightVolume?.geometry.dispose();
+      volumetricLightVolume?.material.dispose();
       clouds.dispose();
       skyBackdrop.dispose();
       audio.dispose();

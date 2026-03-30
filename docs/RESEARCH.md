@@ -18,7 +18,8 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - `git branch --show-current` now matches the issue branch `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`.
 - No system Chrome binary was present: `google-chrome` and `chromium` were both missing on this host.
 - No NVIDIA tooling was present: `nvidia-smi` was not available on this host.
-- A local Playwright Chromium probe succeeded, but reported `navigator.gpu === false`, so the browser runtime available here does not expose WebGPU.
+- Repo-local Chrome-for-Testing could be downloaded and launched from the issue workspace, but default headless and flagged/headed `xvfb-run` launches both still reported `navigator.gpu === false`.
+- The flagged headed probe reported WebGL renderer `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, which confirms software rendering rather than RTX-backed acceleration on this host.
 - That makes the ticket's requested execution surface unavailable on this machine before any profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 
@@ -60,7 +61,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the profiling instrumentation from `98e49ac` instead of the `main` GitHub Pages site:
+1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the profiling instrumentation from `5bcf209` instead of the `main` GitHub Pages site:
 
    ```bash
    git checkout eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene

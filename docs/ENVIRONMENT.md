@@ -72,6 +72,11 @@ Expected post-cleanup result:
 
 - Ticket scope: profile WebGPU startup frame spikes on desktop Chrome with RTX-class hardware.
 - Current host limitation: the active Symphony host is WSL2 with no `google-chrome`/`chromium`, no `nvidia-smi`, and no WebGPU-capable Chrome runtime.
+- Browser probe update on this host:
+  - repo-local Chrome-for-Testing can be downloaded and launched from the workspace
+  - default headless launch reports `navigator.gpu === false`
+  - headed launch under `xvfb-run` with `--enable-unsafe-webgpu --ignore-gpu-blocklist --enable-features=Vulkan,UseSkiaRenderer` still reports `navigator.gpu === false`
+  - the same headed probe reports `WEBGL_debug_renderer_info` as `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, so this host is still software-rendered rather than RTX-backed
 - Remote surface limitation: no MCP-provided browser/GPU execution surface is attached in this environment.
 - Hosted preview limitation: the shared GitHub Pages site serves `main`, and the `github-pages` environment branch policy rejects PR-branch deploys for PR #52.
 

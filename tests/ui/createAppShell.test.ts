@@ -290,8 +290,14 @@ describe('createAppShell', () => {
 
     const movedHotbarSlot = root.querySelector<HTMLButtonElement>('[data-slot-index="27"]');
     expect(movedHotbarSlot?.dataset.itemType).toBe('oak-log');
-    expect(movedHotbarSlot?.classList.contains('selected')).toBe(true);
+    expect(movedHotbarSlot?.classList.contains('selected')).toBe(false);
     expect(sandboxStub.setSelectedBlock).toHaveBeenCalledWith('oak-log');
+
+    const storageCobblestoneSlot = root.querySelector<HTMLButtonElement>('[data-slot-index="1"]');
+    storageCobblestoneSlot?.click();
+
+    expect(root.querySelector<HTMLButtonElement>('[data-slot-index="1"]')?.classList.contains('selected')).toBe(true);
+    expect(root.querySelector<HTMLButtonElement>('[data-slot-index="27"]')?.dataset.itemType).toBe('oak-log');
 
     statusListener({
       locked: false,

@@ -811,6 +811,11 @@ export function createAppShell(root: HTMLDivElement): void {
     }
   };
 
+  const clearInventoryCarryState = () => {
+    selectedInventorySlotIndex = null;
+    draggedInventorySlotIndex = null;
+  };
+
   const syncSelectedHotbarSlot = (hotbarSlotIndex: number, syncSceneSelection: boolean) => {
     selectedHotbarSlotIndex = normalizeHotbarSlotIndex(hotbarSlotIndex);
     hotbarSelectionInitialized = true;
@@ -839,7 +844,7 @@ export function createAppShell(root: HTMLDivElement): void {
     nextLayout[fromIndex] = nextLayout[toIndex];
     nextLayout[toIndex] = sourceSlot;
     inventoryLayout = nextLayout;
-    selectedInventorySlotIndex = toIndex;
+    clearInventoryCarryState();
     persistInventoryLayout(inventoryLayout);
     if (toIndex >= STORAGE_SLOT_COUNT) {
       syncSelectedHotbarSlot(toIndex - STORAGE_SLOT_COUNT, true);

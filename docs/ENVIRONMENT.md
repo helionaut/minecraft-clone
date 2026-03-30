@@ -81,6 +81,7 @@ Expected post-cleanup result:
   - a real Chrome binary exists at `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`
   - Windows `nvidia-smi.exe` exists at `/mnt/c/Windows/System32/nvidia-smi.exe`
   - `nvidia-smi.exe` reports `NVIDIA GeForce GTX 965M` on driver `582.28`, so the visible adapter is desktop-class NVIDIA hardware but still not RTX-class
+  - not every WSL runner can execute mounted Windows binaries directly; in this session both `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe` and `/mnt/c/Windows/System32/cmd.exe` returned `Invalid argument`, so the Windows-local runtime bundle from the prior pass could not be relaunched here even though `/dev/dxg` and the Chrome path are visible
   - the committed Playwright wrapper cannot launch that Windows Chrome binary directly from WSL because Chrome exits on `--remote-debugging-pipe` with `Remote debugging pipe file descriptors are not open`
   - manually launching Windows Chrome with `--remote-debugging-port=9222` leaves the browser listening on the Windows side, but this WSL session cannot reach that listener over either `127.0.0.1` or the Windows host IP from `/etc/resolv.conf`
   - the Windows host also lacks `node` and `npm` in PATH, so unattended profiling from Windows requires a portable `node.exe` toolchain rather than relying on a preinstalled runtime

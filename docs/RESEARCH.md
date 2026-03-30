@@ -74,6 +74,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - this machine still does not satisfy the issue's RTX requirement
   - the visible NVIDIA adapter from WSL is GTX 965M, while the successful hardware-accelerated browser run actually bound to Intel HD 4600
   - the previously prepared SwiftShader control comparison could not be regenerated automatically in this pass because the baseline `startup-profile-report.json` is no longer present in the current workspace; only a stale `trace.zip` remains under `webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/`
+  - a follow-up WSL session on 2026-03-31 confirmed an additional transport limit: `/dev/dxg` and the Windows Chrome path are visible, but direct execution of `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe` and `/mnt/c/Windows/System32/cmd.exe` failed with `Invalid argument`, so the previously working Windows-local runtime bundle cannot be relaunched from every runner
 
 ### Code-backed startup suspects to profile on the next pass
 

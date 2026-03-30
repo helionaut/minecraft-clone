@@ -73,15 +73,17 @@ describe('stageWindowsStartupProfileRuntime', () => {
       env: {
         ...process.env,
         PLAYWRIGHT_PROFILE_DRY_RUN: '1',
+        PLAYWRIGHT_WINDOWS_NODE_EXE: process.execPath,
+        PLAYWRIGHT_WINDOWS_CHROME_EXE: process.execPath,
       },
       encoding: 'utf8',
       stdio: 'pipe',
     });
 
     expect(output).toContain('runtime dir: /mnt/c/Temp/hel142-startup-runtime');
-    expect(output).toContain('node source: /home/helionaut/srv/research-cache/minecraft-clone/toolchains/node-v22.22.1-win-x64/node-v22.22.1-win-x64/node.exe');
+    expect(output).toContain(`node source: ${process.execPath}`);
     expect(output).toContain('bundled node target: /mnt/c/Temp/hel142-startup-runtime/node.exe');
-    expect(output).toContain('windows chrome: /mnt/c/Program Files/Google/Chrome/Application/chrome.exe');
+    expect(output).toContain(`windows chrome: ${process.execPath}`);
     expect(output).toContain('dry run only; skipping bundle copy');
   });
 });

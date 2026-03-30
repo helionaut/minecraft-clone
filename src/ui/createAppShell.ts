@@ -466,7 +466,7 @@ function renderRecipes(recipes: readonly RecipeStatusEntry[], nearbyStations: re
   }).join('');
 }
 
-export function createAppShell(root: HTMLDivElement): void {
+export async function createAppShell(root: HTMLDivElement): Promise<void> {
   root.innerHTML = `
     <main class="shell">
       <section class="sandbox">
@@ -1079,7 +1079,7 @@ export function createAppShell(root: HTMLDivElement): void {
 
   const exposeQaHarness = new URLSearchParams(window.location.search).has('qaHarness');
   const freezeAtSpawnFrame = exposeQaHarness && new URLSearchParams(window.location.search).has('freezeScene');
-  const sandbox = createPlayableScene(
+  const sandbox = await createPlayableScene(
     viewport,
     applyStatus,
     touchControls,

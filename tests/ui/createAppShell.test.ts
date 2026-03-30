@@ -22,7 +22,7 @@ let statusListener: StatusListener | null = null;
 let hotbarControls: HotbarSelectionControls | null = null;
 
 vi.mock('../../src/rendering/scene.ts', () => ({
-  createPlayableScene: vi.fn((
+  createPlayableScene: vi.fn(async (
     _container: HTMLElement,
     onStatusChange: StatusListener,
     _touchControls: unknown,
@@ -54,14 +54,14 @@ describe('createAppShell', () => {
     vi.useRealTimers();
   });
 
-  it('opens a Minecraft-style inventory window with storage grid, hotbar row, and recipe book', () => {
+  it('opens a Minecraft-style inventory window with storage grid, hotbar row, and recipe book', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
       throw new Error('Expected #app test root.');
     }
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');
@@ -130,7 +130,7 @@ describe('createAppShell', () => {
     expect(sandboxStub.craftRecipe).toHaveBeenCalledWith('crafting-table');
   });
 
-  it('updates hotbar selection and keeps reset inside the inventory overlay', () => {
+  it('updates hotbar selection and keeps reset inside the inventory overlay', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -152,7 +152,7 @@ describe('createAppShell', () => {
       null,
     ]));
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');
@@ -188,14 +188,14 @@ describe('createAppShell', () => {
     expect(sandboxStub.resetWorld).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the main HUD hotbar from the real hotbar layout after moving a crafting table into it', () => {
+  it('renders the main HUD hotbar from the real hotbar layout after moving a crafting table into it', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
       throw new Error('Expected #app test root.');
     }
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');
@@ -236,7 +236,7 @@ describe('createAppShell', () => {
     expect(hudHotbarSlot?.textContent).toContain('1');
   });
 
-  it('raises the hotbar on touch layouts when the center gap is too narrow for the controls and hotbar to share the bottom band', () => {
+  it('raises the hotbar on touch layouts when the center gap is too narrow for the controls and hotbar to share the bottom band', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -249,7 +249,7 @@ describe('createAppShell', () => {
       value: undefined,
     });
 
-    createAppShell(root);
+    await createAppShell(root);
 
     const hotbarShell = root.querySelector<HTMLElement>('.hotbar-shell');
     const moveCluster = root.querySelector<HTMLElement>('.touch-move');
@@ -313,7 +313,7 @@ describe('createAppShell', () => {
     expect(root.style.getPropertyValue('--hotbar-raise-offset')).toBe('64px');
   });
 
-  it('keeps the hotbar at its baseline position when touch controls leave enough center gap', () => {
+  it('keeps the hotbar at its baseline position when touch controls leave enough center gap', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -326,7 +326,7 @@ describe('createAppShell', () => {
       value: undefined,
     });
 
-    createAppShell(root);
+    await createAppShell(root);
 
     const hotbarShell = root.querySelector<HTMLElement>('.hotbar-shell');
     const moveCluster = root.querySelector<HTMLElement>('.touch-move');
@@ -390,7 +390,7 @@ describe('createAppShell', () => {
     expect(root.style.getPropertyValue('--hotbar-raise-offset')).toBe('');
   });
 
-  it('supports selecting and moving inventory items between storage and hotbar slots', () => {
+  it('supports selecting and moving inventory items between storage and hotbar slots', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -407,7 +407,7 @@ describe('createAppShell', () => {
       null, null, null, null, null, null, null, null, null,
     ]));
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');
@@ -480,14 +480,14 @@ describe('createAppShell', () => {
     expect(refreshedHotbarSlot?.classList.contains('active')).toBe(true);
   });
 
-  it('auto-populates the hotbar with visible inventory items when no hotbar layout is saved yet', () => {
+  it('auto-populates the hotbar with visible inventory items when no hotbar layout is saved yet', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
       throw new Error('Expected #app test root.');
     }
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');
@@ -521,7 +521,7 @@ describe('createAppShell', () => {
     expect(root.querySelector<HTMLButtonElement>('[data-hud-hotbar-slot="0"]')?.classList.contains('active')).toBe(true);
   });
 
-  it('lets tool hotbar slots become active without treating them as placeable blocks', () => {
+  it('lets tool hotbar slots become active without treating them as placeable blocks', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -543,7 +543,7 @@ describe('createAppShell', () => {
       null,
     ]));
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');
@@ -574,7 +574,7 @@ describe('createAppShell', () => {
     expect(sandboxStub.setSelectedBlock).not.toHaveBeenCalled();
   });
 
-  it('keeps the selected hotbar slot highlighted after closing inventory, even when that slot is empty', () => {
+  it('keeps the selected hotbar slot highlighted after closing inventory, even when that slot is empty', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -596,7 +596,7 @@ describe('createAppShell', () => {
       null,
     ]));
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener || !hotbarControls) {
       throw new Error('Expected scene status listener and hotbar controls.');
@@ -652,14 +652,14 @@ describe('createAppShell', () => {
     expect(sandboxStub.setSelectedBlock).not.toHaveBeenCalled();
   });
 
-  it('auto-collapses touch help while keeping a reopen control available on mobile', () => {
+  it('auto-collapses touch help while keeping a reopen control available on mobile', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
       throw new Error('Expected #app test root.');
     }
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');
@@ -706,7 +706,7 @@ describe('createAppShell', () => {
     expect(openHelpButton?.hidden).toBe(false);
   });
 
-  it('walks the player from crafted table to placed table with explicit onboarding copy', () => {
+  it('walks the player from crafted table to placed table with explicit onboarding copy', async () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 
     if (!root) {
@@ -721,7 +721,7 @@ describe('createAppShell', () => {
       null, null, null, null, null, null, null, null, null,
     ]));
 
-    createAppShell(root);
+    await createAppShell(root);
 
     if (!statusListener) {
       throw new Error('Expected scene status listener.');

@@ -50,4 +50,17 @@ describe('getVolumetricLightingDecision', () => {
       reason: 'rtx-pipeline-unavailable',
     });
   });
+
+  it('keeps the effect off when runtime initialization falls back after WebGPU detection', () => {
+    expect(getVolumetricLightingDecision({
+      touchDevice: false,
+      rendererMode: 'hardware-accelerated',
+      browserSupportsWebGpu: true,
+      hasRtxVolumetricPipeline: true,
+      reasonOverride: 'rtx-pipeline-unavailable',
+    })).toEqual({
+      enabled: false,
+      reason: 'rtx-pipeline-unavailable',
+    });
+  });
 });

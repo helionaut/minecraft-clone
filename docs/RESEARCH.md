@@ -16,15 +16,24 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 ### Environment check results
 
 - `git branch --show-current` now matches the issue branch `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`.
-- No system Chrome binary was present: `google-chrome` and `chromium` were both missing on this host.
-- No NVIDIA tooling was present: `nvidia-smi` was not available on this host.
+- No Linux system Chrome binary was present in PATH: `google-chrome` and `chromium` were both missing inside WSL.
+- No Linux `nvidia-smi` was present in PATH inside WSL.
 - Repo-local Chrome-for-Testing could be downloaded and launched from the issue workspace, but default headless and flagged/headed `xvfb-run` launches both still reported `navigator.gpu === false`.
 - The flagged headed probe reported WebGL renderer `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, which confirms software rendering rather than RTX-backed acceleration on this host.
+- A later host probe showed that the underlying Windows machine does expose a real browser/GPU stack to WSL:
+  - Chrome exists at `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`
+  - Windows `nvidia-smi.exe` exists at `/mnt/c/Windows/System32/nvidia-smi.exe`
+  - `nvidia-smi.exe` reports `NVIDIA GeForce GTX 965M`, driver `582.28`, and active Chrome GPU processes
+- That Windows-backed path still fails as a profiling surface from this session:
+  - `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=/mnt/c/Program Files/Google/Chrome/Application/chrome.exe npm run profile:webgpu-startup:local-preview` fails before navigation because Playwright launches Chrome with `--remote-debugging-pipe`, and Windows Chrome exits with `Remote debugging pipe file descriptors are not open`
+  - manually launching Windows Chrome with `--remote-debugging-port=9222` succeeds on the Windows side, but WSL cannot connect to that endpoint on either `127.0.0.1` or the Windows host IP, so `connectOverCDP` is not currently reachable from this session either
+  - the Windows host does not have `node` or `npm`, so the profiling wrapper cannot be moved wholesale to the Windows side without extra bootstrap work
+- Even if that transport problem were removed, the visible adapter on this machine is GTX 965M rather than the RTX-class hardware named in the issue
 - The attached Playwright MCP browser surface was also checked and is not usable here: it is configured for system Chrome at `/opt/google/chrome/chrome`, that binary is missing, and an unattended `npx playwright install chrome` attempt fails because it requires `sudo`.
 - The profiling wrapper has since been hardened to accept `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH`, so the eventual RTX run can point directly at a Chrome-for-Testing or locally installed Chrome binary without depending on Playwright channel discovery.
 - MCP discovery returned zero configured resources and zero resource templates, so there is no off-host browser or GPU execution surface hidden behind the current environment.
 - GitHub Actions also does not provide a hidden fallback execution lane here: the repo currently has zero registered self-hosted runners, and `.github/workflows/ci.yml` runs PR validation only on `ubuntu-latest`.
-- That makes the ticket's requested execution surface unavailable on this machine before any profiler trace can be captured.
+- That leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 
 ### Code-backed startup suspects to profile on the next pass

@@ -71,12 +71,19 @@ Expected post-cleanup result:
 ## HEL-142 hardware contract
 
 - Ticket scope: profile WebGPU startup frame spikes on desktop Chrome with RTX-class hardware.
-- Current host limitation: the active Symphony host is WSL2 with no `google-chrome`/`chromium`, no `nvidia-smi`, and no WebGPU-capable Chrome runtime.
+- Current host limitation: the active Symphony workspace is WSL2, but the underlying Windows host now proves only a partial browser/GPU surface rather than the required RTX execution surface.
 - Browser probe update on this host:
   - repo-local Chrome-for-Testing can be downloaded and launched from the workspace
   - default headless launch reports `navigator.gpu === false`
   - headed launch under `xvfb-run` with `--enable-unsafe-webgpu --ignore-gpu-blocklist --enable-features=Vulkan,UseSkiaRenderer` still reports `navigator.gpu === false`
   - the same headed probe reports `WEBGL_debug_renderer_info` as `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, so this host is still software-rendered rather than RTX-backed
+- Windows host probe update from WSL:
+  - a real Chrome binary exists at `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`
+  - Windows `nvidia-smi.exe` exists at `/mnt/c/Windows/System32/nvidia-smi.exe`
+  - `nvidia-smi.exe` reports `NVIDIA GeForce GTX 965M` on driver `582.28`, so the visible adapter is desktop-class NVIDIA hardware but still not RTX-class
+  - the committed Playwright wrapper cannot launch that Windows Chrome binary directly from WSL because Chrome exits on `--remote-debugging-pipe` with `Remote debugging pipe file descriptors are not open`
+  - manually launching Windows Chrome with `--remote-debugging-port=9222` leaves the browser listening on the Windows side, but this WSL session cannot reach that listener over either `127.0.0.1` or the Windows host IP from `/etc/resolv.conf`
+  - the Windows host also lacks `node` and `npm`, so the profiling wrapper cannot simply be re-run entirely on the Windows side against the same workspace
 - Remote surface limitation: no MCP-provided browser/GPU execution surface is attached in this environment.
 - GitHub runner limitation: the repository currently has zero registered self-hosted Actions runners, and the only CI workflow for PR branches runs on `ubuntu-latest`, so there is no repo-managed remote GPU execution path available from GitHub either.
 - Attached browser-tool limitation: the available Playwright MCP browser wrapper is configured for system Chrome at `/opt/google/chrome/chrome`; that binary is missing on this host, and `npx playwright install chrome` cannot complete unattended because it requires `sudo`.
@@ -88,6 +95,7 @@ Required execution surface for the remaining proof:
 - desktop machine with RTX-class NVIDIA GPU and working driver visibility
 - desktop Chrome with WebGPU enabled and hardware acceleration working
 - local checkout of branch `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`
+- browser automation running on the same OS/network surface as that Chrome instance, or a reachable remote debugging endpoint
 - ability to run:
 
 ```bash

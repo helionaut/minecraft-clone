@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, stat, writeFile } from 'node:fs/promises';
 import process from 'node:process';
 
 /**
@@ -171,6 +171,59 @@ export async function findLatestArtifactOutputDir(resultsDir) {
   return directories[0]?.path ?? null;
 }
 
+export function buildStartupProfileUploadManifest(artifactOutputDir) {
+  const files = [
+    'runtime-status.json',
+    'console-messages.json',
+    'chrome-performance-trace.json',
+    'startup-profile.json',
+    'startup-profile-summary.json',
+    'startup-profile-report.json',
+    'startup-profile-report.md',
+    'startup-profile-comparison.json',
+    'startup-profile-comparison.md',
+  ];
+
+  return {
+    json: {
+      generatedAt: new Date().toISOString(),
+      artifactDir: artifactOutputDir,
+      files,
+      uploadInstruction: 'Upload this artifact directory back to PR #52 / HEL-142 after the RTX run completes.',
+    },
+    markdown: [
+      '# WebGPU Startup Profile Upload Bundle',
+      '',
+      `Artifact directory: ${artifactOutputDir}`,
+      '',
+      'Upload the whole directory or at minimum these files:',
+      ...files.map((file) => `- ${file}`),
+      '',
+      'Use this bundle for PR #52 / HEL-142 so the trace, console export, runtime status, report, and comparison stay together.',
+      '',
+    ].join('\n'),
+  };
+}
+
+async function writeStartupProfileUploadManifest(artifactOutputDir) {
+  const manifest = buildStartupProfileUploadManifest(artifactOutputDir);
+
+  await Promise.all([
+    writeFile(
+      `${artifactOutputDir}/startup-profile-upload-manifest.json`,
+      `${JSON.stringify(manifest.json, null, 2)}\n`,
+      'utf8',
+    ),
+    writeFile(
+      `${artifactOutputDir}/startup-profile-upload-manifest.md`,
+      manifest.markdown,
+      'utf8',
+    ),
+  ]);
+
+  console.info(`[webgpu-startup-profile] upload manifest: ${artifactOutputDir}/startup-profile-upload-manifest.json`);
+}
+
 async function runPostCaptureReport(plan) {
   const artifactOutputDir = await findLatestArtifactOutputDir(plan.artifactResultsDir);
 
@@ -253,6 +306,7 @@ async function main() {
   console.info(`[webgpu-startup-profile] artifacts: ${plan.artifactDir}`);
   console.info(`[webgpu-startup-profile] report command: ${plan.reportCommand} ${plan.reportArgs.join(' ')}`);
   console.info('[webgpu-startup-profile] comparison is auto-generated after a successful capture');
+  console.info('[webgpu-startup-profile] upload manifest is auto-generated after a successful capture');
 
   if (plan.dryRun) {
     console.info(`[webgpu-startup-profile] dry run command: ${plan.command} ${plan.args.join(' ')}`);
@@ -291,6 +345,7 @@ async function main() {
     const artifactOutputDir = await runPostCaptureReport(plan);
     if (artifactOutputDir) {
       await runPostCaptureComparison(plan, artifactOutputDir);
+      await writeStartupProfileUploadManifest(artifactOutputDir);
     }
   } catch (error) {
     console.error(`[webgpu-startup-profile] ${error instanceof Error ? error.message : String(error)}`);

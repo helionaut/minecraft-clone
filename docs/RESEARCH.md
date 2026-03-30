@@ -115,7 +115,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    npm run profile:webgpu-startup
    ```
 
-   On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` and `npm run profile:webgpu-startup:compare` against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json`, `startup-profile-report.md`, `startup-profile-comparison.json`, and `startup-profile-comparison.md`.
+   On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` and `npm run profile:webgpu-startup:compare`, then writes an upload manifest against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json`, `startup-profile-report.md`, `startup-profile-comparison.json`, `startup-profile-comparison.md`, `startup-profile-upload-manifest.json`, and `startup-profile-upload-manifest.md`.
 
    For the lowest-ceremony path on the RTX machine, the repo also now exposes a one-command local-preview flow:
 

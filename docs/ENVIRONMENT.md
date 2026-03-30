@@ -123,3 +123,5 @@ Expected artifacts from that machine:
 - `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-report.md`
 - `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-comparison.json`
 - `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-comparison.md`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-upload-manifest.json`
+- `reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-upload-manifest.md`

@@ -26,6 +26,7 @@ describe('runWebGpuStartupProfileLocalPreview', () => {
     expect(output).toContain('preview command: npm run preview -- --host 127.0.0.1 --port 4173');
     expect(output).toContain('capture command: npm run profile:webgpu-startup');
     expect(output).toContain('comparison is auto-generated after a successful capture');
+    expect(output).toContain('upload manifest is auto-generated after a successful capture');
   });
 
   it('builds the expected default local preview plan', () => {

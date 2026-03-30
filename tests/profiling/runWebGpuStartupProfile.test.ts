@@ -2,12 +2,14 @@ import { execFileSync } from 'node:child_process';
 
 import { describe, expect, it } from 'vitest';
 
-import {
+import * as startupProfileScript from '../../scripts/runWebGpuStartupProfile.mjs';
+
+const {
   buildWebGpuStartupProfileRun,
   findLatestArtifactOutputDir,
   validateBrowserChannel,
   validateBrowserExecutablePath,
-} from '../../scripts/runWebGpuStartupProfile.mjs';
+} = startupProfileScript;
 
 const scriptPath = 'scripts/runWebGpuStartupProfile.mjs';
 
@@ -119,5 +121,27 @@ describe('runWebGpuStartupProfile', () => {
       null,
       'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path',
     ]).toContain(newestDir);
+  });
+
+  it('builds an upload manifest for the generated artifact bundle', () => {
+    const manifestBuilder = startupProfileScript as typeof startupProfileScript & {
+      buildStartupProfileUploadManifest: (artifactOutputDir: string) => {
+        json: {
+          artifactDir: string;
+          files: string[];
+        };
+        markdown: string;
+      };
+    };
+    const manifest = manifestBuilder.buildStartupProfileUploadManifest(
+      'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path',
+    );
+
+    expect(manifest.json.artifactDir).toContain('webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path');
+    expect(manifest.json.files).toContain('chrome-performance-trace.json');
+    expect(manifest.json.files).toContain('startup-profile-report.json');
+    expect(manifest.json.files).toContain('startup-profile-comparison.json');
+    expect(manifest.markdown).toContain('startup-profile-report.json');
+    expect(manifest.markdown).toContain('startup-profile-comparison.json');
   });
 });

@@ -619,6 +619,9 @@ export function createAppShell(root: HTMLDivElement): void {
   const mobileStatus = root.querySelector<HTMLElement>('[data-mobile-status]');
   const mobileCoords = root.querySelector<HTMLElement>('[data-mobile-coords]');
   const touchUi = root.querySelector<HTMLElement>('[data-touch-ui]');
+  const hotbarShell = root.querySelector<HTMLElement>('.hotbar-shell');
+  const touchMoveCluster = root.querySelector<HTMLElement>('.touch-move');
+  const touchActionsPanel = root.querySelector<HTMLElement>('.touch-actions-panel');
   const lookSurface = root.querySelector<HTMLElement>('[data-look-surface]');
   const moveStick = root.querySelector<HTMLElement>('[data-move-stick]');
   const moveThumb = root.querySelector<HTMLElement>('[data-move-thumb]');
@@ -652,6 +655,9 @@ export function createAppShell(root: HTMLDivElement): void {
     !mobileStatus ||
     !mobileCoords ||
     !touchUi ||
+    !hotbarShell ||
+    !touchMoveCluster ||
+    !touchActionsPanel ||
     !lookSurface ||
     !moveStick ||
     !moveThumb ||
@@ -686,6 +692,9 @@ export function createAppShell(root: HTMLDivElement): void {
   const safeMobileStatus = mobileStatus;
   const safeMobileCoords = mobileCoords;
   const safeTouchUi = touchUi;
+  const safeHotbarShell = hotbarShell;
+  const safeTouchMoveCluster = touchMoveCluster;
+  const safeTouchActionsPanel = touchActionsPanel;
   const safeLookSurface = lookSurface;
   const safeOpenHelpButton = openHelpButton;
   const safeDismissHelpButton = dismissHelpButton;
@@ -732,6 +741,37 @@ export function createAppShell(root: HTMLDivElement): void {
     safeHudStatus.hidden = !showHudStatus;
     safeOpenHelpButton.hidden = !touchDevice || touchHelpVisible;
     safeDismissHelpButton.hidden = !touchDevice || !touchHelpVisible;
+  };
+
+  const syncResponsiveHotbarOffset = () => {
+    if (!(lastStatus?.touchDevice)) {
+      root.style.removeProperty('--hotbar-raise-offset');
+      return;
+    }
+
+    const hotbarRect = safeHotbarShell.getBoundingClientRect();
+    const moveRect = safeTouchMoveCluster.getBoundingClientRect();
+    const actionsRect = safeTouchActionsPanel.getBoundingClientRect();
+
+    if (hotbarRect.width <= 0 || moveRect.width <= 0 || actionsRect.width <= 0) {
+      root.style.removeProperty('--hotbar-raise-offset');
+      return;
+    }
+
+    const centerGapWidth = Math.max(0, actionsRect.left - moveRect.right);
+
+    if (centerGapWidth >= hotbarRect.width) {
+      root.style.removeProperty('--hotbar-raise-offset');
+      return;
+    }
+
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+    const minimumLift = Math.max(0, viewportHeight * 0.1);
+    const controlTop = Math.min(moveRect.top, actionsRect.top);
+    const clearanceLift = Math.max(0, hotbarRect.bottom - (controlTop - 8));
+    const hotbarLift = Math.max(minimumLift, clearanceLift);
+
+    root.style.setProperty('--hotbar-raise-offset', `${Math.round(hotbarLift * 100) / 100}px`);
   };
 
   const scheduleTouchHelpAutoHide = () => {
@@ -1003,6 +1043,7 @@ export function createAppShell(root: HTMLDivElement): void {
     safeCrafting.innerHTML = renderRecipes(status.recipes, status.nearbyStations ?? []);
     bindHudHotbarInteractions();
     bindInventorySlotInteractions();
+    syncResponsiveHotbarOffset();
 
     for (const button of safeCrafting.querySelectorAll<HTMLButtonElement>('[data-recipe-id]')) {
       button.addEventListener('click', () => {
@@ -1090,4 +1131,7 @@ export function createAppShell(root: HTMLDivElement): void {
   safeResetButton.addEventListener('click', () => {
     sandbox.resetWorld();
   });
+
+  window.addEventListener('resize', syncResponsiveHotbarOffset);
+  window.addEventListener('orientationchange', syncResponsiveHotbarOffset);
 }

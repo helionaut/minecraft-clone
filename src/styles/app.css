@@ -288,7 +288,7 @@ button {
   position: absolute;
   left: calc(0.8rem + var(--viewport-safe-left));
   right: calc(0.8rem + var(--viewport-safe-right));
-  bottom: calc(1rem + var(--viewport-safe-bottom));
+  bottom: calc(1rem + var(--viewport-safe-bottom) + var(--hotbar-raise-offset, 0px));
   width: auto;
   max-width: 30rem;
   margin: 0 auto;
@@ -1007,7 +1007,7 @@ button {
   .hotbar-shell {
     left: calc(0.5rem + var(--viewport-safe-left));
     right: calc(0.5rem + var(--viewport-safe-right));
-    bottom: calc(0.55rem + var(--viewport-safe-bottom));
+    bottom: calc(0.55rem + var(--viewport-safe-bottom) + var(--hotbar-raise-offset, 0px));
     max-width: 23rem;
   }
 
@@ -1161,7 +1161,7 @@ button {
   .hotbar-shell {
     left: calc(0.4rem + var(--viewport-safe-left));
     right: calc(0.4rem + var(--viewport-safe-right));
-    bottom: calc(0.32rem + var(--viewport-safe-bottom));
+    bottom: calc(0.32rem + var(--viewport-safe-bottom) + var(--hotbar-raise-offset, 0px));
     max-width: 18rem;
   }
 

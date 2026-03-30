@@ -236,6 +236,160 @@ describe('createAppShell', () => {
     expect(hudHotbarSlot?.textContent).toContain('1');
   });
 
+  it('raises the hotbar on touch layouts when the center gap is too narrow for the controls and hotbar to share the bottom band', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: undefined,
+    });
+
+    createAppShell(root);
+
+    const hotbarShell = root.querySelector<HTMLElement>('.hotbar-shell');
+    const moveCluster = root.querySelector<HTMLElement>('.touch-move');
+    const actionsPanel = root.querySelector<HTMLElement>('.touch-actions-panel');
+
+    if (!statusListener || !hotbarShell || !moveCluster || !actionsPanel) {
+      throw new Error('Expected touch HUD layout nodes and scene status listener.');
+    }
+
+    vi.spyOn(hotbarShell, 'getBoundingClientRect').mockReturnValue({
+      x: 40,
+      y: 492,
+      width: 320,
+      height: 48,
+      top: 492,
+      right: 360,
+      bottom: 540,
+      left: 40,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(moveCluster, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 500,
+      width: 120,
+      height: 120,
+      top: 500,
+      right: 120,
+      bottom: 620,
+      left: 0,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(actionsPanel, 'getBoundingClientRect').mockReturnValue({
+      x: 250,
+      y: 500,
+      width: 120,
+      height: 120,
+      top: 500,
+      right: 370,
+      bottom: 620,
+      left: 250,
+      toJSON: () => ({}),
+    });
+
+    statusListener({
+      locked: false,
+      activeItem: 'grass',
+      selectedBlock: 'grass',
+      coords: 'X 4.0 Y 10.0 Z -2.0',
+      target: 'Aim at terrain',
+      prompt: 'Use touch controls.',
+      touchDevice: true,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      nearbyStations: [],
+      renderer: 'WebGL 2 | software fallback | SwiftShader',
+      inventory: [{ type: 'oak-log', count: 3 }, { type: 'cobblestone', count: 8 }],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    expect(root.style.getPropertyValue('--hotbar-raise-offset')).toBe('64px');
+  });
+
+  it('keeps the hotbar at its baseline position when touch controls leave enough center gap', () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: undefined,
+    });
+
+    createAppShell(root);
+
+    const hotbarShell = root.querySelector<HTMLElement>('.hotbar-shell');
+    const moveCluster = root.querySelector<HTMLElement>('.touch-move');
+    const actionsPanel = root.querySelector<HTMLElement>('.touch-actions-panel');
+
+    if (!statusListener || !hotbarShell || !moveCluster || !actionsPanel) {
+      throw new Error('Expected touch HUD layout nodes and scene status listener.');
+    }
+
+    vi.spyOn(hotbarShell, 'getBoundingClientRect').mockReturnValue({
+      x: 100,
+      y: 492,
+      width: 160,
+      height: 48,
+      top: 492,
+      right: 260,
+      bottom: 540,
+      left: 100,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(moveCluster, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 500,
+      width: 120,
+      height: 120,
+      top: 500,
+      right: 120,
+      bottom: 620,
+      left: 0,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(actionsPanel, 'getBoundingClientRect').mockReturnValue({
+      x: 300,
+      y: 500,
+      width: 120,
+      height: 120,
+      top: 500,
+      right: 420,
+      bottom: 620,
+      left: 300,
+      toJSON: () => ({}),
+    });
+
+    statusListener({
+      locked: false,
+      activeItem: 'grass',
+      selectedBlock: 'grass',
+      coords: 'X 4.0 Y 10.0 Z -2.0',
+      target: 'Aim at terrain',
+      prompt: 'Use touch controls.',
+      touchDevice: true,
+      selectedTool: 'hand',
+      stations: 'none nearby',
+      nearbyStations: [],
+      renderer: 'WebGL 2 | software fallback | SwiftShader',
+      inventory: [{ type: 'oak-log', count: 3 }, { type: 'cobblestone', count: 8 }],
+      recipes: [],
+      placeableCounts: { grass: 0, dirt: 0, stone: 0, cobblestone: 8, sand: 0, 'oak-log': 3, 'oak-planks': 0, 'crafting-table': 0, furnace: 0 },
+    });
+
+    expect(root.style.getPropertyValue('--hotbar-raise-offset')).toBe('');
+  });
+
   it('supports selecting and moving inventory items between storage and hotbar slots', () => {
     const root = document.querySelector<HTMLDivElement>('#app');
 

@@ -88,10 +88,11 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `972aa47` instead of the `main` GitHub Pages site:
+1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from the latest published PR #52 head instead of the `main` GitHub Pages site:
 
    ```bash
    git checkout eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene
+   git pull --ff-only
    npm ci
    npm run build
    npm run preview -- --host 127.0.0.1 --port 4173
@@ -125,7 +126,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
    That command runs `npm run build`, starts `vite preview` on `127.0.0.1:4173`, waits for `http://127.0.0.1:4173/minecraft-clone/`, runs the existing Playwright capture wrapper, then stops the preview server.
 
-3. If a hosted preview is preferred instead of a local preview, first loosen the `github-pages` environment branch policy or merge the profiling branch to `main`; the current Pages site at `https://helionaut.github.io/minecraft-clone/` serves `main`, not PR #52.
+3. If a hosted preview is preferred instead of a local preview, first loosen the `github-pages` environment branch policy or merge the profiling branch to `main`; the current Pages site at `https://helionaut.github.io/minecraft-clone/` serves `main`, not the latest PR #52 head.
 
 4. The profiling run will open `?renderer=webgpu&qaHarness=1&startupProfile=1` and write artifacts into the newest Playwright output directory under `reports/startup-profiling/test-results/<playwright-output-dir>/`, including:
    - `chrome-performance-trace.json`

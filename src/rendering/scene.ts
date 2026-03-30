@@ -403,6 +403,12 @@ export async function createPlayableScene(
     clearWebGpuSafeMode(window.localStorage);
   }
 
+  const stableGraphicsModeReason = rendererSelection.fallbackReason === 'webgpu-device-lost'
+    ? 'safe mode after previous WebGPU device loss'
+    : rendererSelection.fallbackReason === 'webgpu-stability-gated'
+      ? 'stable WebGL gate while desktop WebGPU is being validated'
+      : null;
+
   renderer = rendererSelection.renderer;
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = ACESFilmicToneMapping;
@@ -414,9 +420,7 @@ export async function createPlayableScene(
   const rendererSummary = [
     rendererSelection.backend === 'webgpu' ? 'WebGPU' : 'WebGL 2',
     rendererDeviceSummary || rendererDiagnostics.summary,
-    rendererSelection.fallbackReason === 'webgpu-device-lost'
-      ? 'safe mode after previous WebGPU device loss'
-      : null,
+    stableGraphicsModeReason,
     volumetricLighting.enabled
       ? 'volumetric lighting enabled'
       : `volumetric lighting disabled (${volumetricLighting.reason ?? 'unknown'})`,
@@ -695,12 +699,17 @@ export async function createPlayableScene(
       Math.floor(player.position.y),
       Math.floor(player.position.z),
     );
+    const stableGraphicsModePrompt = rendererSelection.fallbackReason === 'webgpu-device-lost'
+      ? 'stable graphics mode enabled after a previous WebGPU reset on this device'
+      : rendererSelection.fallbackReason === 'webgpu-stability-gated'
+        ? 'stable graphics mode enabled while desktop WebGPU recovery is still under validation'
+        : null;
     const prompt = locked
-      ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch items, craft from the inventory panel${rendererSelection.fallbackReason === 'webgpu-device-lost' ? ', stable graphics mode enabled after a previous WebGPU reset on this device' : ''}`
+      ? `WASD move, Space jump, click to mine/build, wheel or 1-${PLACEABLE_BLOCK_ORDER.length} switch items, craft from the inventory panel${stableGraphicsModePrompt ? `, ${stableGraphicsModePrompt}` : ''}`
       : touchDevice
         ? 'Use the left thumbstick to move, drag anywhere to aim, mine blocks for drops, and craft tools or stations from the drawer.'
-        : rendererSelection.fallbackReason === 'webgpu-device-lost'
-          ? 'Running in stable graphics mode after a previous WebGPU reset on this device. Click the viewport to capture the mouse and enter the world.'
+        : stableGraphicsModePrompt
+          ? `Running in ${stableGraphicsModePrompt}. Click the viewport to capture the mouse and enter the world.`
           : 'Click the viewport to capture the mouse and enter the world.';
     const target = currentTarget
       ? `Target ${currentTarget.type} @ ${currentTarget.x}, ${currentTarget.y}, ${currentTarget.z}${

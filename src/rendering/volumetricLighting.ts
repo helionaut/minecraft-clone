@@ -4,6 +4,7 @@ export type VolumetricLightingDisableReason =
   | 'mobile'
   | 'software-renderer'
   | 'webgpu-unavailable'
+  | 'webgpu-stability-gated'
   | 'webgpu-device-lost'
   | 'webgpu-fallback-adapter'
   | 'webgpu-init-failed'

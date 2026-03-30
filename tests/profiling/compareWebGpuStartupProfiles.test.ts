@@ -46,7 +46,7 @@ describe('compareWebGpuStartupProfiles', () => {
     expect(comparison.json.deltas.startupTotalDurationMs).toBeCloseTo(-1436);
     expect(comparison.json.deltas.longFrameCount).toBe(-36);
     expect(comparison.json.phaseComparisons[0]?.name).toBe('initial-rebuild-world');
-    expect(comparison.json.highlights.map((highlight) => highlight.finding)).toContain('renderer-change');
+    expect(comparison.json.highlights.map((highlight: { finding: string }) => highlight.finding)).toContain('renderer-change');
     expect(comparison.markdown).toContain('Baseline: swiftshader-control');
     expect(comparison.markdown).toContain('Candidate: rtx-candidate');
     expect(comparison.markdown).toContain('initial-rebuild-world: baseline=2420.8ms candidate=640.0ms delta=-1780.8ms');

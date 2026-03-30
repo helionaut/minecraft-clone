@@ -51,20 +51,21 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Control experiment on the invalid local browser surface
 
-- The published profiling lane was run end-to-end against a local preview on this host using bundled Chromium with `PLAYWRIGHT_PROFILE_BROWSER_CHANNEL=''`.
+- The published profiling lane was run end-to-end against a local preview on this host using a portable Chrome for Testing binary via `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH`.
 - Result: the run failed at the new runtime guard, not at startup-profile collection. `runtime-status.json` reported:
   - `browserSupportsWebGpu: true`
   - renderer status string: `WebGL 2 | software fallback | ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver) | volumetric lighting disabled (software-renderer)`
   - WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`
-- The run still emitted control artifacts under `reports/startup-profiling/test-results/...`, including `chrome-performance-trace.json`, `console-messages.json`, `runtime-status.json`, `startup-shell.png`, and `trace.zip`.
+- The run still emitted control artifacts under `reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/`, including `chrome-performance-trace.json`, `console-messages.json`, `runtime-status.json`, `startup-shell.png`, and `trace.zip`.
 - Control-only startup profile summary on that invalid surface:
-  - `initial-rebuild-world`: about `2178.3ms`
-  - `create-scene-renderer`: about `29.5ms`
-  - `initial-sync-size`: about `18.1ms`
-  - `initial-status-publish`: about `16.2ms`
-  - `longFrameCount`: `30`
-  - `maxFrameDurationMs`: about `2566.4ms`
-- This does not prove the RTX behavior, but it does eliminate one weak hypothesis on the local control surface: browser/bootstrap overhead was not the dominant startup cost there; world rebuild work dominated instead.
+  - `initial-rebuild-world`: about `2420.8ms`
+  - `create-scene-renderer`: about `31.2ms`
+  - `initial-sync-size`: about `21.0ms`
+  - `initial-status-publish`: about `16.8ms`
+  - `longFrameCount`: `44`
+  - `maxFrameDurationMs`: about `3133.2ms`
+- The Chrome trace and console export from that same control run also showed repeated `GPU stall due to ReadPixels` warnings and multiple main-thread `RunTask` spans between roughly `544ms` and `2707ms`.
+- This does not prove the RTX behavior, but it does eliminate one weak hypothesis on the local control surface: browser/bootstrap overhead was not the dominant startup cost there; world rebuild work still dominated even after the harness could run against real desktop Chrome.
 
 ### Instrumentation prepared in this pass
 
@@ -82,7 +83,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `cc266c6` instead of the `main` GitHub Pages site:
+1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from branch head `d42c84d` instead of the `main` GitHub Pages site:
 
    ```bash
    git checkout eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene

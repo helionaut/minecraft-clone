@@ -21,6 +21,11 @@ describe('stageWindowsStartupProfileRuntime', () => {
     expect(plan.windowsNodeExe).toBe('C:\\Temp\\hel142-startup-runtime\\node.exe');
     expect(plan.windowsChromeExe).toBe('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe');
     expect(plan.baseURL).toBe('http://127.0.0.1:4173/minecraft-clone/');
+    expect(plan.captureScriptTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/captureWebGpuStartupProfileOverCdp.mjs');
+    expect(plan.sharedHelperTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/isExecutedDirectly.mjs');
+    expect(plan.reportScriptTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/summarizeWebGpuStartupProfile.mjs');
+    expect(plan.compareScriptTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/compareWebGpuStartupProfiles.mjs');
+    expect(plan.baselineReportTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/baselines/hel-142-windows-intel-control-startup-profile-report.json');
   });
 
   it('reports missing Windows toolchain paths clearly', () => {
@@ -52,6 +57,10 @@ describe('stageWindowsStartupProfileRuntime', () => {
 
     expect(command).toContain('set "PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"');
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\captureWebGpuStartupProfileOverCdp.mjs"');
+    expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\summarizeWebGpuStartupProfile.mjs"');
+    expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\compareWebGpuStartupProfiles.mjs"');
+    expect(command).toContain('set "STARTUP_PROFILE_BASELINE_REPORT=C:\\Temp\\hel142-startup-runtime\\baselines\\hel-142-windows-intel-control-startup-profile-report.json"');
+    expect(command).toContain('set "STARTUP_PROFILE_CANDIDATE_REPORT=C:\\Temp\\hel142-startup-runtime\\artifacts\\startup-profile-report.json"');
     expect(command).toContain('set "STARTUP_PROFILE_ARTIFACT_DIR=C:\\Temp\\hel142-startup-runtime\\artifacts"');
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\node.exe"');
   });
@@ -65,6 +74,8 @@ describe('stageWindowsStartupProfileRuntime', () => {
     expect(readme).toContain('C:\\Temp\\hel142-startup-runtime\\artifacts\\');
     expect(readme).toContain('Bundled Windows Node: C:\\Temp\\hel142-startup-runtime\\node.exe');
     expect(readme).toContain('reports\\startup-profiling\\test-results\\windows-host-runtime-attempt\\');
+    expect(readme).toContain('startup-profile-report.json');
+    expect(readme).toContain('startup-profile-comparison.json');
   });
 
   it('prints the staging plan during dry run', () => {

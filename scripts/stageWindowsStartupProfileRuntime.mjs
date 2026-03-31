@@ -10,6 +10,7 @@ const DEFAULT_WINDOWS_RUNTIME_DIR = '/mnt/c/Temp/hel142-startup-runtime';
 const DEFAULT_WINDOWS_NODE_EXE = '/home/helionaut/srv/research-cache/minecraft-clone/toolchains/node-v22.22.1-win-x64/node-v22.22.1-win-x64/node.exe';
 const DEFAULT_WINDOWS_CHROME_EXE = '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:4173/minecraft-clone/';
+const DEFAULT_BASELINE_REPORT_PATH = `${REPO_ROOT_DIR}/artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json`;
 
 function normalizeWindowsDrivePath(path) {
   const match = /^\/mnt\/([a-zA-Z])\/(.*)$/.exec(path);
@@ -56,8 +57,17 @@ export function buildWindowsStartupRuntimePlan(env = process.env, pathExists = e
     playwrightCoreSource: `${REPO_ROOT_DIR}/node_modules/playwright-core`,
     runtimeScriptsDir: `${runtimeDir}/scripts`,
     runtimeNodeModulesDir: `${runtimeDir}/node_modules`,
+    runtimeBaselineDir: `${runtimeDir}/baselines`,
     stagedNodeExeTarget: `${runtimeDir}/node.exe`,
     captureScriptTarget: `${runtimeDir}/scripts/captureWebGpuStartupProfileOverCdp.mjs`,
+    sharedHelperSource: `${REPO_ROOT_DIR}/scripts/isExecutedDirectly.mjs`,
+    sharedHelperTarget: `${runtimeDir}/scripts/isExecutedDirectly.mjs`,
+    reportScriptSource: `${REPO_ROOT_DIR}/scripts/summarizeWebGpuStartupProfile.mjs`,
+    reportScriptTarget: `${runtimeDir}/scripts/summarizeWebGpuStartupProfile.mjs`,
+    compareScriptSource: `${REPO_ROOT_DIR}/scripts/compareWebGpuStartupProfiles.mjs`,
+    compareScriptTarget: `${runtimeDir}/scripts/compareWebGpuStartupProfiles.mjs`,
+    baselineReportSource: DEFAULT_BASELINE_REPORT_PATH,
+    baselineReportTarget: `${runtimeDir}/baselines/hel-142-windows-intel-control-startup-profile-report.json`,
     playwrightCoreTarget: `${runtimeDir}/node_modules/playwright-core`,
     runCmdPath: `${runtimeDir}/run-startup-profile.cmd`,
     readmePath: `${runtimeDir}/README.txt`,
@@ -86,6 +96,12 @@ export function buildWindowsRuntimeReadme(plan) {
     'The launcher writes artifacts under:',
     `  ${plan.windowsRuntimeDir}\\artifacts\\`,
     '',
+    'The launcher also generates these derived files inside that artifact directory:',
+    '  startup-profile-report.json',
+    '  startup-profile-report.md',
+    '  startup-profile-comparison.json',
+    '  startup-profile-comparison.md',
+    '',
     'Copy that artifact folder back into the repo workspace after the run, for example:',
     '  reports\\startup-profiling\\test-results\\windows-host-runtime-attempt\\',
     '',
@@ -101,6 +117,13 @@ export function buildWindowsRuntimeCommand(plan) {
     `set "PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=${plan.windowsChromeExe}"`,
     `set "STARTUP_PROFILE_ARTIFACT_DIR=${plan.windowsRuntimeDir}\\artifacts"`,
     `"${plan.windowsNodeExe}" "${plan.windowsRuntimeDir}\\scripts\\captureWebGpuStartupProfileOverCdp.mjs"`,
+    'if errorlevel 1 exit /b %errorlevel%',
+    `"${plan.windowsNodeExe}" "${plan.windowsRuntimeDir}\\scripts\\summarizeWebGpuStartupProfile.mjs"`,
+    'if errorlevel 1 exit /b %errorlevel%',
+    `set "STARTUP_PROFILE_BASELINE_REPORT=${plan.windowsRuntimeDir}\\baselines\\hel-142-windows-intel-control-startup-profile-report.json"`,
+    `set "STARTUP_PROFILE_CANDIDATE_REPORT=${plan.windowsRuntimeDir}\\artifacts\\startup-profile-report.json"`,
+    `"${plan.windowsNodeExe}" "${plan.windowsRuntimeDir}\\scripts\\compareWebGpuStartupProfiles.mjs"`,
+    'if errorlevel 1 exit /b %errorlevel%',
     'endlocal',
     '',
   ].join('\r\n');
@@ -127,15 +150,24 @@ async function main() {
 
   await mkdir(plan.runtimeScriptsDir, { recursive: true });
   await mkdir(plan.runtimeNodeModulesDir, { recursive: true });
+  await mkdir(plan.runtimeBaselineDir, { recursive: true });
   await mkdir(`${plan.runtimeDir}/artifacts`, { recursive: true });
 
   await cp(plan.nodeExe, plan.stagedNodeExeTarget);
   await cp(plan.captureScriptSource, plan.captureScriptTarget);
+  await cp(plan.sharedHelperSource, plan.sharedHelperTarget);
+  await cp(plan.reportScriptSource, plan.reportScriptTarget);
+  await cp(plan.compareScriptSource, plan.compareScriptTarget);
   await cp(plan.playwrightCoreSource, plan.playwrightCoreTarget, { recursive: true });
+  await cp(plan.baselineReportSource, plan.baselineReportTarget);
   await writeFile(plan.runCmdPath, buildWindowsRuntimeCommand(plan), 'utf8');
   await writeFile(plan.readmePath, buildWindowsRuntimeReadme(plan), 'utf8');
 
   console.info(`[webgpu-startup-profile:windows-runtime] staged capture script: ${plan.captureScriptTarget}`);
+  console.info(`[webgpu-startup-profile:windows-runtime] staged shared helper: ${plan.sharedHelperTarget}`);
+  console.info(`[webgpu-startup-profile:windows-runtime] staged report script: ${plan.reportScriptTarget}`);
+  console.info(`[webgpu-startup-profile:windows-runtime] staged compare script: ${plan.compareScriptTarget}`);
+  console.info(`[webgpu-startup-profile:windows-runtime] staged baseline report: ${plan.baselineReportTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] staged playwright-core: ${plan.playwrightCoreTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] windows launcher: ${plan.runCmdPath}`);
   console.info(`[webgpu-startup-profile:windows-runtime] instructions: ${plan.readmePath}`);

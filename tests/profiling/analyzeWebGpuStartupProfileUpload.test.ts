@@ -10,6 +10,7 @@ import {
   buildRemoteUploadRequestOptions,
   defaultImportedUploadDir,
   findStartupProfileArtifactDir,
+  normalizeRemoteUploadSource,
   resolveStartupProfileUploadSource,
 } from '../helpers/analyzeWebGpuStartupProfileUpload';
 
@@ -134,6 +135,30 @@ describe('analyzeWebGpuStartupProfileUpload', () => {
   it('adds GitHub auth headers for private GitHub artifact API URLs when a token is available', async () => {
     const options = await buildRemoteUploadRequestOptions(
       'https://api.github.com/repos/helionaut/minecraft-clone/actions/artifacts/123456789/zip',
+      {},
+      async () => 'test-token',
+    );
+
+    expect(options).toEqual({
+      headers: {
+        Authorization: 'Bearer test-token',
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+  });
+
+  it('normalizes GitHub web artifact URLs into GitHub artifact API zip URLs', () => {
+    expect(
+      normalizeRemoteUploadSource(
+        'https://github.com/helionaut/minecraft-clone/actions/runs/23780241098/artifacts/6186064743',
+      ),
+    ).toBe('https://api.github.com/repos/helionaut/minecraft-clone/actions/artifacts/6186064743/zip');
+  });
+
+  it('adds GitHub auth headers for normalized GitHub web artifact URLs when a token is available', async () => {
+    const options = await buildRemoteUploadRequestOptions(
+      'https://github.com/helionaut/minecraft-clone/actions/runs/23780241098/artifacts/6186064743',
       {},
       async () => 'test-token',
     );

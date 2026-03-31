@@ -65,8 +65,28 @@ export function resolveUploadSourceName(sourcePath) {
   }
 }
 
+export function normalizeRemoteUploadSource(sourceUrl) {
+  try {
+    const parsedUrl = new URL(sourceUrl);
+    const webArtifactMatch = parsedUrl.href.match(
+      /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/actions\/runs\/\d+\/artifacts\/(\d+)(?:\/.*)?$/i,
+    );
+
+    if (webArtifactMatch) {
+      const [, owner, repo, artifactId] = webArtifactMatch;
+      return `https://api.github.com/repos/${owner}/${repo}/actions/artifacts/${artifactId}/zip`;
+    }
+
+    return sourceUrl;
+  } catch {
+    return sourceUrl;
+  }
+}
+
 export function isGitHubArtifactApiUrl(sourceUrl) {
-  return /^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/actions\/artifacts\/\d+\/zip(?:\?.*)?$/i.test(sourceUrl);
+  return /^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/actions\/artifacts\/\d+\/zip(?:\?.*)?$/i.test(
+    normalizeRemoteUploadSource(sourceUrl),
+  );
 }
 
 export async function resolveGitHubAuthToken(
@@ -95,7 +115,9 @@ export async function buildRemoteUploadRequestOptions(
   env = process.env,
   resolveAuthTokenFn = resolveGitHubAuthToken,
 ) {
-  if (!isGitHubArtifactApiUrl(sourceUrl)) {
+  const normalizedSourceUrl = normalizeRemoteUploadSource(sourceUrl);
+
+  if (!isGitHubArtifactApiUrl(normalizedSourceUrl)) {
     return {};
   }
 
@@ -180,10 +202,11 @@ export async function downloadStartupProfileUploadSource(
 
   const downloadName = resolveUploadSourceName(sourceUrl) || 'startup-profile-upload-bundle.zip';
   const downloadPath = `${outputDir}/${downloadName}`;
-  const response = await fetch(sourceUrl, await buildRequestOptions(sourceUrl));
+  const normalizedSourceUrl = normalizeRemoteUploadSource(sourceUrl);
+  const response = await fetch(normalizedSourceUrl, await buildRequestOptions(normalizedSourceUrl));
 
   if (!response.ok) {
-    throw new Error(`Could not download upload source ${sourceUrl}: HTTP ${response.status}.`);
+    throw new Error(`Could not download upload source ${normalizedSourceUrl}: HTTP ${response.status}.`);
   }
 
   const arrayBuffer = await response.arrayBuffer();

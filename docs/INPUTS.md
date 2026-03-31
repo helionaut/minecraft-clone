@@ -106,6 +106,8 @@ Accepted returned forms:
 - an HTTP(S) URL that points at `startup-profile-upload-bundle.zip`
 - a private GitHub Actions artifact API URL such as
   `https://api.github.com/repos/<owner>/<repo>/actions/artifacts/<id>/zip`
+- a GitHub web artifact page URL such as
+  `https://github.com/<owner>/<repo>/actions/runs/<run-id>/artifacts/<id>`
 - an unpacked artifact directory containing at least:
   - `runtime-status.json`
   - `startup-profile.json`
@@ -122,10 +124,12 @@ How the returned input is consumed in this workspace:
 - `STARTUP_PROFILE_UPLOAD_SOURCE=/absolute/path/to/<bundle-or-dir> npm run profile:webgpu-startup:analyze-upload`
 - `STARTUP_PROFILE_UPLOAD_SOURCE=https://.../startup-profile-upload-bundle.zip npm run profile:webgpu-startup:analyze-upload`
 - `STARTUP_PROFILE_UPLOAD_SOURCE=https://api.github.com/repos/<owner>/<repo>/actions/artifacts/<id>/zip npm run profile:webgpu-startup:analyze-upload`
+- `STARTUP_PROFILE_UPLOAD_SOURCE=https://github.com/<owner>/<repo>/actions/runs/<run-id>/artifacts/<id> npm run profile:webgpu-startup:analyze-upload`
 
 For private GitHub artifact URLs, the analyzer will reuse `GITHUB_TOKEN`,
 `GH_TOKEN`, or the local `gh auth token` session from this machine when
-available.
+available, and GitHub web artifact URLs are normalized internally to the API
+download endpoint before fetching.
 
 Source-of-truth repo paths for this lane:
 - operator instructions: `docs/RESEARCH.md`

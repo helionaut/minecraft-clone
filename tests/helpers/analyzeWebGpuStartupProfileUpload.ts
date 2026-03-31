@@ -54,6 +54,11 @@ export const buildRemoteUploadRequestOptions =
     resolveAuthTokenFn?: (env?: Record<string, string | undefined>) => Promise<string | null>,
   ) => Promise<Record<string, unknown>>;
 
+export const normalizeRemoteUploadSource =
+  analyzeStartupProfileUploadScript.normalizeRemoteUploadSource as (
+    sourcePath: string,
+  ) => string;
+
 export const findStartupProfileArtifactDir =
   analyzeStartupProfileUploadScript.findStartupProfileArtifactDir as (
     rootDir: string,

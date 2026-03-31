@@ -79,6 +79,47 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - the previously prepared SwiftShader control comparison could not be regenerated automatically in this pass because the baseline `startup-profile-report.json` is no longer present in the current workspace; only a stale `trace.zip` remains under `webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/`
   - a follow-up WSL session on 2026-03-31 confirmed an additional transport limit: `/dev/dxg` and the Windows Chrome path are visible, but direct execution of `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`, `cmd.exe`, and `chrome.exe` failed with `Invalid argument`, so the previously working Windows-local runtime bundle cannot be relaunched from every runner
 
+### Current profiler-backed findings summary
+
+- Source artifact bundle: `reports/startup-profiling/test-results/windows-host-runtime-attempt/`
+- Surface classification: desktop Chrome with hardware acceleration and `navigator.gpu`, but the runtime still fell back to `WebGL 2 | hardware accelerated | ANGLE (Intel, Intel(R) HD Graphics 4600 ...) | volumetric lighting disabled (webgpu-fallback-adapter)`, so this is a control run rather than RTX proof
+- Dominant startup phase:
+  - `initial-rebuild-world`: about `2142.7ms` out of `2762.3ms` total startup
+- Dominant nested startup suspect:
+  - `initial-rebuild-world:compute-lighting`: about `1302.0ms`
+- Secondary startup suspects:
+  - `create-scene-renderer`: about `480.8ms`
+  - `initial-rebuild-world:rebuild-visible-meshes`: about `437.7ms`
+  - `initial-rebuild-world:sync-chunks`: about `402.5ms`
+- Post-startup behavior:
+  - `19` long frames after startup
+  - max frame duration about `2527.5ms`
+- Trace shape:
+  - dominant main-thread work remained long `RunTask` / microtask spans around the first scene startup window
+  - the largest GPU/compositor setup slice was only about `170ms` (`GpuChannelHost::CreateViewCommandBuffer` / `CommandBufferProxyImpl::Initialize`)
+
+### Prioritized remediation candidates from the current control run
+
+1. `initial-rebuild-world:compute-lighting`
+   - strongest measured nested suspect in the current desktop control run
+   - first RTX follow-up should split this further into `seed-sunlight-columns`, `seed-emissive-blocks`, and `propagate-light-queue`
+2. `initial-rebuild-world:rebuild-visible-meshes`
+   - second world-rebuild suspect after lighting
+   - compare `worldGroup.clear()` and per-block `new Mesh(...)` rebuild cost against the lighting pass
+3. `initial-rebuild-world`
+   - the broad parent phase still dominates startup overall, so chunk sync, voxel iteration, and scene rebuild work remain higher priority than renderer bootstrap
+4. `post-startup frame loop`
+   - `19` long frames after startup mean the follow-up RTX trace should still inspect the first interactive seconds, not only the initial load
+
+### Eliminated or narrowed suspects from the current control run
+
+- Pure renderer bootstrap is not the leading suspect on this hardware-accelerated desktop control surface:
+  - `create-scene-renderer` measured about `480.8ms`, well below `initial-rebuild-world` and `initial-rebuild-world:compute-lighting`
+- The startup problem is not explained only by software rendering:
+  - the successful Windows-host control run was hardware accelerated on Intel graphics, yet the same broad startup pattern still favored synchronous world rebuild work
+- The RTX-specific volumetric/material path remains unproven rather than confirmed:
+  - this control run never stayed on desktop WebGPU and disabled volumetric lighting through the fallback adapter path, so RTX-only conclusions still require the target machine
+
 ### Code-backed startup suspects to profile on the next pass
 
 1. WebGPU renderer initialization in `src/rendering/sceneRenderer.ts`

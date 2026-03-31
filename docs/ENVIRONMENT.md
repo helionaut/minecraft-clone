@@ -77,6 +77,7 @@ Expected post-cleanup result:
   - default headless launch reports `navigator.gpu === false`
   - headed launch under `xvfb-run` with `--enable-unsafe-webgpu --ignore-gpu-blocklist --enable-features=Vulkan,UseSkiaRenderer` still reports `navigator.gpu === false`
   - the same headed probe reports `WEBGL_debug_renderer_info` as `ANGLE (Mesa, llvmpipe (LLVM 20.1.2 256 bits), OpenGL 4.5)`, so this host is still software-rendered rather than RTX-backed
+  - a 2026-03-31 recheck from the published branch still reports `navigator.gpu === false` in Playwright Chromium, and `/dev/dri` is absent
 - Windows host probe update from WSL:
   - a real Chrome binary exists at `/mnt/c/Program Files/Google/Chrome/Application/chrome.exe`
   - Windows `nvidia-smi.exe` exists at `/mnt/c/Windows/System32/nvidia-smi.exe`
@@ -98,6 +99,7 @@ Expected post-cleanup result:
   - the resulting runtime is still not the requested target surface: Chrome reported `WebGL 2 | hardware accelerated` on `ANGLE (Intel, Intel(R) HD Graphics 4600...)` with `volumetric lighting disabled (webgpu-fallback-adapter)`
 - Remote surface limitation: no MCP-provided browser/GPU execution surface is attached in this environment.
 - GitHub runner limitation: the repository currently has zero registered self-hosted Actions runners, and the only CI workflow for PR branches runs on `ubuntu-latest`, so there is no repo-managed remote GPU execution path available from GitHub either.
+- Current queued-run evidence: PR #52 still points at `3fa99de15ff8c5521b24d23a587ccb6fa18ffc83`, `CI / check` is green, and `Profile WebGPU Startup` run `23786573281` remains queued because `gh api repos/helionaut/minecraft-clone/actions/runners` still returns `total_count=0`.
 - Remote workflow readiness update: the repo now includes `.github/workflows/profile-webgpu-startup.yml`, a profiling lane that targets a future self-hosted Windows/GPU runner with labels `self-hosted`, `windows`, `x64`, and `gpu`. It keeps `workflow_dispatch` for the eventual post-merge/manual path, and it now also triggers on branch `push` plus profiling-related `pull_request` changes so a future runner can execute the issue branch before the workflow lands on `main`.
 - Dispatchability constraint update: GitHub still only exposes `workflow_dispatch` workflows from the default-branch workflow registry. A direct `gh api .../actions/workflows/profile-webgpu-startup.yml/dispatches` call against this repo currently returns `404` because the workflow file exists only on PR branch `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`, not on `main` yet.
 - CLI confirmation: `gh workflow run profile-webgpu-startup.yml --ref eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene` also fails with `HTTP 404: workflow profile-webgpu-startup.yml not found on the default branch`, so manual dispatch still is not available until the workflow lands on `main`.

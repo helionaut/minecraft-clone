@@ -67,6 +67,8 @@ describe('stageWindowsStartupProfileRuntime', () => {
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\summarizeWebGpuStartupProfile.mjs"');
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\compareWebGpuStartupProfiles.mjs"');
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\writeWebGpuStartupProfileUploadManifest.mjs"');
+    expect(command).toContain('Compress-Archive');
+    expect(command).toContain('startup-profile-upload-bundle.zip');
     expect(command).toContain('set "STARTUP_PROFILE_BASELINE_REPORT=C:\\Temp\\hel142-startup-runtime\\baselines\\hel-142-windows-intel-control-startup-profile-report.json"');
     expect(command).toContain('set "STARTUP_PROFILE_CANDIDATE_REPORT=C:\\Temp\\hel142-startup-runtime\\artifacts\\startup-profile-report.json"');
     expect(command).toContain('set "STARTUP_PROFILE_ARTIFACT_DIR=C:\\Temp\\hel142-startup-runtime\\artifacts"');
@@ -85,6 +87,7 @@ describe('stageWindowsStartupProfileRuntime', () => {
     expect(readme).toContain('startup-profile-report.json');
     expect(readme).toContain('startup-profile-comparison.json');
     expect(readme).toContain('startup-profile-upload-manifest.json');
+    expect(readme).toContain('startup-profile-upload-bundle.zip');
   });
 
   it('prints the staging plan during dry run', () => {

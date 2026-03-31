@@ -1,0 +1,91 @@
+{
+  "status": "blocked",
+  "current_step": "Wait for a true RTX desktop Chrome machine to run PR #52 head e7c060d and upload a new reports/startup-profiling artifact bundle.",
+  "issue": "HEL-142",
+  "branch": "eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene",
+  "branch_head": "e7c060d1b41d13cedc6d2dc911dcfbd78741f3be",
+  "pr_url": "https://github.com/helionaut/minecraft-clone/pull/52",
+  "linear_state": "Rework",
+  "completed": 4,
+  "total": 4,
+  "unit": "continuation-checks",
+  "progress_percent": 100,
+  "rate": null,
+  "eta_seconds": null,
+  "changed_variable": "made the Windows runtime staging path emit startup-profile-upload-manifest.* so the external RTX handoff bundle is self-describing on both capture paths",
+  "artifact_expected": "hardware-backed RTX Chrome startup profiling artifacts under reports/startup-profiling/*",
+  "blocked_by": [
+    "desktop-rtx-hardware-unavailable",
+    "github-pages-branch-policy-blocks-pr-preview",
+    "linux-chrome-distribution-missing",
+    "local-visible-gpu-is-gtx-965m-not-rtx",
+    "no-local-chrome-webgpu-surface",
+    "no-remote-browser-or-gpu-mcp-resource",
+    "no-github-self-hosted-gpu-runner",
+    "wsl-windows-interop-invalid-argument"
+  ],
+  "local_host": {
+    "browser": "windows-chrome-visible-but-unlaunchable-from-wsl",
+    "nvidia_stack": "windows-nvidia-stack-visible-gtx-965m",
+    "mcp_browser_surface": "missing",
+    "playwright_mcp_browser": "failed-missing-/opt/google/chrome/chrome",
+    "windows_mount_execution": "blocked-invalid-argument",
+    "dxg_device": "present",
+    "windows_mounts_visible": true
+  },
+  "remote_validation": {
+    "pr_head": "e7c060d1b41d13cedc6d2dc911dcfbd78741f3be",
+    "checks": [
+      {
+        "name": "check",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/helionaut/minecraft-clone/actions/runs/23776563370/job/69279661510"
+      },
+      {
+        "name": "check",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/helionaut/minecraft-clone/actions/runs/23776564394/job/69279664771"
+      }
+    ]
+  },
+  "target_run": {
+    "base_url": "http://127.0.0.1:4173/minecraft-clone/",
+    "commands": [
+      "npm ci",
+      "npm run build",
+      "npm run preview -- --host 127.0.0.1 --port 4173",
+      "PLAYWRIGHT_BASE_URL=http://127.0.0.1:4173/minecraft-clone/ npm run profile:webgpu-startup"
+    ]
+  },
+  "metrics": {
+    "local_head": "e7c060d1b41d13cedc6d2dc911dcfbd78741f3be",
+    "remote_head": "e7c060d1b41d13cedc6d2dc911dcfbd78741f3be",
+    "pr_number": 52,
+    "pr_checks": "passing",
+    "issue_state": "Rework",
+    "playwright_browser_probe": "failed: chrome distribution missing at /opt/google/chrome/chrome",
+    "fallback_hotspot_phase": "initial-rebuild-world",
+    "fallback_hotspot_duration_ms": 2142.7,
+    "fallback_hotspot_subphase": "initial-rebuild-world:compute-lighting",
+    "fallback_hotspot_subphase_duration_ms": 1302.0,
+    "fallback_renderer_status": "WebGL 2 | hardware accelerated | ANGLE (Intel, Intel(R) HD Graphics 4600...) | volumetric lighting disabled (webgpu-fallback-adapter)",
+    "known_local_artifact_count": 12,
+    "latest_published_head": "e7c060d1b41d13cedc6d2dc911dcfbd78741f3be",
+    "pr_reviews": "0",
+    "pr_comments": "0"
+  },
+  "artifacts": [
+    "artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json",
+    "docs/ENVIRONMENT.md",
+    "docs/RESEARCH.md",
+    ".symphony/validation/HEL-142.json",
+    "/mnt/c/Temp/hel142-startup-runtime/README.txt",
+    "/mnt/c/Temp/hel142-startup-runtime/run-startup-profile.cmd",
+    "reports/startup-profiling/test-results/windows-host-runtime-attempt/startup-profile-report.json",
+    "reports/startup-profiling/test-results/windows-host-runtime-attempt/chrome-performance-trace.json",
+    "https://github.com/helionaut/minecraft-clone/pull/52"
+  ],
+  "updated_at": "2026-03-31T01:49:12+00:00"
+}

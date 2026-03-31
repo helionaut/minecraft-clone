@@ -133,6 +133,17 @@ function chunkOrigin(chunkIndex: number, chunkSize: number): number {
   return chunkIndex * chunkSize;
 }
 
+function isWithinChunk(x: number, z: number, chunkX: number, chunkZ: number, chunkSize: number): boolean {
+  const originX = chunkOrigin(chunkX, chunkSize);
+  const originZ = chunkOrigin(chunkZ, chunkSize);
+  return (
+    x >= originX &&
+    x < originX + chunkSize &&
+    z >= originZ &&
+    z < originZ + chunkSize
+  );
+}
+
 function normalizeChunkDirection(
   direction: ChunkLoadPlanOptions['preferDirection'],
 ): { readonly x: number; readonly z: number } | null {
@@ -423,12 +434,18 @@ function blockWithinBounds(y: number, config: WorldConfig): boolean {
 function placeDecorationBlock(
   blocks: BlockMap,
   config: WorldConfig,
+  chunkX: number,
+  chunkZ: number,
   x: number,
   y: number,
   z: number,
   type: SolidBlockType,
 ): void {
   if (!blockWithinBounds(y, config)) {
+    return;
+  }
+
+  if (!isWithinChunk(x, z, chunkX, chunkZ, config.chunkSize)) {
     return;
   }
 
@@ -444,6 +461,8 @@ function placeDecorationBlock(
 function placeTree(
   blocks: BlockMap,
   config: WorldConfig,
+  chunkX: number,
+  chunkZ: number,
   x: number,
   groundY: number,
   z: number,
@@ -451,7 +470,7 @@ function placeTree(
   const trunkHeight = 4 + Math.floor(hash(config.seed + 307, x, groundY, z) * 2);
 
   for (let offset = 1; offset <= trunkHeight; offset += 1) {
-    placeDecorationBlock(blocks, config, x, groundY + offset, z, 'oak-log');
+    placeDecorationBlock(blocks, config, chunkX, chunkZ, x, groundY + offset, z, 'oak-log');
   }
 
   const canopyStart = groundY + trunkHeight - 1;
@@ -469,17 +488,19 @@ function placeTree(
           continue;
         }
 
-        placeDecorationBlock(blocks, config, x + dx, canopyStart + dy, z + dz, 'oak-leaves');
+        placeDecorationBlock(blocks, config, chunkX, chunkZ, x + dx, canopyStart + dy, z + dz, 'oak-leaves');
       }
     }
   }
 
-  placeDecorationBlock(blocks, config, x, canopyStart + 3, z, 'oak-leaves');
+  placeDecorationBlock(blocks, config, chunkX, chunkZ, x, canopyStart + 3, z, 'oak-leaves');
 }
 
 function placeCactus(
   blocks: BlockMap,
   config: WorldConfig,
+  chunkX: number,
+  chunkZ: number,
   x: number,
   groundY: number,
   z: number,
@@ -493,7 +514,7 @@ function placeCactus(
   const height = 2 + Math.floor(hash(config.seed + 331, x, groundY, z) * 3);
 
   for (let offset = 1; offset <= height; offset += 1) {
-    placeDecorationBlock(blocks, config, x, groundY + offset, z, 'cactus');
+    placeDecorationBlock(blocks, config, chunkX, chunkZ, x, groundY + offset, z, 'cactus');
   }
 }
 
@@ -583,14 +604,22 @@ function createBaseChunkMap(config: WorldConfig, chunkX: number, chunkZ: number)
         }
       }
 
-      const topSurface = blocks.get(createBlockKey(x, column.height, z));
+    }
+  }
+
+  const decorationRadius = 2;
+
+  for (let x = originX - decorationRadius; x < originX + config.chunkSize + decorationRadius; x += 1) {
+    for (let z = originZ - decorationRadius; z < originZ + config.chunkSize + decorationRadius; z += 1) {
+      const column = getColumnData(config, x, z);
+      const topSurface = column.flooded && column.height <= config.seaLevel ? 'sand' : column.surface;
 
       if (
         topSurface === 'sand' &&
         hash(config.seed + 353, x, column.height, z) > 0.55 &&
         (Math.abs(x) > 2 || Math.abs(z) > 2)
       ) {
-        placeCactus(blocks, config, x, column.height, z);
+        placeCactus(blocks, config, chunkX, chunkZ, x, column.height, z);
       }
 
       if (
@@ -604,7 +633,7 @@ function createBaseChunkMap(config: WorldConfig, chunkX: number, chunkZ: number)
           (column.biome === 'forest' && decorationScore > 0.71) ||
           (column.biome === 'plains' && decorationScore > 0.81)
         ) {
-          placeTree(blocks, config, x, column.height, z);
+          placeTree(blocks, config, chunkX, chunkZ, x, column.height, z);
         }
       }
     }

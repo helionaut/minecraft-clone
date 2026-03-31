@@ -75,6 +75,7 @@ describe('computeVoxelLighting', () => {
 
   it('emits nested timing phases when a profiler is provided', () => {
     const phases: string[] = [];
+    const phaseMetrics = new Map<string, Record<string, number>>();
 
     computeVoxelLighting(
       {
@@ -91,6 +92,9 @@ describe('computeVoxelLighting', () => {
           phases.push(name);
           return run();
         },
+        recordPhaseMetrics(name, metrics) {
+          phaseMetrics.set(name, metrics);
+        },
       },
     );
 
@@ -99,5 +103,19 @@ describe('computeVoxelLighting', () => {
       'seed-emissive-blocks',
       'propagate-light-queue',
     ]);
+    expect(phaseMetrics.get('seed-sunlight-columns')).toEqual({
+      columnCount: 25,
+      cellVisits: 100,
+    });
+    expect(phaseMetrics.get('seed-emissive-blocks')).toEqual({
+      scannedCells: 27,
+      emissiveBlocks: 1,
+    });
+    expect(phaseMetrics.get('propagate-light-queue')).toEqual({
+      queueSeeds: 101,
+      processedEntries: 200,
+      neighborChecks: 1200,
+      lightWrites: 99,
+    });
   });
 });

@@ -7,6 +7,20 @@ function formatNumber(value, digits = 1) {
   return Number.isFinite(value) ? Number(value).toFixed(digits) : 'unknown';
 }
 
+function formatPhaseMetrics(metrics) {
+  if (!metrics || typeof metrics !== 'object') {
+    return '';
+  }
+
+  const entries = Object.entries(metrics).filter(([, value]) => Number.isFinite(value));
+
+  if (entries.length === 0) {
+    return '';
+  }
+
+  return ` (${entries.map(([name, value]) => `${name}=${formatNumber(value, 0)}`).join(', ')})`;
+}
+
 function parseJsonFile(path) {
   return readFile(path, 'utf8').then((contents) => JSON.parse(contents));
 }
@@ -35,6 +49,17 @@ function summarizeStartupProfileSnapshot(snapshot) {
     longFrameThresholdMs: Number(snapshot.longFrameThresholdMs ?? 0),
     topPhases: [...snapshot.phases]
       .filter((phase) => phase && typeof phase.name === 'string' && Number.isFinite(phase.durationMs))
+      .map((phase) => ({
+        name: phase.name,
+        durationMs: Number(phase.durationMs),
+        ...(phase.metrics && typeof phase.metrics === 'object'
+          ? {
+            metrics: Object.fromEntries(
+              Object.entries(phase.metrics).filter(([, value]) => Number.isFinite(value)),
+            ),
+          }
+          : {}),
+      }))
       .sort((left, right) => right.durationMs - left.durationMs)
       .slice(0, 5),
   };
@@ -363,7 +388,7 @@ export function buildStartupProfilingReport({
     '## Top startup phases',
     ...(
       topPhases.length > 0
-        ? topPhases.map((phase) => `- ${phase.name}: ${formatNumber(phase.durationMs)}ms`)
+        ? topPhases.map((phase) => `- ${phase.name}: ${formatNumber(phase.durationMs)}ms${formatPhaseMetrics(phase.metrics)}`)
         : ['- none']
     ),
     '',

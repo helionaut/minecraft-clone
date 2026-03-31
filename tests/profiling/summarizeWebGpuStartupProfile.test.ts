@@ -148,7 +148,14 @@ describe('summarizeWebGpuStartupProfile', () => {
         longFrameCount: 10,
         maxFrameDurationMs: 540,
         topPhases: [
-          { name: 'initial-rebuild-world:compute-lighting:propagate-light-queue', durationMs: 980 },
+          {
+            name: 'initial-rebuild-world:compute-lighting:propagate-light-queue',
+            durationMs: 980,
+            metrics: {
+              queueSeeds: 144,
+              processedEntries: 912,
+            },
+          },
           { name: 'initial-rebuild-world:compute-lighting', durationMs: 1280 },
           { name: 'initial-rebuild-world', durationMs: 1850 },
         ],
@@ -169,6 +176,7 @@ describe('summarizeWebGpuStartupProfile', () => {
       'post-startup frame loop',
     ]);
     expect(report.markdown).toContain('initial-rebuild-world:compute-lighting:propagate-light-queue: 980.0ms');
+    expect(report.markdown).toContain('processedEntries=912');
   });
 
   it('rebuilds a startup profiling report from an artifact directory when only raw files exist', async () => {

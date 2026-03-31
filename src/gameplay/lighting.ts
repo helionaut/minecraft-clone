@@ -22,6 +22,7 @@ export interface VoxelLightResult {
 
 export interface VoxelLightingProfiler {
   measureSync<T>(name: string, run: () => T): T;
+  recordPhaseMetrics?(name: string, metrics: Readonly<Record<string, number>>): void;
 }
 
 interface MutableCellLight {
@@ -63,6 +64,7 @@ export function computeVoxelLighting(
 ): VoxelLightResult {
   const lights = new Map<string, MutableCellLight>();
   const queue: QueueEntry[] = [];
+  let lightWrites = 0;
   const expanded = {
     minX: bounds.minX - 1,
     maxX: bounds.maxX + 1,
@@ -102,10 +104,13 @@ export function computeVoxelLighting(
 
     lights.set(key, { sunlight: nextSunlight, blocklight: nextBlocklight });
     queue.push({ x, y, z });
+    lightWrites += 1;
   };
   const measurePhase = <T,>(name: string, run: () => T): T => profiler ? profiler.measureSync(name, run) : run();
 
   measurePhase('seed-sunlight-columns', () => {
+    const columnCount = (expanded.maxX - expanded.minX + 1) * (expanded.maxZ - expanded.minZ + 1);
+    const cellVisits = columnCount * (expanded.maxY - expanded.minY + 1);
     for (let x = expanded.minX; x <= expanded.maxX; x += 1) {
       for (let z = expanded.minZ; z <= expanded.maxZ; z += 1) {
         let sunlight = 15;
@@ -126,12 +131,19 @@ export function computeVoxelLighting(
         }
       }
     }
+    profiler?.recordPhaseMetrics?.('seed-sunlight-columns', {
+      columnCount,
+      cellVisits,
+    });
   });
 
   measurePhase('seed-emissive-blocks', () => {
+    let scannedCells = 0;
+    let emissiveBlocks = 0;
     for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
       for (let z = bounds.minZ; z <= bounds.maxZ; z += 1) {
         for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+          scannedCells += 1;
           const type = getBlock(x, y, z);
 
           if (!type) {
@@ -141,15 +153,25 @@ export function computeVoxelLighting(
           const emittedLight = BLOCK_DEFINITIONS[type].emittedLight;
 
           if (emittedLight > 0) {
+            emissiveBlocks += 1;
             setLight(x, y, z, 0, emittedLight);
           }
         }
       }
     }
+    profiler?.recordPhaseMetrics?.('seed-emissive-blocks', {
+      scannedCells,
+      emissiveBlocks,
+    });
   });
 
   measurePhase('propagate-light-queue', () => {
+    const queueSeeds = queue.length;
+    let processedEntries = 0;
+    let neighborChecks = 0;
+    const lightWritesBeforePropagation = lightWrites;
     for (let index = 0; index < queue.length; index += 1) {
+      processedEntries += 1;
       const entry = queue[index];
       const source = lights.get(createKey(entry.x, entry.y, entry.z));
 
@@ -158,6 +180,7 @@ export function computeVoxelLighting(
       }
 
       for (const [dx, dy, dz] of CARDINAL_NEIGHBORS) {
+        neighborChecks += 1;
         const x = entry.x + dx;
         const y = entry.y + dy;
         const z = entry.z + dz;
@@ -183,6 +206,12 @@ export function computeVoxelLighting(
         setLight(x, y, z, sunlight, blocklight);
       }
     }
+    profiler?.recordPhaseMetrics?.('propagate-light-queue', {
+      queueSeeds,
+      processedEntries,
+      neighborChecks,
+      lightWrites: lightWrites - lightWritesBeforePropagation,
+    });
   });
 
   return {

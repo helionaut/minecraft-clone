@@ -178,6 +178,10 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - `initial-sync-size`
   - `initial-status-publish`
   - `initial-sync-frame-visuals` when running with the frozen spawn frame harness
+- The lighting startup subphases now also carry workload counts in the emitted startup profile and generated markdown report:
+  - `seed-sunlight-columns` records `columnCount` and `cellVisits`
+  - `seed-emissive-blocks` records `scannedCells` and `emissiveBlocks`
+  - `propagate-light-queue` records `queueSeeds`, `processedEntries`, `neighborChecks`, and propagation-time `lightWrites`
 - The profile also captures early frame durations so the next RTX pass can see whether long frames continue after startup.
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine

@@ -20,6 +20,7 @@ export interface StartupProfileSummary {
   readonly topPhases: ReadonlyArray<{
     readonly name: string;
     readonly durationMs: number;
+    readonly metrics?: Readonly<Record<string, number>>;
   }>;
 }
 

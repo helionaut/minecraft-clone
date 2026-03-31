@@ -22,6 +22,10 @@ describe('createStartupProfiler', () => {
       now = 52;
       return 'done';
     });
+    profiler.recordPhaseMetrics('sync-phase', {
+      workUnits: 12,
+      queueEntries: 3,
+    });
 
     profiler.recordFrame(16.7);
     profiler.recordFrame(55);
@@ -36,7 +40,14 @@ describe('createStartupProfiler', () => {
       completedAt: 71,
       totalDurationMs: 61,
       phases: [
-        { name: 'sync-phase', durationMs: 11 },
+        {
+          name: 'sync-phase',
+          durationMs: 11,
+          metrics: {
+            workUnits: 12,
+            queueEntries: 3,
+          },
+        },
         { name: 'async-phase', durationMs: 17 },
       ],
       frameSamples: [
@@ -58,5 +69,30 @@ describe('createStartupProfiler', () => {
 
     expect(result).toBe('value');
     expect(profiler.snapshot()).toBeNull();
+  });
+
+  it('merges phase metrics recorded before and after the timed phase completes', () => {
+    let now = 0;
+    const profiler = createStartupProfiler({
+      enabled: true,
+      timeSource: () => now,
+    });
+
+    profiler.recordPhaseMetrics('lighting', { queueSeeds: 4 });
+    profiler.measureSync('lighting', () => {
+      now = 10;
+    });
+    profiler.recordPhaseMetrics('lighting', { queueIterations: 28 });
+
+    expect(profiler.snapshot()?.phases).toEqual([
+      {
+        name: 'lighting',
+        durationMs: 10,
+        metrics: {
+          queueSeeds: 4,
+          queueIterations: 28,
+        },
+      },
+    ]);
   });
 });

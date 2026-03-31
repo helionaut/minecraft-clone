@@ -115,6 +115,19 @@ describe('VoxelWorld', () => {
       .toBe('bedrock');
   });
 
+  it('keeps loaded chunk blocks in their owning chunk so rendering and targeting stay aligned', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+    const chunkX = -1;
+    const chunkZ = 0;
+    const chunk = world.getChunk(chunkX, chunkZ);
+
+    for (const block of chunk.blocks) {
+      expect(Math.floor(block.x / DEFAULT_WORLD_CONFIG.chunkSize)).toBe(chunkX);
+      expect(Math.floor(block.z / DEFAULT_WORLD_CONFIG.chunkSize)).toBe(chunkZ);
+      expect(world.getBlock(block.x, block.y, block.z)).toBe(block.type);
+    }
+  });
+
   it('caps chunk streaming to the requested active chunk budget', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
 

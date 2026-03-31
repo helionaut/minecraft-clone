@@ -66,12 +66,15 @@ describe('summarizeWebGpuStartupProfile', () => {
     expect(report.json.topConsoleErrors).toHaveLength(2);
     expect(report.json.traceSummary.topMainThreadTasks[0]?.name).toBe('FunctionCall');
     expect(report.json.traceSummary.topGpuTasks[0]?.name).toBe('GLES2::ReadPixels');
+    expect(report.json.targetSurface.meetsRequirement).toBe(false);
+    expect(report.json.targetSurface.status).toBe('control-or-fallback-surface');
     expect(report.json.remediationCandidates.map((candidate) => candidate.suspect)).toEqual([
       'initial-rebuild-world',
       'post-startup frame loop',
       'invalid-runtime-surface',
     ]);
     expect(report.markdown).toContain('initial-rebuild-world: 2178.3ms');
+    expect(report.markdown).toContain('Target surface verdict: Did not match the requested RTX/WebGPU target surface');
     expect(report.markdown).toContain('[error] device lost');
     expect(report.markdown).toContain('FunctionCall: 520.8ms');
     expect(report.markdown).toContain('GLES2::ReadPixels: 1027.1ms');
@@ -102,6 +105,8 @@ describe('summarizeWebGpuStartupProfile', () => {
       'create-scene-renderer',
       'create-desktop-volumetric-light-volume',
     ]);
+    expect(report.json.targetSurface.meetsRequirement).toBe(true);
+    expect(report.json.targetSurface.status).toBe('matched-rtx-webgpu');
     expect(report.markdown).toContain('create-scene-renderer: 480.0ms');
   });
 
@@ -142,6 +147,9 @@ describe('summarizeWebGpuStartupProfile', () => {
       buildStartupProfilingReportFromArtifactDir: (artifactDir: string) => Promise<{
         json: {
           startupTotalDurationMs: number;
+          targetSurface: {
+            status: string;
+          };
           topPhases: Array<{ name: string }>;
           traceSummary: {
             topGpuTasks: Array<{ name: string }>;
@@ -184,10 +192,39 @@ describe('summarizeWebGpuStartupProfile', () => {
       const report = await summarizeHelpers.buildStartupProfilingReportFromArtifactDir(artifactDir);
 
       expect(report.json.startupTotalDurationMs).toBe(2616);
+      expect(report.json.targetSurface.status).toBe('control-or-fallback-surface');
       expect(report.json.topPhases[0]?.name).toBe('initial-rebuild-world');
       expect(report.json.traceSummary.topGpuTasks[0]?.name).toBe('GLES2::ReadPixels');
     } finally {
       await rm(artifactDir, { recursive: true, force: true });
     }
+  });
+
+  it('classifies non-RTX hardware-accelerated runs as controls rather than target-surface matches', () => {
+    const report = buildStartupProfilingReport({
+      startupSummary: {
+        totalDurationMs: 1200,
+        longFrameCount: 4,
+        maxFrameDurationMs: 120,
+        topPhases: [
+          { name: 'initial-rebuild-world:compute-lighting', durationMs: 820 },
+        ],
+      },
+      runtimeStatus: {
+        browserSupportsWebGpu: true,
+        webglRenderer: 'ANGLE (Intel, Intel(R) HD Graphics 4600 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+        status: {
+          renderer: 'WebGL 2 | hardware accelerated | ANGLE (Intel, Intel(R) HD Graphics 4600 Direct3D11 vs_5_0 ps_5_0, D3D11) | volumetric lighting disabled (webgpu-fallback-adapter)',
+        },
+      },
+      consoleEntries: [],
+      traceData: {
+        traceEvents: [],
+      },
+    });
+
+    expect(report.json.targetSurface.meetsRequirement).toBe(false);
+    expect(report.json.targetSurface.status).toBe('control-or-fallback-surface');
+    expect(report.json.targetSurface.summary).toContain('fallback adapter detected');
   });
 });

@@ -180,6 +180,33 @@ describe('runWebGpuStartupProfile', () => {
     expect(manifest.markdown).toContain('startup-profile-comparison.json');
   });
 
+  it('can enrich the upload manifest with a target-surface verdict', () => {
+    const manifestBuilder = startupProfileScript as typeof startupProfileScript & {
+      buildStartupProfileUploadManifest: (
+        artifactOutputDir: string,
+        files?: string[],
+        targetSurface?: Record<string, unknown> | null,
+      ) => {
+        json: Record<string, unknown>;
+        markdown: string;
+      };
+    };
+    const manifest = manifestBuilder.buildStartupProfileUploadManifest(
+      'reports/startup-profiling/test-results/example-artifact-dir',
+      ['runtime-status.json', 'startup-profile-report.json'],
+      {
+        meetsRequirement: false,
+        status: 'non-rtx-surface',
+        summary: 'Did not match the requested RTX/WebGPU target surface (renderer does not identify an RTX GPU).',
+        reasons: ['renderer does not identify an RTX GPU'],
+      },
+    );
+
+    expect(manifest.json.targetSurface).toBeTruthy();
+    expect(manifest.markdown).toContain('## Target surface verdict');
+    expect(manifest.markdown).toContain('Did not match the requested RTX/WebGPU target surface');
+  });
+
   it('filters the upload bundle down to files that actually exist', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'hel-142-profile-bundle-'));
     const manifestHelpers = startupProfileScript as typeof startupProfileScript & {

@@ -40,6 +40,12 @@ export interface StartupProfilingReport {
       webglRenderer: string | null;
       rendererStatus: string | null;
     };
+    targetSurface: {
+      meetsRequirement: boolean;
+      status: string;
+      summary: string;
+      reasons: string[];
+    };
     topPhases: Array<{
       name: string;
       durationMs: number;

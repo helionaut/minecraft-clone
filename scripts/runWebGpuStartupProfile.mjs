@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readdir, stat, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
@@ -200,8 +200,12 @@ export function collectExistingStartupProfileBundleFiles(artifactOutputDir, path
     .filter((file) => pathExists(`${artifactOutputDir}/${file}`));
 }
 
-export function buildStartupProfileUploadManifest(artifactOutputDir, files = STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES) {
-  return {
+export function buildStartupProfileUploadManifest(
+  artifactOutputDir,
+  files = STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES,
+  targetSurface = null,
+) {
+  const manifest = {
     json: {
       generatedAt: new Date().toISOString(),
       artifactDir: artifactOutputDir,
@@ -220,6 +224,18 @@ export function buildStartupProfileUploadManifest(artifactOutputDir, files = STA
       '',
     ].join('\n'),
   };
+
+  if (targetSurface && typeof targetSurface === 'object') {
+    manifest.json.targetSurface = targetSurface;
+    manifest.markdown += [
+      '## Target surface verdict',
+      '',
+      `- ${String(targetSurface.summary ?? 'unknown')}`,
+      '',
+    ].join('\n');
+  }
+
+  return manifest;
 }
 
 export function hasStartupProfileBaselineArtifacts(artifactDir, pathExists = existsSync) {
@@ -229,9 +245,9 @@ export function hasStartupProfileBaselineArtifacts(artifactDir, pathExists = exi
   ].every((file) => pathExists(`${artifactDir}/${file}`));
 }
 
-async function writeStartupProfileUploadManifest(artifactOutputDir) {
+async function writeStartupProfileUploadManifest(artifactOutputDir, targetSurface = null) {
   const files = collectExistingStartupProfileBundleFiles(artifactOutputDir);
-  const manifest = buildStartupProfileUploadManifest(artifactOutputDir, files);
+  const manifest = buildStartupProfileUploadManifest(artifactOutputDir, files, targetSurface);
 
   await Promise.all([
     writeFile(
@@ -284,7 +300,21 @@ async function runPostCaptureReport(plan) {
     });
   });
 
-  return artifactOutputDir;
+  const reportPath = `${artifactOutputDir}/startup-profile-report.json`;
+  let targetSurface = null;
+
+  if (existsSync(reportPath)) {
+    const report = JSON.parse(await readFile(reportPath, 'utf8'));
+    targetSurface = report?.targetSurface ?? null;
+    if (targetSurface?.summary) {
+      console.info(`[webgpu-startup-profile] target surface verdict: ${targetSurface.summary}`);
+    }
+  }
+
+  return {
+    artifactOutputDir,
+    targetSurface,
+  };
 }
 
 async function runPostCaptureComparison(plan, artifactOutputDir) {
@@ -384,10 +414,10 @@ async function main() {
   process.exitCode = childExitCode;
 
   try {
-    const artifactOutputDir = await runPostCaptureReport(plan);
-    if (artifactOutputDir) {
-      await runPostCaptureComparison(plan, artifactOutputDir);
-      await writeStartupProfileUploadManifest(artifactOutputDir);
+    const reportResult = await runPostCaptureReport(plan);
+    if (reportResult) {
+      await runPostCaptureComparison(plan, reportResult.artifactOutputDir);
+      await writeStartupProfileUploadManifest(reportResult.artifactOutputDir, reportResult.targetSurface);
     }
   } catch (error) {
     console.error(`[webgpu-startup-profile] ${error instanceof Error ? error.message : String(error)}`);

@@ -51,6 +51,75 @@ function collectTopConsoleErrors(consoleEntries) {
     }));
 }
 
+function classifyTargetSurface(runtimeStatus) {
+  const browserSupportsWebGpu = runtimeStatus?.browserSupportsWebGpu === true;
+  const renderer = String(runtimeStatus?.webglRenderer ?? '');
+  const rendererStatus = String(runtimeStatus?.status?.renderer ?? '');
+  const combinedRendererText = `${renderer} ${rendererStatus}`.trim();
+  const reasons = [];
+
+  if (!browserSupportsWebGpu) {
+    reasons.push('navigator.gpu unavailable');
+  }
+
+  if (/swiftshader|llvmpipe|soft(pipe|ware)|lavapipe/i.test(combinedRendererText)) {
+    reasons.push('software renderer detected');
+  }
+
+  if (/fallback-adapter|software fallback/i.test(rendererStatus)) {
+    reasons.push('fallback adapter detected');
+  }
+
+  const hasRtxRenderer = /\bRTX\b/i.test(combinedRendererText);
+  const hasNvidiaRenderer = /\bNVIDIA\b/i.test(combinedRendererText);
+
+  if (browserSupportsWebGpu && hasRtxRenderer) {
+    return {
+      meetsRequirement: true,
+      status: 'matched-rtx-webgpu',
+      summary: `Matched the requested RTX/WebGPU target surface (${combinedRendererText || 'renderer unknown'}).`,
+      reasons: [],
+    };
+  }
+
+  if (reasons.length > 0) {
+    return {
+      meetsRequirement: false,
+      status: 'control-or-fallback-surface',
+      summary: `Did not match the requested RTX/WebGPU target surface (${reasons.join(', ')}).`,
+      reasons,
+    };
+  }
+
+  if (browserSupportsWebGpu && hasNvidiaRenderer && !hasRtxRenderer) {
+    reasons.push('NVIDIA GPU detected, but renderer is not RTX-class');
+    return {
+      meetsRequirement: false,
+      status: 'non-rtx-nvidia-surface',
+      summary: `Did not match the requested RTX/WebGPU target surface (${reasons[0]}).`,
+      reasons,
+    };
+  }
+
+  if (browserSupportsWebGpu && combinedRendererText) {
+    reasons.push(`renderer does not identify an RTX GPU: ${combinedRendererText}`);
+    return {
+      meetsRequirement: false,
+      status: 'non-rtx-surface',
+      summary: `Did not match the requested RTX/WebGPU target surface (${reasons[0]}).`,
+      reasons,
+    };
+  }
+
+  reasons.push('insufficient runtime renderer detail');
+  return {
+    meetsRequirement: false,
+    status: 'unknown-surface',
+    summary: `Could not confirm the requested RTX/WebGPU target surface (${reasons[0]}).`,
+    reasons,
+  };
+}
+
 function collectRemediationCandidates(startupSummary, runtimeStatus) {
   const candidates = [];
   const topPhase = startupSummary?.topPhases?.[0];
@@ -244,6 +313,7 @@ export function buildStartupProfilingReport({
   const topPhases = Array.isArray(startupSummary?.topPhases) ? startupSummary.topPhases : [];
   const topConsoleErrors = collectTopConsoleErrors(Array.isArray(consoleEntries) ? consoleEntries : []);
   const traceSummary = summarizeTrace(traceData);
+  const targetSurface = classifyTargetSurface(runtimeStatus);
   const report = {
     generatedAt: new Date().toISOString(),
     startupTotalDurationMs: startupSummary?.totalDurationMs ?? null,
@@ -256,6 +326,7 @@ export function buildStartupProfilingReport({
       webglRenderer: runtimeStatus?.webglRenderer ?? null,
       rendererStatus: runtimeStatus?.status?.renderer ?? null,
     },
+    targetSurface,
     topPhases,
     topConsoleErrors,
     traceSummary,
@@ -270,6 +341,7 @@ export function buildStartupProfilingReport({
     `- Max frame duration: ${formatNumber(report.maxFrameDurationMs)}ms`,
     `- WebGPU available: ${String(report.runtime.browserSupportsWebGpu)}`,
     `- WebGL renderer: ${report.runtime.webglRenderer ?? 'unknown'}`,
+    `- Target surface verdict: ${report.targetSurface.summary}`,
     '',
     '## Top startup phases',
     ...(

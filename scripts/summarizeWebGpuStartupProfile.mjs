@@ -158,6 +158,8 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
   const hasLightingSubphase = startupSummary?.topPhases?.some((phase) => phase.name === 'initial-rebuild-world:compute-lighting');
   const lightingNestedPhase = startupSummary?.topPhases?.find((phase) => phase.name.startsWith('initial-rebuild-world:compute-lighting:'));
   const hasMeshSubphase = startupSummary?.topPhases?.some((phase) => phase.name === 'initial-rebuild-world:rebuild-visible-meshes');
+  const meshNestedPhase = startupSummary?.topPhases?.find((phase) => phase.name.startsWith('initial-rebuild-world:rebuild-visible-meshes:'));
+  const rendererNestedPhase = startupSummary?.topPhases?.find((phase) => phase.name.startsWith('create-scene-renderer:'));
 
   if (topPhase?.name === 'initial-rebuild-world:compute-lighting') {
     pushCandidate({
@@ -180,6 +182,14 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
       priority: 'high',
       suspect: 'initial-rebuild-world:rebuild-visible-meshes',
       rationale: 'Visible block mesh reconstruction dominates startup time; inspect worldGroup.clear(), per-block Mesh creation, and material reuse before first interaction.',
+    });
+  }
+
+  if (topPhase?.name?.startsWith('initial-rebuild-world:rebuild-visible-meshes:')) {
+    pushCandidate({
+      priority: 'high',
+      suspect: topPhase.name,
+      rationale: 'A specific visible-mesh rebuild subphase dominates startup time; compare scene clearing against per-block mesh population before changing the broader world rebuild path.',
     });
   }
 
@@ -207,6 +217,14 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
     });
   }
 
+  if (meshNestedPhase) {
+    pushCandidate({
+      priority: 'high',
+      suspect: meshNestedPhase.name,
+      rationale: 'A nested visible-mesh rebuild phase is large enough to appear in top startup phases; use it to separate scene clearing from visible mesh population on the RTX run.',
+    });
+  }
+
   if (topPhase?.name === 'initial-rebuild-world') {
     pushCandidate({
       priority: 'high',
@@ -220,6 +238,30 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
       priority: 'high',
       suspect: 'create-scene-renderer',
       rationale: 'Renderer bootstrap dominates startup time; inspect adapter/device acquisition, renderer.init(), and pipeline/material setup.',
+    });
+  }
+
+  if (topPhase?.name?.startsWith('create-scene-renderer:')) {
+    pushCandidate({
+      priority: 'high',
+      suspect: topPhase.name,
+      rationale: 'A specific renderer bootstrap subphase dominates startup time; compare adapter acquisition, renderer construction, and renderer.init() on the RTX run before changing broader startup work.',
+    });
+  }
+
+  if (rendererNestedPhase) {
+    pushCandidate({
+      priority: 'high',
+      suspect: 'create-scene-renderer',
+      rationale: 'Renderer bootstrap is large enough to appear among top startup phases; compare adapter acquisition and renderer.init() cost against world rebuild work.',
+    });
+  }
+
+  if (rendererNestedPhase) {
+    pushCandidate({
+      priority: 'high',
+      suspect: rendererNestedPhase.name,
+      rationale: 'A nested renderer bootstrap phase is large enough to appear in top startup phases; use it to separate adapter acquisition from renderer.init() on the RTX run.',
     });
   }
 

@@ -389,6 +389,7 @@ export async function createPlayableScene(
     touchDevice,
     rendererDiagnostics,
     webGpuPreference,
+    startupProfiler,
     onWebGpuDeviceLost: (info) => {
       if (webGpuDeviceLost) {
         return;
@@ -682,42 +683,73 @@ export async function createPlayableScene(
     );
 
     measureRebuildStep('rebuild-visible-meshes', () => {
-      worldGroup.clear();
-
-      world.forEachLoadedBlockInBounds(bounds, (block) => {
-        const visibleFaces = createVisibleFaces();
-        let hasVisibleFace = false;
-
-        for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
-          const neighbor = world.getLoadedBlock(block.x + dx, block.y + dy, block.z + dz);
-          const visible = !neighbor || (
-            block.type === 'water' || block.type === 'lava'
-              ? neighbor !== block.type
-              : !BLOCK_DEFINITIONS[neighbor].opaque
-          );
-          visibleFaces[face] = visible;
-          hasVisibleFace ||= visible;
-        }
-
-        if (!hasVisibleFace) {
-          return;
-        }
-
-        const brightness = getRenderBrightness(block, lighting);
-        const voxel = new Mesh(
-          block.type === 'water' ? waterGeometry : blockGeometry,
-          blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
-        );
-        voxel.position.set(
-          block.x + 0.5,
-          block.y + (block.type === 'water' ? 0.44 : 0.5),
-          block.z + 0.5,
-        );
-        voxel.userData.cell = block;
-        voxel.castShadow = block.type !== 'water' && block.type !== 'lava';
-        voxel.receiveShadow = block.type !== 'water';
-        worldGroup.add(voxel);
+      measureRebuildStep('rebuild-visible-meshes:clear-world-group', () => {
+        worldGroup.clear();
       });
+
+      let meshCount = 0;
+      let culledBlockCount = 0;
+      let fluidMeshCount = 0;
+
+      measureRebuildStep('rebuild-visible-meshes:populate-visible-meshes', () => {
+        world.forEachLoadedBlockInBounds(bounds, (block) => {
+          const visibleFaces = createVisibleFaces();
+          let hasVisibleFace = false;
+
+          for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
+            const neighbor = world.getLoadedBlock(block.x + dx, block.y + dy, block.z + dz);
+            const visible = !neighbor || (
+              block.type === 'water' || block.type === 'lava'
+                ? neighbor !== block.type
+                : !BLOCK_DEFINITIONS[neighbor].opaque
+            );
+            visibleFaces[face] = visible;
+            hasVisibleFace ||= visible;
+          }
+
+          if (!hasVisibleFace) {
+            culledBlockCount += 1;
+            return;
+          }
+
+          const brightness = getRenderBrightness(block, lighting);
+          const voxel = new Mesh(
+            block.type === 'water' ? waterGeometry : blockGeometry,
+            blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
+          );
+          voxel.position.set(
+            block.x + 0.5,
+            block.y + (block.type === 'water' ? 0.44 : 0.5),
+            block.z + 0.5,
+          );
+          voxel.userData.cell = block;
+          voxel.castShadow = block.type !== 'water' && block.type !== 'lava';
+          voxel.receiveShadow = block.type !== 'water';
+          worldGroup.add(voxel);
+          meshCount += 1;
+
+          if (isFluidBlock(block.type)) {
+            fluidMeshCount += 1;
+          }
+        });
+      });
+
+      if (profilePhasePrefix) {
+        const meshMetrics = {
+          meshCount,
+          culledBlockCount,
+          fluidMeshCount,
+        };
+
+        startupProfiler.recordPhaseMetrics(
+          `${profilePhasePrefix}:rebuild-visible-meshes`,
+          meshMetrics,
+        );
+        startupProfiler.recordPhaseMetrics(
+          `${profilePhasePrefix}:rebuild-visible-meshes:populate-visible-meshes`,
+          meshMetrics,
+        );
+      }
     });
 
     worldDirty = false;

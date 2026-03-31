@@ -181,6 +181,76 @@ describe('summarizeWebGpuStartupProfile', () => {
     expect(report.markdown).toContain('processedEntries=912');
   });
 
+  it('surfaces nested renderer bootstrap subphases when they dominate', () => {
+    const startupSummary = {
+      totalDurationMs: 980,
+      longFrameCount: 0,
+      maxFrameDurationMs: 44,
+      topPhases: [
+        { name: 'create-scene-renderer:init-renderer', durationMs: 610 },
+        { name: 'create-scene-renderer', durationMs: 740 },
+        { name: 'create-scene-renderer:request-adapter', durationMs: 120 },
+      ],
+    };
+
+    const report = buildStartupProfilingReport({
+      startupSummary,
+      runtimeStatus: {
+        browserSupportsWebGpu: true,
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',
+      },
+      consoleEntries: [],
+      traceData: {
+        traceEvents: [],
+      },
+    });
+
+    expect(report.json.remediationCandidates.map((candidate) => candidate.suspect)).toEqual([
+      'create-scene-renderer:init-renderer',
+      'create-scene-renderer',
+    ]);
+    expect(report.markdown).toContain('create-scene-renderer:init-renderer: 610.0ms');
+  });
+
+  it('surfaces nested visible-mesh rebuild subphases when they dominate', () => {
+    const startupSummary = {
+      totalDurationMs: 2010,
+      longFrameCount: 8,
+      maxFrameDurationMs: 430,
+      topPhases: [
+        {
+          name: 'initial-rebuild-world:rebuild-visible-meshes:populate-visible-meshes',
+          durationMs: 840,
+          metrics: {
+            meshCount: 1728,
+            culledBlockCount: 914,
+          },
+        },
+        { name: 'initial-rebuild-world:rebuild-visible-meshes', durationMs: 905 },
+        { name: 'initial-rebuild-world', durationMs: 1880 },
+      ],
+    };
+
+    const report = buildStartupProfilingReport({
+      startupSummary,
+      runtimeStatus: {
+        browserSupportsWebGpu: true,
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',
+      },
+      consoleEntries: [],
+      traceData: {
+        traceEvents: [],
+      },
+    });
+
+    expect(report.json.remediationCandidates.map((candidate) => candidate.suspect)).toEqual([
+      'initial-rebuild-world:rebuild-visible-meshes:populate-visible-meshes',
+      'initial-rebuild-world:rebuild-visible-meshes',
+      'post-startup frame loop',
+    ]);
+    expect(report.markdown).toContain('meshCount=1728');
+  });
+
   it('rebuilds a startup profiling report from an artifact directory when only raw files exist', async () => {
     const artifactDir = await mkdtemp(join(tmpdir(), 'hel-142-startup-artifacts-'));
     const summarizeHelpers = summarizeStartupProfileScript as typeof summarizeStartupProfileScript & {

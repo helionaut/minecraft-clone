@@ -38,6 +38,16 @@ export function parseBrowserArgs(env = process.env) {
     .filter(Boolean);
 }
 
+export function parseRequireRtxRenderer(env = process.env) {
+  const rawValue = env.PLAYWRIGHT_PROFILE_REQUIRE_RTX?.trim();
+
+  if (!rawValue) {
+    return false;
+  }
+
+  return !/^(0|false|no)$/i.test(rawValue);
+}
+
 function summarizeStartupProfile(snapshot) {
   return {
     totalDurationMs: snapshot.totalDurationMs,
@@ -63,15 +73,25 @@ function isStartupProfileSnapshot(value) {
     && typeof value.longFrameThresholdMs === 'number';
 }
 
-function getInvalidProfilingRuntimeReason(status) {
+function getInvalidProfilingRuntimeReason(status, requireRtxRenderer = false) {
   if (status.browserSupportsWebGpu !== true) {
     return `Expected a WebGPU-capable Chrome runtime, but navigator.gpu was unavailable. User agent: ${String(status.userAgent ?? 'unknown')}.`;
   }
 
   const renderer = typeof status.webglRenderer === 'string' ? status.webglRenderer : '';
+  const rendererStatus = typeof status.status?.renderer === 'string' ? status.status.renderer : '';
+  const combinedRendererText = `${renderer} ${rendererStatus}`.trim();
 
-  if (renderer && SOFTWARE_RENDERER_PATTERNS.some((pattern) => pattern.test(renderer))) {
-    return `Expected hardware-accelerated graphics for profiling, but WebGL renderer was ${renderer}.`;
+  if (combinedRendererText && SOFTWARE_RENDERER_PATTERNS.some((pattern) => pattern.test(combinedRendererText))) {
+    return `Expected hardware-accelerated graphics for profiling, but WebGL renderer was ${combinedRendererText}.`;
+  }
+
+  if (/fallback-adapter|software fallback/i.test(rendererStatus)) {
+    return `Expected the requested RTX/WebGPU target surface, but the runtime reported a fallback adapter: ${rendererStatus}.`;
+  }
+
+  if (requireRtxRenderer && !/\bRTX\b/i.test(combinedRendererText)) {
+    return `Expected an RTX-class renderer for profiling, but captured ${combinedRendererText || 'unknown renderer'}.`;
   }
 
   return null;
@@ -144,6 +164,7 @@ async function main() {
   const executablePath = process.env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
   const browserChannel = process.env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL?.trim() ?? '';
   const browserArgs = parseBrowserArgs();
+  const requireRtxRenderer = parseRequireRtxRenderer();
 
   if (!baseURL) {
     throw new Error('PLAYWRIGHT_BASE_URL is required for startup profiling runs.');
@@ -160,6 +181,7 @@ async function main() {
   console.info(`[webgpu-startup-profile:capture] browser channel: ${browserChannel}`);
   console.info(`[webgpu-startup-profile:capture] browser executable: ${executablePath}`);
   console.info(`[webgpu-startup-profile:capture] browser args: ${browserArgs.join(' ')}`);
+  console.info(`[webgpu-startup-profile:capture] require RTX renderer: ${String(requireRtxRenderer)}`);
   console.info(`[webgpu-startup-profile:cdp] base URL: ${baseURL}`);
   console.info(`[webgpu-startup-profile:cdp] output: ${artifactOutputDir}`);
 
@@ -264,7 +286,7 @@ async function main() {
     await writeFile(statusPath, JSON.stringify(runtimeStatus, null, 2), 'utf8');
     await stopChromeTrace(cdpSession, tracePath);
 
-    const invalidRuntimeReason = getInvalidProfilingRuntimeReason(runtimeStatus);
+    const invalidRuntimeReason = getInvalidProfilingRuntimeReason(runtimeStatus, requireRtxRenderer);
 
     if (invalidRuntimeReason) {
       throw new Error(invalidRuntimeReason);

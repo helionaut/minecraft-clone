@@ -4,8 +4,10 @@ import * as captureScript from '../../scripts/captureWebGpuStartupProfileOverCdp
 
 const {
   parseBrowserArgs,
+  parseRequireRtxRenderer,
 } = captureScript as typeof captureScript & {
   parseBrowserArgs: (env?: NodeJS.ProcessEnv) => string[];
+  parseRequireRtxRenderer: (env?: NodeJS.ProcessEnv) => boolean;
 };
 
 describe('captureWebGpuStartupProfileOverCdp', () => {
@@ -31,5 +33,15 @@ describe('captureWebGpuStartupProfileOverCdp', () => {
       '--flag-b',
       '--flag-c',
     ]);
+  });
+
+  it('defaults the low-level capture script to non-RTX mode unless explicitly requested', () => {
+    expect(parseRequireRtxRenderer({})).toBe(false);
+    expect(parseRequireRtxRenderer({
+      PLAYWRIGHT_PROFILE_REQUIRE_RTX: '1',
+    })).toBe(true);
+    expect(parseRequireRtxRenderer({
+      PLAYWRIGHT_PROFILE_REQUIRE_RTX: '0',
+    })).toBe(false);
   });
 });

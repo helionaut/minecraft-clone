@@ -7,6 +7,9 @@ export interface StartupProfileRuntimeStatus {
   readonly userAgent?: unknown;
   readonly webglVendor?: unknown;
   readonly webglRenderer?: unknown;
+  readonly status?: {
+    readonly renderer?: unknown;
+  } | null;
 }
 
 export interface StartupProfileSummary {
@@ -56,14 +59,33 @@ const SOFTWARE_RENDERER_PATTERNS = [
 ];
 
 export function getInvalidProfilingRuntimeReason(status: StartupProfileRuntimeStatus): string | null {
+  return getInvalidProfilingRuntimeReasonForTarget(status, {});
+}
+
+export function getInvalidProfilingRuntimeReasonForTarget(
+  status: StartupProfileRuntimeStatus,
+  options: {
+    readonly requireRtxRenderer?: boolean;
+  },
+): string | null {
   if (status.browserSupportsWebGpu !== true) {
     return `Expected a WebGPU-capable Chrome runtime, but navigator.gpu was unavailable. User agent: ${String(status.userAgent ?? 'unknown')}.`;
   }
 
   const renderer = typeof status.webglRenderer === 'string' ? status.webglRenderer : '';
+  const rendererStatus = typeof status.status?.renderer === 'string' ? status.status.renderer : '';
+  const combinedRendererText = `${renderer} ${rendererStatus}`.trim();
 
-  if (renderer && SOFTWARE_RENDERER_PATTERNS.some((pattern) => pattern.test(renderer))) {
-    return `Expected hardware-accelerated graphics for profiling, but WebGL renderer was ${renderer}.`;
+  if (combinedRendererText && SOFTWARE_RENDERER_PATTERNS.some((pattern) => pattern.test(combinedRendererText))) {
+    return `Expected hardware-accelerated graphics for profiling, but WebGL renderer was ${combinedRendererText}.`;
+  }
+
+  if (/fallback-adapter|software fallback/i.test(rendererStatus)) {
+    return `Expected the requested RTX/WebGPU target surface, but the runtime reported a fallback adapter: ${rendererStatus}.`;
+  }
+
+  if (options.requireRtxRenderer === true && !/\bRTX\b/i.test(combinedRendererText)) {
+    return `Expected an RTX-class renderer for profiling, but captured ${combinedRendererText || 'unknown renderer'}.`;
   }
 
   return null;

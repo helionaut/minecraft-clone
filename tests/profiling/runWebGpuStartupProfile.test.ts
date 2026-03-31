@@ -50,6 +50,7 @@ describe('runWebGpuStartupProfile', () => {
     expect(output).toContain('browser channel: ');
     expect(output).toContain('browser executable: ');
     expect(output).toContain('CDP endpoint: ');
+    expect(output).toContain('require RTX renderer: true');
     expect(output).toContain(`report command: ${process.execPath} `);
     expect(output).toContain('summarizeWebGpuStartupProfile.mjs');
     expect(output).toContain(`dry run command: ${process.execPath} `);
@@ -98,6 +99,7 @@ describe('runWebGpuStartupProfile', () => {
     };
 
     expect(plan.browserChannel).toBe('');
+    expect(plan.requireRtxRenderer).toBe(true);
     expect(plan.artifactResultsDir).toBe('reports/startup-profiling/test-results');
     expect(plan.reportCommand).toBe(process.execPath);
     expect(plan.reportArgs[0]).toContain('summarizeWebGpuStartupProfile.mjs');
@@ -120,8 +122,24 @@ describe('runWebGpuStartupProfile', () => {
     }
 
     expect(plan.cdpEndpointUrl).toBe('http://127.0.0.1:9333');
+    expect(plan.requireRtxRenderer).toBe(true);
     expect(plan.command).toBe(process.execPath);
     expect(plan.args[0]).toContain('captureWebGpuStartupProfileOverCdp.mjs');
+  });
+
+  it('allows the wrapper to disable the RTX requirement explicitly', () => {
+    const plan = buildWebGpuStartupProfileRun({
+      PLAYWRIGHT_BASE_URL: 'https://example.invalid',
+      PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: '',
+      PLAYWRIGHT_PROFILE_REQUIRE_RTX: '0',
+    });
+
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) {
+      throw new Error('expected plan to succeed');
+    }
+
+    expect(plan.requireRtxRenderer).toBe(false);
   });
 
   it('fails early when the configured executable path does not exist', () => {

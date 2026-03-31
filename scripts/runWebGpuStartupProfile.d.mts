@@ -4,6 +4,7 @@ export interface WebGpuStartupProfileRunPlan {
   browserChannel: string;
   executablePath: string;
   cdpEndpointUrl: string;
+  requireRtxRenderer: boolean;
   dryRun: boolean;
   artifactDir: string;
   artifactResultsDir: string;

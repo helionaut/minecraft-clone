@@ -36,6 +36,7 @@ const STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES = [
  *   browserChannel: string,
  *   executablePath: string,
  *   cdpEndpointUrl: string,
+ *   requireRtxRenderer: boolean,
  *   dryRun: boolean,
  *   artifactDir: string,
  *   artifactResultsDir: string,
@@ -119,6 +120,7 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
   const executablePath = env.PLAYWRIGHT_PROFILE_EXECUTABLE_PATH?.trim() ?? '';
   const cdpEndpointUrl = env.PLAYWRIGHT_PROFILE_CDP_ENDPOINT_URL?.trim() ?? '';
   const requestedBrowserChannel = env.PLAYWRIGHT_PROFILE_BROWSER_CHANNEL?.trim() ?? 'chrome';
+  const requireRtxRenderer = !/^(0|false|no)$/i.test(env.PLAYWRIGHT_PROFILE_REQUIRE_RTX?.trim() ?? '1');
   const dryRun = env.PLAYWRIGHT_PROFILE_DRY_RUN === '1';
   const artifactDir = 'reports/startup-profiling';
 
@@ -154,6 +156,7 @@ export function buildWebGpuStartupProfileRun(env = process.env) {
     browserChannel,
     executablePath,
     cdpEndpointUrl,
+    requireRtxRenderer,
     dryRun,
     artifactDir,
     artifactResultsDir: `${artifactDir}/test-results`,
@@ -377,6 +380,7 @@ async function main() {
   console.info(`[webgpu-startup-profile] browser channel: ${plan.browserChannel}`);
   console.info(`[webgpu-startup-profile] browser executable: ${plan.executablePath}`);
   console.info(`[webgpu-startup-profile] CDP endpoint: ${plan.cdpEndpointUrl}`);
+  console.info(`[webgpu-startup-profile] require RTX renderer: ${String(plan.requireRtxRenderer)}`);
   console.info(`[webgpu-startup-profile] artifacts: ${plan.artifactDir}`);
   console.info(`[webgpu-startup-profile] report command: ${plan.reportCommand} ${plan.reportArgs.join(' ')}`);
   console.info('[webgpu-startup-profile] post-capture report generation is attempted whenever a Playwright artifact directory exists');
@@ -398,6 +402,7 @@ async function main() {
         PLAYWRIGHT_PROFILE_BROWSER_CHANNEL: plan.browserChannel,
         PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: plan.executablePath,
         PLAYWRIGHT_PROFILE_CDP_ENDPOINT_URL: plan.cdpEndpointUrl,
+        PLAYWRIGHT_PROFILE_REQUIRE_RTX: plan.requireRtxRenderer ? '1' : '0',
       },
     });
 

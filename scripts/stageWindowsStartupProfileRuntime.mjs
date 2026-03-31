@@ -21,11 +21,16 @@ function normalizeWindowsDrivePath(path) {
   return `${match[1].toUpperCase()}:\\${match[2].replaceAll('/', '\\')}`;
 }
 
+function getRequireRtxRenderer(env = process.env) {
+  return !/^(0|false|no)$/i.test(env.PLAYWRIGHT_PROFILE_REQUIRE_RTX?.trim() ?? '1');
+}
+
 export function buildWindowsStartupRuntimePlan(env = process.env, pathExists = existsSync) {
   const runtimeDir = env.PLAYWRIGHT_WINDOWS_RUNTIME_DIR?.trim() || DEFAULT_WINDOWS_RUNTIME_DIR;
   const nodeExe = env.PLAYWRIGHT_WINDOWS_NODE_EXE?.trim() || DEFAULT_WINDOWS_NODE_EXE;
   const chromeExe = env.PLAYWRIGHT_WINDOWS_CHROME_EXE?.trim() || DEFAULT_WINDOWS_CHROME_EXE;
   const baseURL = env.PLAYWRIGHT_BASE_URL?.trim() || DEFAULT_BASE_URL;
+  const requireRtxRenderer = getRequireRtxRenderer(env);
   const dryRun = env.PLAYWRIGHT_PROFILE_DRY_RUN === '1';
 
   const missing = [];
@@ -46,6 +51,7 @@ export function buildWindowsStartupRuntimePlan(env = process.env, pathExists = e
     nodeExe,
     chromeExe,
     baseURL,
+    requireRtxRenderer,
     captureScriptSource: `${REPO_ROOT_DIR}/scripts/captureWebGpuStartupProfileOverCdp.mjs`,
     playwrightCoreSource: `${REPO_ROOT_DIR}/node_modules/playwright-core`,
     runtimeScriptsDir: `${runtimeDir}/scripts`,
@@ -69,6 +75,7 @@ export function buildWindowsRuntimeReadme(plan) {
     `Bundled Windows Node: ${plan.windowsNodeExe}`,
     `Chrome executable: ${plan.windowsChromeExe}`,
     `Target URL: ${plan.baseURL}`,
+    `Require RTX renderer: ${plan.requireRtxRenderer ? 'yes' : 'no'}`,
     '',
     'Run from Windows:',
     `  ${plan.windowsRuntimeDir}\\run-startup-profile.cmd`,
@@ -90,6 +97,7 @@ export function buildWindowsRuntimeCommand(plan) {
     '@echo off',
     'setlocal',
     `if "%PLAYWRIGHT_BASE_URL%"=="" set "PLAYWRIGHT_BASE_URL=${plan.baseURL}"`,
+    `if "%PLAYWRIGHT_PROFILE_REQUIRE_RTX%"=="" set "PLAYWRIGHT_PROFILE_REQUIRE_RTX=${plan.requireRtxRenderer ? '1' : '0'}"`,
     `set "PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=${plan.windowsChromeExe}"`,
     `set "STARTUP_PROFILE_ARTIFACT_DIR=${plan.windowsRuntimeDir}\\artifacts"`,
     `"${plan.windowsNodeExe}" "${plan.windowsRuntimeDir}\\scripts\\captureWebGpuStartupProfileOverCdp.mjs"`,
@@ -106,6 +114,7 @@ async function main() {
   console.info(`[webgpu-startup-profile:windows-runtime] bundled node target: ${plan.stagedNodeExeTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] windows chrome: ${plan.chromeExe}`);
   console.info(`[webgpu-startup-profile:windows-runtime] base URL: ${plan.baseURL}`);
+  console.info(`[webgpu-startup-profile:windows-runtime] require RTX renderer: ${String(plan.requireRtxRenderer)}`);
 
   if (!plan.ok) {
     throw new Error(plan.missing.join('\n'));

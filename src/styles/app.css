@@ -595,6 +595,12 @@ button {
   line-height: 1.35;
 }
 
+.world-panel-actions {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}
+
 .inventory-player-preview {
   display: grid;
   place-items: center;

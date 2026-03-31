@@ -71,6 +71,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - `initial-rebuild-world:rebuild-visible-meshes` was about `437.7ms`
   - `initial-rebuild-world:sync-chunks` was about `402.5ms`
   - top trace hotspots were still main-thread `RunTask`/microtask spans, with the top GPU/compositor setup hotspot around `GpuChannelHost::CreateViewCommandBuffer` / `CommandBufferProxyImpl::Initialize` at about `170ms`
+  - committed baseline summary artifact: `artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.md`
 - What this eliminates:
   - on a real hardware-accelerated desktop Chrome surface, even outside SwiftShader, the strongest startup suspect is still synchronous world rebuild work rather than pure renderer bootstrap
   - the leading sub-suspect is now narrower than the original hypothesis: `computeVoxelLighting(...)` inside the first `rebuildWorld()` pass is the largest measured startup subphase on this host run

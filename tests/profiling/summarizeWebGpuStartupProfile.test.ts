@@ -1,6 +1,12 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
 import { describe, expect, it } from 'vitest';
 
-import { buildStartupProfilingReport } from '../../scripts/summarizeWebGpuStartupProfile.mjs';
+import * as summarizeStartupProfileScript from '../../scripts/summarizeWebGpuStartupProfile.mjs';
+
+const { buildStartupProfilingReport } = summarizeStartupProfileScript;
 
 describe('summarizeWebGpuStartupProfile', () => {
   it('builds a report with top phases, console errors, and remediation candidates', () => {
@@ -128,5 +134,60 @@ describe('summarizeWebGpuStartupProfile', () => {
       'post-startup frame loop',
     ]);
     expect(report.markdown).toContain('initial-rebuild-world:compute-lighting: 1090.0ms');
+  });
+
+  it('rebuilds a startup profiling report from an artifact directory when only raw files exist', async () => {
+    const artifactDir = await mkdtemp(join(tmpdir(), 'hel-142-startup-artifacts-'));
+    const summarizeHelpers = summarizeStartupProfileScript as typeof summarizeStartupProfileScript & {
+      buildStartupProfilingReportFromArtifactDir: (artifactDir: string) => Promise<{
+        json: {
+          startupTotalDurationMs: number;
+          topPhases: Array<{ name: string }>;
+          traceSummary: {
+            topGpuTasks: Array<{ name: string }>;
+          };
+        };
+      }>;
+    };
+
+    try {
+      await mkdir(artifactDir, { recursive: true });
+      await Promise.all([
+        writeFile(`${artifactDir}/runtime-status.json`, JSON.stringify({
+          browserSupportsWebGpu: true,
+          webglRenderer: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)',
+          status: {
+            renderer: 'WebGL 2 | software fallback | ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)',
+          },
+          startupProfile: {
+            totalDurationMs: 2616,
+            longFrameCount: 44,
+            maxFrameDurationMs: 3133.2,
+            longFrameThresholdMs: 50,
+            phases: [
+              { name: 'initial-rebuild-world', durationMs: 2420.8 },
+              { name: 'create-scene-renderer', durationMs: 31.2 },
+            ],
+          },
+        }), 'utf8'),
+        writeFile(`${artifactDir}/console-messages.json`, JSON.stringify([
+          { type: 'warning', text: 'GPU stall due to ReadPixels' },
+        ]), 'utf8'),
+        writeFile(`${artifactDir}/chrome-performance-trace.json`, JSON.stringify({
+          traceEvents: [
+            { ph: 'M', name: 'thread_name', pid: 1, tid: 20, args: { name: 'CrGpuMain' } },
+            { ph: 'X', name: 'GLES2::ReadPixels', cat: 'gpu', dur: 579_000, ts: 124_000, pid: 1, tid: 20, args: {} },
+          ],
+        }), 'utf8'),
+      ]);
+
+      const report = await summarizeHelpers.buildStartupProfilingReportFromArtifactDir(artifactDir);
+
+      expect(report.json.startupTotalDurationMs).toBe(2616);
+      expect(report.json.topPhases[0]?.name).toBe('initial-rebuild-world');
+      expect(report.json.traceSummary.topGpuTasks[0]?.name).toBe('GLES2::ReadPixels');
+    } finally {
+      await rm(artifactDir, { recursive: true, force: true });
+    }
   });
 });

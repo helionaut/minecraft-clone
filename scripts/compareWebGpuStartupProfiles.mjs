@@ -1,7 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import process from 'node:process';
 
 import { isExecutedDirectly } from './isExecutedDirectly.mjs';
+import { buildStartupProfilingReportFromArtifactDir } from './summarizeWebGpuStartupProfile.mjs';
 
 function formatNumber(value, digits = 1) {
   return Number.isFinite(value) ? Number(value).toFixed(digits) : 'unknown';
@@ -9,6 +11,22 @@ function formatNumber(value, digits = 1) {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+async function resolveStartupProfilingReport({ reportPath, artifactDir }) {
+  try {
+    return await readJson(reportPath);
+  } catch (error) {
+    if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  if (!artifactDir) {
+    throw new Error(`Baseline report is missing and no artifact directory was provided: ${reportPath}`);
+  }
+
+  return (await buildStartupProfilingReportFromArtifactDir(artifactDir)).json;
 }
 
 function mapPhases(phases) {
@@ -168,6 +186,8 @@ export function buildStartupProfileComparison({
 async function main() {
   const baselineReportPath = process.env.STARTUP_PROFILE_BASELINE_REPORT?.trim()
     ?? 'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/startup-profile-report.json';
+  const baselineArtifactDir = process.env.STARTUP_PROFILE_BASELINE_ARTIFACT_DIR?.trim()
+    ?? dirname(baselineReportPath);
   const candidateReportPath = process.env.STARTUP_PROFILE_CANDIDATE_REPORT?.trim();
 
   if (!candidateReportPath) {
@@ -180,7 +200,10 @@ async function main() {
     ?? candidateReportPath.replace(/startup-profile-report\.json$/, 'startup-profile-comparison.md');
 
   const [baselineReport, candidateReport] = await Promise.all([
-    readJson(baselineReportPath),
+    resolveStartupProfilingReport({
+      reportPath: baselineReportPath,
+      artifactDir: baselineArtifactDir,
+    }),
     readJson(candidateReportPath),
   ]);
 

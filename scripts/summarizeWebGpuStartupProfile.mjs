@@ -208,6 +208,33 @@ function summarizeTrace(traceData) {
   };
 }
 
+export async function loadStartupProfilingInputs(artifactDir) {
+  const [startupSummaryFile, runtimeStatus, consoleEntries, traceData] = await Promise.all([
+    parseOptionalJsonFile(`${artifactDir}/startup-profile-summary.json`),
+    parseJsonFile(`${artifactDir}/runtime-status.json`),
+    parseJsonFile(`${artifactDir}/console-messages.json`),
+    parseOptionalJsonFile(`${artifactDir}/chrome-performance-trace.json`),
+  ]);
+
+  const startupSummary = startupSummaryFile
+    ?? summarizeStartupProfileSnapshot(runtimeStatus?.startupProfile);
+
+  if (!startupSummary) {
+    throw new Error(`No startup profile summary could be derived from ${artifactDir}.`);
+  }
+
+  return {
+    startupSummary,
+    runtimeStatus,
+    consoleEntries,
+    traceData,
+  };
+}
+
+export async function buildStartupProfilingReportFromArtifactDir(artifactDir) {
+  return buildStartupProfilingReport(await loadStartupProfilingInputs(artifactDir));
+}
+
 export function buildStartupProfilingReport({
   startupSummary,
   runtimeStatus,
@@ -294,26 +321,7 @@ async function main() {
   const outputMarkdownPath = process.env.STARTUP_PROFILE_REPORT_MARKDOWN?.trim()
     ?? `${artifactDir}/startup-profile-report.md`;
 
-  const [startupSummaryFile, runtimeStatus, consoleEntries, traceData] = await Promise.all([
-    parseOptionalJsonFile(`${artifactDir}/startup-profile-summary.json`),
-    parseJsonFile(`${artifactDir}/runtime-status.json`),
-    parseJsonFile(`${artifactDir}/console-messages.json`),
-    parseOptionalJsonFile(`${artifactDir}/chrome-performance-trace.json`),
-  ]);
-
-  const startupSummary = startupSummaryFile
-    ?? summarizeStartupProfileSnapshot(runtimeStatus?.startupProfile);
-
-  if (!startupSummary) {
-    throw new Error(`No startup profile summary could be derived from ${artifactDir}.`);
-  }
-
-  const report = buildStartupProfilingReport({
-    startupSummary,
-    runtimeStatus,
-    consoleEntries,
-    traceData,
-  });
+  const report = await buildStartupProfilingReportFromArtifactDir(artifactDir);
 
   await Promise.all([
     writeFile(outputJsonPath, JSON.stringify(report.json, null, 2), 'utf8'),

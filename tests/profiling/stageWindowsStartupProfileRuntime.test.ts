@@ -16,6 +16,7 @@ describe('stageWindowsStartupProfileRuntime', () => {
       sharedHelperTarget: string;
       reportScriptTarget: string;
       compareScriptTarget: string;
+      uploadManifestScriptTarget: string;
       baselineReportTarget: string;
     };
 
@@ -30,6 +31,7 @@ describe('stageWindowsStartupProfileRuntime', () => {
     expect(plan.sharedHelperTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/isExecutedDirectly.mjs');
     expect(plan.reportScriptTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/summarizeWebGpuStartupProfile.mjs');
     expect(plan.compareScriptTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/compareWebGpuStartupProfiles.mjs');
+    expect(plan.uploadManifestScriptTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/scripts/writeWebGpuStartupProfileUploadManifest.mjs');
     expect(plan.baselineReportTarget).toBe('/mnt/c/Temp/hel142-startup-runtime/baselines/hel-142-windows-intel-control-startup-profile-report.json');
   });
 
@@ -64,6 +66,7 @@ describe('stageWindowsStartupProfileRuntime', () => {
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\captureWebGpuStartupProfileOverCdp.mjs"');
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\summarizeWebGpuStartupProfile.mjs"');
     expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\compareWebGpuStartupProfiles.mjs"');
+    expect(command).toContain('"C:\\Temp\\hel142-startup-runtime\\scripts\\writeWebGpuStartupProfileUploadManifest.mjs"');
     expect(command).toContain('set "STARTUP_PROFILE_BASELINE_REPORT=C:\\Temp\\hel142-startup-runtime\\baselines\\hel-142-windows-intel-control-startup-profile-report.json"');
     expect(command).toContain('set "STARTUP_PROFILE_CANDIDATE_REPORT=C:\\Temp\\hel142-startup-runtime\\artifacts\\startup-profile-report.json"');
     expect(command).toContain('set "STARTUP_PROFILE_ARTIFACT_DIR=C:\\Temp\\hel142-startup-runtime\\artifacts"');
@@ -81,6 +84,7 @@ describe('stageWindowsStartupProfileRuntime', () => {
     expect(readme).toContain('reports\\startup-profiling\\test-results\\windows-host-runtime-attempt\\');
     expect(readme).toContain('startup-profile-report.json');
     expect(readme).toContain('startup-profile-comparison.json');
+    expect(readme).toContain('startup-profile-upload-manifest.json');
   });
 
   it('prints the staging plan during dry run', () => {

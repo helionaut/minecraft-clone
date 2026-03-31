@@ -44,7 +44,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
   - kept the preview/build on WSL, but moved the profiling runtime itself onto Windows by using a portable Windows Node v22.22.1 toolchain from the shared cache
   - bypassed the UNC workspace limitations by staging a minimal Windows-local runtime bundle under `/mnt/c/Temp/hel142-startup-runtime/` containing `scripts/captureWebGpuStartupProfileOverCdp.mjs` plus `node_modules/playwright-core`
   - the repo now includes `npm run profile:webgpu-startup:stage-windows-runtime` to regenerate that Windows-local runtime bundle from WSL without recreating the copy steps manually
-  - that staged bundle now carries the helper/report/compare scripts plus the committed Intel control baseline, so `run-startup-profile.cmd` can emit `startup-profile-report.*` and `startup-profile-comparison.*` directly on the Windows side instead of leaving post-processing manual
+  - that staged bundle now carries the helper/report/compare/upload-manifest scripts plus the committed Intel control baseline, so `run-startup-profile.cmd` can emit `startup-profile-report.*`, `startup-profile-comparison.*`, and `startup-profile-upload-manifest.*` directly on the Windows side instead of leaving post-processing manual
 - Result:
   - the Windows-local runtime bundle successfully launched `C:\Program Files\Google\Chrome\Application\chrome.exe`, hit the WSL preview URL `http://127.0.0.1:4174/minecraft-clone/`, and wrote a new artifact bundle to `reports/startup-profiling/test-results/windows-host-runtime-attempt/`
   - generated artifacts now include:
@@ -228,7 +228,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    npm run profile:webgpu-startup:stage-windows-runtime
    ```
 
-   That stages `scripts/captureWebGpuStartupProfileOverCdp.mjs`, `scripts/isExecutedDirectly.mjs`, `scripts/summarizeWebGpuStartupProfile.mjs`, `scripts/compareWebGpuStartupProfiles.mjs`, `node_modules/playwright-core`, the committed Intel control baseline, `README.txt`, and `run-startup-profile.cmd` under `/mnt/c/Temp/hel142-startup-runtime/`. Launch `C:\Temp\hel142-startup-runtime\run-startup-profile.cmd` from Windows; it now captures the run and writes `startup-profile-report.*` plus `startup-profile-comparison.*` into `C:\Temp\hel142-startup-runtime\artifacts\`. Then copy that artifact folder back into `reports/startup-profiling/test-results/windows-host-runtime-attempt/`.
+   That stages `scripts/captureWebGpuStartupProfileOverCdp.mjs`, `scripts/isExecutedDirectly.mjs`, `scripts/summarizeWebGpuStartupProfile.mjs`, `scripts/compareWebGpuStartupProfiles.mjs`, `scripts/writeWebGpuStartupProfileUploadManifest.mjs`, `node_modules/playwright-core`, the committed Intel control baseline, `README.txt`, and `run-startup-profile.cmd` under `/mnt/c/Temp/hel142-startup-runtime/`. Launch `C:\Temp\hel142-startup-runtime\run-startup-profile.cmd` from Windows; it now captures the run and writes `startup-profile-report.*`, `startup-profile-comparison.*`, and `startup-profile-upload-manifest.*` into `C:\Temp\hel142-startup-runtime\artifacts\`. Then copy that artifact folder back into `reports/startup-profiling/test-results/windows-host-runtime-attempt/`.
 
    If the RTX machine needs explicit Chrome flags to stay on the high-performance adapter or expose the desired WebGPU path, pass them through `PLAYWRIGHT_PROFILE_BROWSER_ARGS`. Separate flags with newlines or `;;`, for example:
 

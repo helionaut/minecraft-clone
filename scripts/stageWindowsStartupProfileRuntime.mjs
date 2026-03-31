@@ -66,6 +66,8 @@ export function buildWindowsStartupRuntimePlan(env = process.env, pathExists = e
     reportScriptTarget: `${runtimeDir}/scripts/summarizeWebGpuStartupProfile.mjs`,
     compareScriptSource: `${REPO_ROOT_DIR}/scripts/compareWebGpuStartupProfiles.mjs`,
     compareScriptTarget: `${runtimeDir}/scripts/compareWebGpuStartupProfiles.mjs`,
+    uploadManifestScriptSource: `${REPO_ROOT_DIR}/scripts/writeWebGpuStartupProfileUploadManifest.mjs`,
+    uploadManifestScriptTarget: `${runtimeDir}/scripts/writeWebGpuStartupProfileUploadManifest.mjs`,
     baselineReportSource: DEFAULT_BASELINE_REPORT_PATH,
     baselineReportTarget: `${runtimeDir}/baselines/hel-142-windows-intel-control-startup-profile-report.json`,
     playwrightCoreTarget: `${runtimeDir}/node_modules/playwright-core`,
@@ -101,6 +103,8 @@ export function buildWindowsRuntimeReadme(plan) {
     '  startup-profile-report.md',
     '  startup-profile-comparison.json',
     '  startup-profile-comparison.md',
+    '  startup-profile-upload-manifest.json',
+    '  startup-profile-upload-manifest.md',
     '',
     'Copy that artifact folder back into the repo workspace after the run, for example:',
     '  reports\\startup-profiling\\test-results\\windows-host-runtime-attempt\\',
@@ -123,6 +127,8 @@ export function buildWindowsRuntimeCommand(plan) {
     `set "STARTUP_PROFILE_BASELINE_REPORT=${plan.windowsRuntimeDir}\\baselines\\hel-142-windows-intel-control-startup-profile-report.json"`,
     `set "STARTUP_PROFILE_CANDIDATE_REPORT=${plan.windowsRuntimeDir}\\artifacts\\startup-profile-report.json"`,
     `"${plan.windowsNodeExe}" "${plan.windowsRuntimeDir}\\scripts\\compareWebGpuStartupProfiles.mjs"`,
+    'if errorlevel 1 exit /b %errorlevel%',
+    `"${plan.windowsNodeExe}" "${plan.windowsRuntimeDir}\\scripts\\writeWebGpuStartupProfileUploadManifest.mjs"`,
     'if errorlevel 1 exit /b %errorlevel%',
     'endlocal',
     '',
@@ -158,6 +164,7 @@ async function main() {
   await cp(plan.sharedHelperSource, plan.sharedHelperTarget);
   await cp(plan.reportScriptSource, plan.reportScriptTarget);
   await cp(plan.compareScriptSource, plan.compareScriptTarget);
+  await cp(plan.uploadManifestScriptSource, plan.uploadManifestScriptTarget);
   await cp(plan.playwrightCoreSource, plan.playwrightCoreTarget, { recursive: true });
   await cp(plan.baselineReportSource, plan.baselineReportTarget);
   await writeFile(plan.runCmdPath, buildWindowsRuntimeCommand(plan), 'utf8');
@@ -167,6 +174,7 @@ async function main() {
   console.info(`[webgpu-startup-profile:windows-runtime] staged shared helper: ${plan.sharedHelperTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] staged report script: ${plan.reportScriptTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] staged compare script: ${plan.compareScriptTarget}`);
+  console.info(`[webgpu-startup-profile:windows-runtime] staged upload manifest script: ${plan.uploadManifestScriptTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] staged baseline report: ${plan.baselineReportTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] staged playwright-core: ${plan.playwrightCoreTarget}`);
   console.info(`[webgpu-startup-profile:windows-runtime] windows launcher: ${plan.runCmdPath}`);

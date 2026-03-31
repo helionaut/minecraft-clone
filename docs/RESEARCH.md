@@ -35,6 +35,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - The profiling wrapper has since been hardened to accept `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH`, so the eventual RTX run can point directly at a Chrome-for-Testing or locally installed Chrome binary without depending on Playwright channel discovery.
 - MCP discovery returned zero configured resources and zero resource templates, so there is no off-host browser or GPU execution surface hidden behind the current environment.
 - GitHub Actions also does not provide a hidden fallback execution lane here: the repo currently has zero registered self-hosted runners, and `.github/workflows/ci.yml` runs PR validation only on `ubuntu-latest`.
+- A sharper limitation emerged after publishing `.github/workflows/profile-webgpu-startup.yml`: GitHub does not register or dispatch that `workflow_dispatch` lane while it exists only on the PR branch. `gh workflow list` and `GET /repos/helionaut/minecraft-clone/actions/workflows` still expose only `CI`, `Deploy Pages`, and `PRD Docs`, and direct dispatch/get requests for `profile-webgpu-startup.yml` return `404 workflow ... not found on the default branch`.
 - That leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 
@@ -187,14 +188,14 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-0. If this repository later gains a suitable self-hosted Windows runner with labels `self-hosted`, `windows`, `x64`, and `gpu`, the lowest-ceremony path is now a GitHub Actions dispatch instead of a manual terminal session:
+0. If this repository later gains a suitable self-hosted Windows runner with labels `self-hosted`, `windows`, `x64`, and `gpu`, the lowest-ceremony path can be a GitHub Actions dispatch, but only after `.github/workflows/profile-webgpu-startup.yml` exists on `main` (or whatever branch GitHub treats as the default workflow source):
 
    - open the `Profile WebGPU Startup` workflow in GitHub Actions
    - dispatch it against ref `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`
    - set `chrome_executable_path` if the runner cannot expose Chrome via the default channel lookup
    - keep `require_rtx=true` for the real proof run
 
-   That workflow runs `npm run profile:webgpu-startup:local-preview` on the self-hosted Windows/GPU runner and uploads `reports/startup-profiling` as `webgpu-startup-profile-<run-id>`.
+   That workflow runs `npm run profile:webgpu-startup:local-preview` on the self-hosted Windows/GPU runner and uploads `reports/startup-profiling` as `webgpu-startup-profile-<run-id>`. Until the workflow lands on `main`, the operator must use the manual local-preview commands below rather than the GitHub Actions UI/API.
 
 1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from the latest published PR #52 head instead of the `main` GitHub Pages site:
 

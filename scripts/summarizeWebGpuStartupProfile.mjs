@@ -131,6 +131,7 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
     }
   };
   const hasLightingSubphase = startupSummary?.topPhases?.some((phase) => phase.name === 'initial-rebuild-world:compute-lighting');
+  const lightingNestedPhase = startupSummary?.topPhases?.find((phase) => phase.name.startsWith('initial-rebuild-world:compute-lighting:'));
   const hasMeshSubphase = startupSummary?.topPhases?.some((phase) => phase.name === 'initial-rebuild-world:rebuild-visible-meshes');
 
   if (topPhase?.name === 'initial-rebuild-world:compute-lighting') {
@@ -138,6 +139,14 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
       priority: 'high',
       suspect: 'initial-rebuild-world:compute-lighting',
       rationale: 'Lighting recomputation dominates startup time; inspect computeVoxelLighting breadth, propagation work, and whether lighting can be cached or incrementally updated.',
+    });
+  }
+
+  if (topPhase?.name?.startsWith('initial-rebuild-world:compute-lighting:')) {
+    pushCandidate({
+      priority: 'high',
+      suspect: topPhase.name,
+      rationale: 'A specific computeVoxelLighting subphase dominates startup time; compare sunlight seeding, emissive seeding, and queue propagation before changing the broader world rebuild path.',
     });
   }
 
@@ -154,6 +163,14 @@ function collectRemediationCandidates(startupSummary, runtimeStatus) {
       priority: 'high',
       suspect: 'initial-rebuild-world:compute-lighting',
       rationale: 'Lighting recomputation is large enough to appear among top startup phases; compare computeVoxelLighting cost against the full rebuild-world span.',
+    });
+  }
+
+  if (lightingNestedPhase) {
+    pushCandidate({
+      priority: 'high',
+      suspect: lightingNestedPhase.name,
+      rationale: 'A nested computeVoxelLighting phase is large enough to appear in top startup phases; use it to separate sunlight seeding, emissive seeding, and propagation costs on the RTX run.',
     });
   }
 

@@ -141,6 +141,36 @@ describe('summarizeWebGpuStartupProfile', () => {
     expect(report.markdown).toContain('initial-rebuild-world:compute-lighting: 1090.0ms');
   });
 
+  it('surfaces nested compute-lighting subphases when they dominate', () => {
+    const report = buildStartupProfilingReport({
+      startupSummary: {
+        totalDurationMs: 1900,
+        longFrameCount: 10,
+        maxFrameDurationMs: 540,
+        topPhases: [
+          { name: 'initial-rebuild-world:compute-lighting:propagate-light-queue', durationMs: 980 },
+          { name: 'initial-rebuild-world:compute-lighting', durationMs: 1280 },
+          { name: 'initial-rebuild-world', durationMs: 1850 },
+        ],
+      },
+      runtimeStatus: {
+        browserSupportsWebGpu: true,
+        webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',
+      },
+      consoleEntries: [],
+      traceData: {
+        traceEvents: [],
+      },
+    });
+
+    expect(report.json.remediationCandidates.map((candidate) => candidate.suspect)).toEqual([
+      'initial-rebuild-world:compute-lighting:propagate-light-queue',
+      'initial-rebuild-world:compute-lighting',
+      'post-startup frame loop',
+    ]);
+    expect(report.markdown).toContain('initial-rebuild-world:compute-lighting:propagate-light-queue: 980.0ms');
+  });
+
   it('rebuilds a startup profiling report from an artifact directory when only raw files exist', async () => {
     const artifactDir = await mkdtemp(join(tmpdir(), 'hel-142-startup-artifacts-'));
     const summarizeHelpers = summarizeStartupProfileScript as typeof summarizeStartupProfileScript & {

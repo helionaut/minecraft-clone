@@ -670,7 +670,15 @@ export async function createPlayableScene(
     const bounds = getVisibleBounds();
     const lighting = measureRebuildStep(
       'compute-lighting',
-      () => computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z)),
+      () => computeVoxelLighting(
+        bounds,
+        (x, y, z) => world.getBlock(x, y, z),
+        profilePhasePrefix
+          ? {
+            measureSync: (name, run) => measureRebuildStep(`compute-lighting:${name}`, run),
+          }
+          : undefined,
+      ),
     );
 
     measureRebuildStep('rebuild-visible-meshes', () => {

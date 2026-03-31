@@ -72,4 +72,32 @@ describe('computeVoxelLighting', () => {
     expect(lighting.getCellLight(1, 0, 0).blocklight).toBeGreaterThan(10);
     expect(lighting.getBlockBrightness(0, 0, 0)).toBeGreaterThan(0.9);
   });
+
+  it('emits nested timing phases when a profiler is provided', () => {
+    const phases: string[] = [];
+
+    computeVoxelLighting(
+      {
+        minX: -1,
+        maxX: 1,
+        minY: -1,
+        maxY: 1,
+        minZ: -1,
+        maxZ: 1,
+      },
+      createBlockGetter([[0, 0, 0, 'lava']]),
+      {
+        measureSync<T>(name: string, run: () => T): T {
+          phases.push(name);
+          return run();
+        },
+      },
+    );
+
+    expect(phases).toEqual([
+      'seed-sunlight-columns',
+      'seed-emissive-blocks',
+      'propagate-light-queue',
+    ]);
+  });
 });

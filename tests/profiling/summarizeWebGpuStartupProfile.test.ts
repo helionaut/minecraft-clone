@@ -142,24 +142,26 @@ describe('summarizeWebGpuStartupProfile', () => {
   });
 
   it('surfaces nested compute-lighting subphases when they dominate', () => {
-    const report = buildStartupProfilingReport({
-      startupSummary: {
-        totalDurationMs: 1900,
-        longFrameCount: 10,
-        maxFrameDurationMs: 540,
-        topPhases: [
-          {
-            name: 'initial-rebuild-world:compute-lighting:propagate-light-queue',
-            durationMs: 980,
-            metrics: {
-              queueSeeds: 144,
-              processedEntries: 912,
-            },
+    const startupSummary = {
+      totalDurationMs: 1900,
+      longFrameCount: 10,
+      maxFrameDurationMs: 540,
+      topPhases: [
+        {
+          name: 'initial-rebuild-world:compute-lighting:propagate-light-queue',
+          durationMs: 980,
+          metrics: {
+            queueSeeds: 144,
+            processedEntries: 912,
           },
-          { name: 'initial-rebuild-world:compute-lighting', durationMs: 1280 },
-          { name: 'initial-rebuild-world', durationMs: 1850 },
-        ],
-      },
+        },
+        { name: 'initial-rebuild-world:compute-lighting', durationMs: 1280 },
+        { name: 'initial-rebuild-world', durationMs: 1850 },
+      ],
+    };
+
+    const report = buildStartupProfilingReport({
+      startupSummary,
       runtimeStatus: {
         browserSupportsWebGpu: true,
         webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',

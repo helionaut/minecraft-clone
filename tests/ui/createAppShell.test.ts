@@ -14,6 +14,7 @@ const sandboxStub = {
   placeSelectedBlockOnNearestSurface: vi.fn(),
   getBlockAt: vi.fn(),
   getStatusSnapshot: vi.fn(),
+  getDiagnosticsSnapshot: vi.fn(),
   resetWorld: vi.fn(),
   dispose: vi.fn(),
 };
@@ -46,12 +47,16 @@ describe('createAppShell', () => {
     sandboxStub.placeSelectedBlockOnNearestSurface.mockReset();
     sandboxStub.getBlockAt.mockReset();
     sandboxStub.getStatusSnapshot.mockReset();
+    sandboxStub.getDiagnosticsSnapshot.mockReset();
     sandboxStub.resetWorld.mockReset();
     sandboxStub.dispose.mockReset();
+    window.history.replaceState({}, '', '/');
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('opens a Minecraft-style inventory window with storage grid, hotbar row, and recipe book', async () => {
@@ -186,6 +191,40 @@ describe('createAppShell', () => {
     expect(root.textContent).toContain('Best tool: stone-pickaxe');
     expect(root.textContent).toContain('Stations: crafting-table');
     expect(sandboxStub.resetWorld).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows diagnostics download controls in debug mode and exports a report', async () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    window.history.replaceState({}, '', '/?debug=1');
+    const createObjectURL = vi.fn(() => 'blob:diagnostics');
+    const revokeObjectURL = vi.fn();
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal('URL', Object.assign(URL, {
+      createObjectURL,
+      revokeObjectURL,
+    }));
+    sandboxStub.getDiagnosticsSnapshot.mockReturnValue({
+      capturedAt: '2026-03-31T08:15:00.000Z',
+      renderer: { summary: 'WebGL 2', backend: 'webgl' },
+    });
+
+    await createAppShell(root);
+
+    const downloadButton = root.querySelector<HTMLButtonElement>('[data-download-diagnostics]');
+    expect(downloadButton).not.toBeNull();
+    expect(root.textContent).toContain('Debug build hotkey: Alt+Shift+D');
+
+    downloadButton?.click();
+
+    expect(sandboxStub.getDiagnosticsSnapshot).toHaveBeenCalledTimes(1);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:diagnostics');
+    expect(clickSpy).toHaveBeenCalledTimes(1);
   });
 
   it('renders the main HUD hotbar from the real hotbar layout after moving a crafting table into it', async () => {

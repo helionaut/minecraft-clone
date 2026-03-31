@@ -1,6 +1,22 @@
 name: Profile WebGPU Startup
 
 on:
+  push:
+    branches:
+      - eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/profile-webgpu-startup.yml
+      - scripts/runWebGpuStartupProfile.mjs
+      - scripts/runWebGpuStartupProfileLocalPreview.mjs
+      - scripts/captureWebGpuStartupProfileOverCdp.mjs
+      - scripts/summarizeWebGpuStartupProfile.mjs
+      - scripts/compareWebGpuStartupProfiles.mjs
+      - scripts/analyzeWebGpuStartupProfileUpload.mjs
+      - tests/profiling/**
+      - playwright.profile.config.ts
   workflow_dispatch:
     inputs:
       ref:
@@ -33,7 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -47,16 +63,17 @@ jobs:
       - name: Log profiling inputs
         shell: bash
         run: |
-          echo "ref=${{ inputs.ref }}"
-          echo "require_rtx=${{ inputs.require_rtx }}"
-          echo "chrome_executable_path=${{ inputs.chrome_executable_path }}"
+          echo "event=${{ github.event_name }}"
+          echo "ref=${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"
+          echo "require_rtx=${{ github.event_name == 'workflow_dispatch' && inputs.require_rtx || 'true' }}"
+          echo "chrome_executable_path=${{ github.event_name == 'workflow_dispatch' && inputs.chrome_executable_path || '' }}"
 
       - name: Run WebGPU startup profiling via local preview
         shell: bash
         env:
-          PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: ${{ inputs.chrome_executable_path }}
-          PLAYWRIGHT_PROFILE_REQUIRE_RTX: ${{ inputs.require_rtx == 'true' && '1' || '0' }}
-          PLAYWRIGHT_PROFILE_BROWSER_ARGS: ${{ inputs.browser_args }}
+          PLAYWRIGHT_PROFILE_EXECUTABLE_PATH: ${{ github.event_name == 'workflow_dispatch' && inputs.chrome_executable_path || '' }}
+          PLAYWRIGHT_PROFILE_REQUIRE_RTX: ${{ github.event_name == 'workflow_dispatch' && inputs.require_rtx == 'true' && '1' || '1' }}
+          PLAYWRIGHT_PROFILE_BROWSER_ARGS: ${{ github.event_name == 'workflow_dispatch' && inputs.browser_args || '' }}
         run: npm run profile:webgpu-startup:local-preview
 
       - name: Upload startup profiling artifacts

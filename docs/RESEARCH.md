@@ -38,8 +38,9 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - MCP discovery returned zero configured resources and zero resource templates, so there is no off-host browser or GPU execution surface hidden behind the current environment.
 - GitHub Actions also does not provide a hidden fallback execution lane here: the repo currently has zero registered self-hosted runners, and `.github/workflows/ci.yml` runs PR validation only on `ubuntu-latest`.
 - A sharper limitation emerged after publishing `.github/workflows/profile-webgpu-startup.yml`: GitHub does not register or dispatch that `workflow_dispatch` lane while it exists only on the PR branch. `gh workflow list` and `GET /repos/helionaut/minecraft-clone/actions/workflows` still expose only `CI`, `Deploy Pages`, and `PRD Docs`, and direct dispatch/get requests for `profile-webgpu-startup.yml` return `404 workflow ... not found on the default branch`.
-- A follow-up CLI probe on 2026-03-31 removed the last ambiguity there: `gh workflow run profile-webgpu-startup.yml --ref eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene` also returns `HTTP 404: workflow profile-webgpu-startup.yml not found on the default branch`, so there is no usable branch-local dispatch path through GitHub while the file remains absent from `main`.
-- That leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured.
+- A follow-up CLI probe on 2026-03-31 removed the last ambiguity there: `gh workflow run profile-webgpu-startup.yml --ref eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene` also returns `HTTP 404: workflow profile-webgpu-startup.yml not found on the default branch`, so manual dispatch is still unavailable until the workflow lands on `main`.
+- To remove that default-branch-only dependency, the profiling workflow now also listens to issue-branch `push` and profiling-related `pull_request` updates. That means a future self-hosted Windows/x64/GPU runner can execute this branch without waiting for `workflow_dispatch` registration on `main`; the remaining hard blocker is the missing runner or external RTX artifact, not the branch event wiring.
+- That still leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 
 ### Windows-side host capture from this pass
@@ -191,7 +192,12 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
-0. If this repository later gains a suitable self-hosted Windows runner with labels `self-hosted`, `windows`, `x64`, and `gpu`, the lowest-ceremony path can be a GitHub Actions dispatch, but only after `.github/workflows/profile-webgpu-startup.yml` exists on `main` (or whatever branch GitHub treats as the default workflow source):
+0. If this repository later gains a suitable self-hosted Windows runner with labels `self-hosted`, `windows`, `x64`, and `gpu`, there are now two GitHub Actions paths:
+
+   - branch-event path before merge: push a fresh commit to `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene` or update one of the profiling-related files in PR #52, and the issue-branch workflow will queue automatically on the self-hosted runner
+   - manual dispatch path after merge/default-branch registration: open the `Profile WebGPU Startup` workflow in GitHub Actions and dispatch it against ref `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`
+
+   For the manual-dispatch path, `.github/workflows/profile-webgpu-startup.yml` still needs to exist on `main` (or whatever branch GitHub treats as the default workflow source):
 
    - open the `Profile WebGPU Startup` workflow in GitHub Actions
    - dispatch it against ref `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`

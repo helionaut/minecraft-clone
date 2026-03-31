@@ -61,6 +61,7 @@ import {
 import {
   DEFAULT_WORLD_CONFIG,
   VoxelWorld,
+  planChunkLoads,
   parseWorldPersistence,
 } from '../gameplay/world.ts';
 import { getNearbyStations } from '../gameplay/stations.ts';
@@ -184,6 +185,7 @@ interface StreamingProfile {
   readonly renderChunkRadius: number;
   readonly keepLoadedChunkRadius: number;
   readonly maxLoadedChunks: number;
+  readonly chunkLoadBudgetPerFrame: number;
   readonly pixelRatioCap: number;
 }
 
@@ -191,6 +193,7 @@ const DESKTOP_STREAMING_PROFILE: StreamingProfile = {
   renderChunkRadius: 1,
   keepLoadedChunkRadius: 2,
   maxLoadedChunks: 25,
+  chunkLoadBudgetPerFrame: 2,
   pixelRatioCap: 2,
 };
 
@@ -198,6 +201,7 @@ const MOBILE_STREAMING_PROFILE: StreamingProfile = {
   renderChunkRadius: 1,
   keepLoadedChunkRadius: 1,
   maxLoadedChunks: 9,
+  chunkLoadBudgetPerFrame: 1,
   pixelRatioCap: 1.25,
 };
 
@@ -211,6 +215,10 @@ function createVisibleFaces(): FaceVisibilityMask {
 
 function getRenderBrightness(block: CellTarget, lighting: VoxelLightResult): number {
   return lighting.getBlockBrightness(block.x, block.y, block.z);
+}
+
+function chunkKeyFromCoordinates(chunkX: number, chunkZ: number): string {
+  return `${chunkX},${chunkZ}`;
 }
 
 function inventoryStorageKey(): string {
@@ -632,19 +640,76 @@ export async function createPlayableScene(
     heldItemSwingIntensity = intensity;
   };
 
-  const rebuildWorld = () => {
-    world.loadChunksAround(
-      Math.floor(player.position.x),
-      Math.floor(player.position.z),
-      streamingProfile.renderChunkRadius,
-      streamingProfile.maxLoadedChunks,
-    );
+  const getPlayerChunkCoordinates = () => ({
+    chunkX: Math.floor(player.position.x / world.config.chunkSize),
+    chunkZ: Math.floor(player.position.z / world.config.chunkSize),
+  });
+
+  const getChunkLoadPlan = () => {
+    const { chunkX, chunkZ } = getPlayerChunkCoordinates();
+
+    return planChunkLoads(chunkX, chunkZ, streamingProfile.keepLoadedChunkRadius, {
+      maxChunks: streamingProfile.maxLoadedChunks,
+      urgentRadius: streamingProfile.renderChunkRadius,
+      preferDirection: player.velocity,
+    });
+  };
+
+  const loadVisibleChunksImmediately = () => {
+    const { chunkX: centerChunkX, chunkZ: centerChunkZ } = getPlayerChunkCoordinates();
+    let loadedVisibleChunk = false;
+
+    for (const candidate of getChunkLoadPlan()) {
+      if (
+        Math.abs(candidate.chunkX - centerChunkX) > streamingProfile.renderChunkRadius ||
+        Math.abs(candidate.chunkZ - centerChunkZ) > streamingProfile.renderChunkRadius
+      ) {
+        continue;
+      }
+
+      loadedVisibleChunk ||= world.loadChunk(candidate.chunkX, candidate.chunkZ);
+    }
+
+    return loadedVisibleChunk;
+  };
+
+  const streamPrefetchedChunks = () => {
+    const bounds = getVisibleBounds();
+    let loadedChunks = 0;
+    let loadedVisibleChunk = false;
+
+    for (const candidate of getChunkLoadPlan()) {
+      if (loadedChunks >= streamingProfile.chunkLoadBudgetPerFrame) {
+        break;
+      }
+
+      if (!world.loadChunk(candidate.chunkX, candidate.chunkZ)) {
+        continue;
+      }
+
+      loadedChunks += 1;
+      const chunkMinX = candidate.chunkX * world.config.chunkSize;
+      const chunkMaxX = chunkMinX + world.config.chunkSize - 1;
+      const chunkMinZ = candidate.chunkZ * world.config.chunkSize;
+      const chunkMaxZ = chunkMinZ + world.config.chunkSize - 1;
+      loadedVisibleChunk ||= (
+        chunkMinX <= bounds.maxX &&
+        chunkMaxX >= bounds.minX &&
+        chunkMinZ <= bounds.maxZ &&
+        chunkMaxZ >= bounds.minZ
+      );
+    }
+
     world.pruneLoadedChunks(
       Math.floor(player.position.x),
       Math.floor(player.position.z),
       streamingProfile.keepLoadedChunkRadius,
     );
 
+    return loadedVisibleChunk;
+  };
+
+  const rebuildWorld = () => {
     const bounds = getVisibleBounds();
     const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z));
     worldGroup.clear();
@@ -1184,10 +1249,18 @@ export async function createPlayableScene(
     window.localStorage.removeItem(inventoryStorageKey());
     player = createPlayerState(world.getSpawnPoint());
     worldDirty = true;
+    loadVisibleChunksImmediately();
+    streamPrefetchedChunks();
     rebuildWorld();
     updateTargeting();
   };
 
+  activeChunkKey = chunkKeyFromCoordinates(
+    Math.floor(player.position.x / world.config.chunkSize),
+    Math.floor(player.position.z / world.config.chunkSize),
+  );
+  loadVisibleChunksImmediately();
+  streamPrefetchedChunks();
   rebuildWorld();
   syncSize();
   updateStatus();
@@ -1334,9 +1407,15 @@ export async function createPlayableScene(
     );
     audio.update(previousPlayer, player, input, delta);
 
-    const currentChunkKey = `${Math.floor(player.position.x / world.config.chunkSize)},${Math.floor(player.position.z / world.config.chunkSize)}`;
+    const { chunkX, chunkZ } = getPlayerChunkCoordinates();
+    const currentChunkKey = chunkKeyFromCoordinates(chunkX, chunkZ);
     if (currentChunkKey !== activeChunkKey) {
       activeChunkKey = currentChunkKey;
+      loadVisibleChunksImmediately();
+      worldDirty = true;
+    }
+
+    if (streamPrefetchedChunks()) {
       worldDirty = true;
     }
 

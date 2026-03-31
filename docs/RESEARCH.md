@@ -187,6 +187,15 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
 ### Next-pass profiling checklist on an RTX desktop Chrome machine
 
+0. If this repository later gains a suitable self-hosted Windows runner with labels `self-hosted`, `windows`, `x64`, and `gpu`, the lowest-ceremony path is now a GitHub Actions dispatch instead of a manual terminal session:
+
+   - open the `Profile WebGPU Startup` workflow in GitHub Actions
+   - dispatch it against ref `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`
+   - set `chrome_executable_path` if the runner cannot expose Chrome via the default channel lookup
+   - keep `require_rtx=true` for the real proof run
+
+   That workflow runs `npm run profile:webgpu-startup:local-preview` on the self-hosted Windows/GPU runner and uploads `reports/startup-profiling` as `webgpu-startup-profile-<run-id>`.
+
 1. Serve this PR branch from the RTX desktop machine itself so Playwright hits the current profiling instrumentation from the latest published PR #52 head instead of the `main` GitHub Pages site:
 
    ```bash
@@ -313,6 +322,11 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    STARTUP_PROFILE_UPLOAD_SOURCE=https://github.com/<owner>/<repo>/actions/runs/<run-id>/artifacts/<id> \
    npm run profile:webgpu-startup:analyze-upload
    ```
+
+   If the run came from the new GitHub Actions workflow, the uploaded artifact
+   will be named `webgpu-startup-profile-<run-id>` and can be downloaded from
+   that workflow run or fetched directly from its artifact URL before running
+   the analyzer.
 
    The analyzer accepts either a `.zip` bundle or an unpacked artifact directory. It regenerates `startup-profile-report.*`, `startup-profile-comparison.*`, and `startup-profile-upload-manifest.*` under the resolved artifact directory so the uploaded RTX capture is ready for review without extra hand assembly.
    Compare the RTX deltas against these code paths first:

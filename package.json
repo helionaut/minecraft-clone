@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:debug": "tsc --noEmit && vite build --mode debug",
     "generate:inventory-icons": "node scripts/generateInventoryIcons.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

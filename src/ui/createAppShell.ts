@@ -9,9 +9,15 @@ import {
   type HotbarSelectionControls,
   type InventoryStatusEntry,
   type RecipeStatusEntry,
+  type SceneDiagnosticsSnapshot,
   type SandboxStatus,
   type TouchUiControls,
 } from '../rendering/scene.ts';
+import {
+  createBrowserDiagnosticsMonitor,
+  downloadDiagnosticsReport,
+  isDebugDiagnosticsEnabled,
+} from '../debug/browserDiagnostics.ts';
 import { getInventoryIcon } from './inventoryIcons.ts';
 
 declare global {
@@ -30,6 +36,7 @@ declare global {
       readonly getBlockAt: (x: number, y: number, z: number) => string | null;
       readonly getStatus: () => SandboxStatus | null;
       readonly getStartupProfile: () => unknown;
+      readonly getDiagnostics?: () => SceneDiagnosticsSnapshot;
       readonly moveInventorySlot: (fromIndex: number, toIndex: number) => void;
       readonly setMenuOpen: (open: boolean) => void;
     };
@@ -468,6 +475,8 @@ function renderRecipes(recipes: readonly RecipeStatusEntry[], nearbyStations: re
 }
 
 export async function createAppShell(root: HTMLDivElement): Promise<void> {
+  const diagnosticsEnabled = isDebugDiagnosticsEnabled(window.location.search, import.meta.env.MODE);
+
   root.innerHTML = `
     <main class="shell">
       <section class="sandbox">
@@ -590,7 +599,11 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
                       <p class="world-panel-copy" data-stations></p>
                       <p class="world-panel-copy" data-renderer></p>
                       <p class="world-panel-copy" data-device-note></p>
-                      <button class="reset-button" type="button" data-reset>Reset world</button>
+                      <div class="world-panel-actions">
+                        <button class="reset-button" type="button" data-reset>Reset world</button>
+                        ${diagnosticsEnabled ? '<button class="reset-button" type="button" data-download-diagnostics>Download diagnostics</button>' : ''}
+                      </div>
+                      ${diagnosticsEnabled ? '<p class="world-panel-copy" data-diagnostics-hint>Debug build hotkey: Alt+Shift+D</p>' : ''}
                     </section>
                   </aside>
                 </div>
@@ -616,6 +629,7 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
   const craftingGuide = root.querySelector<HTMLElement>('[data-crafting-guide]');
   const menuHotbar = root.querySelector<HTMLElement>('[data-menu-hotbar]');
   const resetButton = root.querySelector<HTMLButtonElement>('[data-reset]');
+  const downloadDiagnosticsButton = root.querySelector<HTMLButtonElement>('[data-download-diagnostics]');
   const deviceNote = root.querySelector<HTMLElement>('[data-device-note]');
   const mobileStatus = root.querySelector<HTMLElement>('[data-mobile-status]');
   const mobileCoords = root.querySelector<HTMLElement>('[data-mobile-coords]');
@@ -689,6 +703,7 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
   const safeCraftingGuide = craftingGuide;
   const safeMenuHotbar = menuHotbar;
   const safeResetButton = resetButton;
+  const safeDownloadDiagnosticsButton = downloadDiagnosticsButton;
   const safeDeviceNote = deviceNote;
   const safeMobileStatus = mobileStatus;
   const safeMobileCoords = mobileCoords;
@@ -1083,6 +1098,9 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
   const freezeAtSpawnFrame = exposeQaHarness && searchParams.has('freezeScene');
   const autoOpenMenu = exposeQaHarness && searchParams.has('autoOpenMenu');
   const exposeStartupProfile = searchParams.has('startupProfile');
+  const browserDiagnosticsMonitor = diagnosticsEnabled
+    ? createBrowserDiagnosticsMonitor(window)
+    : null;
   const sandbox = await createPlayableScene(
     viewport,
     applyStatus,
@@ -1114,12 +1132,18 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
       getBlockAt: (x: number, y: number, z: number) => sandbox.getBlockAt(x, y, z),
       getStatus: () => sandbox.getStatusSnapshot(),
       getStartupProfile: () => sandbox.getStartupProfile(),
+      getDiagnostics: () => sandbox.getDiagnosticsSnapshot(browserDiagnosticsMonitor?.captureSnapshot()),
       moveInventorySlot: (fromIndex: number, toIndex: number) => {
         moveInventorySlot(fromIndex, toIndex);
       },
       setMenuOpen,
     };
   }
+
+  const downloadDiagnostics = () => {
+    const diagnosticsReport = sandbox.getDiagnosticsSnapshot(browserDiagnosticsMonitor?.captureSnapshot());
+    downloadDiagnosticsReport(diagnosticsReport);
+  };
 
   if (autoOpenMenu) {
     setMenuOpen(true);
@@ -1149,6 +1173,19 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
 
   safeResetButton.addEventListener('click', () => {
     sandbox.resetWorld();
+  });
+
+  safeDownloadDiagnosticsButton?.addEventListener('click', downloadDiagnostics);
+
+  window.addEventListener('keydown', (event) => {
+    if (!diagnosticsEnabled) {
+      return;
+    }
+
+    if (event.altKey && event.shiftKey && event.code === 'KeyD') {
+      event.preventDefault();
+      downloadDiagnostics();
+    }
   });
 
   window.addEventListener('resize', syncResponsiveHotbarOffset);

@@ -32,6 +32,20 @@ export interface GeneratedChunk {
   readonly blocks: readonly Block[];
 }
 
+export interface ChunkCoordinates {
+  readonly chunkX: number;
+  readonly chunkZ: number;
+}
+
+export interface ChunkLoadPlanOptions {
+  readonly maxChunks?: number;
+  readonly urgentRadius?: number;
+  readonly preferDirection?: {
+    readonly x: number;
+    readonly z: number;
+  } | null;
+}
+
 export interface WorldConfig {
   readonly chunkSize: number;
   readonly minY: number;
@@ -117,6 +131,82 @@ function floorDiv(value: number, divisor: number): number {
 
 function chunkOrigin(chunkIndex: number, chunkSize: number): number {
   return chunkIndex * chunkSize;
+}
+
+function isWithinChunk(x: number, z: number, chunkX: number, chunkZ: number, chunkSize: number): boolean {
+  const originX = chunkOrigin(chunkX, chunkSize);
+  const originZ = chunkOrigin(chunkZ, chunkSize);
+  return (
+    x >= originX &&
+    x < originX + chunkSize &&
+    z >= originZ &&
+    z < originZ + chunkSize
+  );
+}
+
+function normalizeChunkDirection(
+  direction: ChunkLoadPlanOptions['preferDirection'],
+): { readonly x: number; readonly z: number } | null {
+  if (!direction) {
+    return null;
+  }
+
+  const length = Math.hypot(direction.x, direction.z);
+
+  if (length <= 1e-6) {
+    return null;
+  }
+
+  return {
+    x: direction.x / length,
+    z: direction.z / length,
+  };
+}
+
+export function planChunkLoads(
+  centerChunkX: number,
+  centerChunkZ: number,
+  radius: number,
+  options: ChunkLoadPlanOptions = {},
+): readonly ChunkCoordinates[] {
+  const normalizedRadius = Math.max(0, Math.floor(radius));
+  const maxChunks = options.maxChunks ?? Number.POSITIVE_INFINITY;
+  const urgentRadius = Math.max(
+    0,
+    Math.min(normalizedRadius, Math.floor(options.urgentRadius ?? normalizedRadius)),
+  );
+  const preferredDirection = normalizeChunkDirection(options.preferDirection);
+  const candidates: Array<ChunkCoordinates & {
+    readonly urgentRank: number;
+    readonly distance: number;
+    readonly forwardAlignment: number;
+  }> = [];
+
+  for (let chunkX = centerChunkX - normalizedRadius; chunkX <= centerChunkX + normalizedRadius; chunkX += 1) {
+    for (let chunkZ = centerChunkZ - normalizedRadius; chunkZ <= centerChunkZ + normalizedRadius; chunkZ += 1) {
+      const deltaX = chunkX - centerChunkX;
+      const deltaZ = chunkZ - centerChunkZ;
+      candidates.push({
+        chunkX,
+        chunkZ,
+        urgentRank: Math.max(Math.abs(deltaX), Math.abs(deltaZ)) <= urgentRadius ? 0 : 1,
+        distance: Math.abs(deltaX) + Math.abs(deltaZ),
+        forwardAlignment: preferredDirection
+          ? deltaX * preferredDirection.x + deltaZ * preferredDirection.z
+          : 0,
+      });
+    }
+  }
+
+  return candidates
+    .sort((left, right) =>
+      left.urgentRank - right.urgentRank ||
+      left.distance - right.distance ||
+      right.forwardAlignment - left.forwardAlignment ||
+      left.chunkX - right.chunkX ||
+      left.chunkZ - right.chunkZ)
+    .slice(0, Math.max(1, Math.floor(maxChunks)))
+    .map(({ chunkX, chunkZ }) => ({ chunkX, chunkZ }));
 }
 
 function fract(value: number): number {
@@ -344,12 +434,18 @@ function blockWithinBounds(y: number, config: WorldConfig): boolean {
 function placeDecorationBlock(
   blocks: BlockMap,
   config: WorldConfig,
+  chunkX: number,
+  chunkZ: number,
   x: number,
   y: number,
   z: number,
   type: SolidBlockType,
 ): void {
   if (!blockWithinBounds(y, config)) {
+    return;
+  }
+
+  if (!isWithinChunk(x, z, chunkX, chunkZ, config.chunkSize)) {
     return;
   }
 
@@ -365,6 +461,8 @@ function placeDecorationBlock(
 function placeTree(
   blocks: BlockMap,
   config: WorldConfig,
+  chunkX: number,
+  chunkZ: number,
   x: number,
   groundY: number,
   z: number,
@@ -372,7 +470,7 @@ function placeTree(
   const trunkHeight = 4 + Math.floor(hash(config.seed + 307, x, groundY, z) * 2);
 
   for (let offset = 1; offset <= trunkHeight; offset += 1) {
-    placeDecorationBlock(blocks, config, x, groundY + offset, z, 'oak-log');
+    placeDecorationBlock(blocks, config, chunkX, chunkZ, x, groundY + offset, z, 'oak-log');
   }
 
   const canopyStart = groundY + trunkHeight - 1;
@@ -390,17 +488,19 @@ function placeTree(
           continue;
         }
 
-        placeDecorationBlock(blocks, config, x + dx, canopyStart + dy, z + dz, 'oak-leaves');
+        placeDecorationBlock(blocks, config, chunkX, chunkZ, x + dx, canopyStart + dy, z + dz, 'oak-leaves');
       }
     }
   }
 
-  placeDecorationBlock(blocks, config, x, canopyStart + 3, z, 'oak-leaves');
+  placeDecorationBlock(blocks, config, chunkX, chunkZ, x, canopyStart + 3, z, 'oak-leaves');
 }
 
 function placeCactus(
   blocks: BlockMap,
   config: WorldConfig,
+  chunkX: number,
+  chunkZ: number,
   x: number,
   groundY: number,
   z: number,
@@ -414,7 +514,7 @@ function placeCactus(
   const height = 2 + Math.floor(hash(config.seed + 331, x, groundY, z) * 3);
 
   for (let offset = 1; offset <= height; offset += 1) {
-    placeDecorationBlock(blocks, config, x, groundY + offset, z, 'cactus');
+    placeDecorationBlock(blocks, config, chunkX, chunkZ, x, groundY + offset, z, 'cactus');
   }
 }
 
@@ -504,14 +604,22 @@ function createBaseChunkMap(config: WorldConfig, chunkX: number, chunkZ: number)
         }
       }
 
-      const topSurface = blocks.get(createBlockKey(x, column.height, z));
+    }
+  }
+
+  const decorationRadius = 2;
+
+  for (let x = originX - decorationRadius; x < originX + config.chunkSize + decorationRadius; x += 1) {
+    for (let z = originZ - decorationRadius; z < originZ + config.chunkSize + decorationRadius; z += 1) {
+      const column = getColumnData(config, x, z);
+      const topSurface = column.flooded && column.height <= config.seaLevel ? 'sand' : column.surface;
 
       if (
         topSurface === 'sand' &&
         hash(config.seed + 353, x, column.height, z) > 0.55 &&
         (Math.abs(x) > 2 || Math.abs(z) > 2)
       ) {
-        placeCactus(blocks, config, x, column.height, z);
+        placeCactus(blocks, config, chunkX, chunkZ, x, column.height, z);
       }
 
       if (
@@ -525,7 +633,7 @@ function createBaseChunkMap(config: WorldConfig, chunkX: number, chunkZ: number)
           (column.biome === 'forest' && decorationScore > 0.71) ||
           (column.biome === 'plains' && decorationScore > 0.81)
         ) {
-          placeTree(blocks, config, x, column.height, z);
+          placeTree(blocks, config, chunkX, chunkZ, x, column.height, z);
         }
       }
     }
@@ -693,6 +801,17 @@ export class VoxelWorld {
     return chunk;
   }
 
+  loadChunk(chunkX: number, chunkZ: number): boolean {
+    const key = createChunkKey(chunkX, chunkZ);
+
+    if (this.#chunks.has(key)) {
+      return false;
+    }
+
+    this.#ensureChunk(chunkX, chunkZ);
+    return true;
+  }
+
   #getChunkForBlock(x: number, z: number): ChunkState {
     return this.#ensureChunk(floorDiv(x, this.config.chunkSize), floorDiv(z, this.config.chunkSize));
   }
@@ -724,30 +843,22 @@ export class VoxelWorld {
     this.#mutations.set(key, current);
   }
 
-  loadChunksAround(x: number, z: number, radius: number, maxChunks = Number.POSITIVE_INFINITY): void {
+  loadChunksAround(
+    x: number,
+    z: number,
+    radius: number,
+    maxChunks = Number.POSITIVE_INFINITY,
+    options: Omit<ChunkLoadPlanOptions, 'maxChunks'> = {},
+  ): void {
     const centerChunkX = floorDiv(x, this.config.chunkSize);
     const centerChunkZ = floorDiv(z, this.config.chunkSize);
-    const candidates: Array<{ readonly chunkX: number; readonly chunkZ: number; readonly distance: number }> = [];
 
-    for (let chunkX = centerChunkX - radius; chunkX <= centerChunkX + radius; chunkX += 1) {
-      for (let chunkZ = centerChunkZ - radius; chunkZ <= centerChunkZ + radius; chunkZ += 1) {
-        candidates.push({
-          chunkX,
-          chunkZ,
-          distance: Math.abs(chunkX - centerChunkX) + Math.abs(chunkZ - centerChunkZ),
-        });
-      }
-    }
-
-    candidates
-      .sort((left, right) =>
-        left.distance - right.distance ||
-        left.chunkX - right.chunkX ||
-        left.chunkZ - right.chunkZ)
-      .slice(0, Math.max(1, Math.floor(maxChunks)))
-      .forEach(({ chunkX, chunkZ }) => {
-        this.#ensureChunk(chunkX, chunkZ);
-      });
+    planChunkLoads(centerChunkX, centerChunkZ, radius, {
+      ...options,
+      maxChunks,
+    }).forEach(({ chunkX, chunkZ }) => {
+      this.#ensureChunk(chunkX, chunkZ);
+    });
   }
 
   pruneLoadedChunks(x: number, z: number, radius: number): void {

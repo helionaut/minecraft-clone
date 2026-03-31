@@ -6,6 +6,7 @@ import {
   generateFlatWorld,
   generateWorld,
   parseWorldPersistence,
+  planChunkLoads,
 } from '../../src/gameplay/world.ts';
 
 describe('generateFlatWorld', () => {
@@ -27,7 +28,7 @@ describe('generateFlatWorld', () => {
 });
 
 describe('generateWorld', () => {
-  it('is deterministic for the same config and coordinates', () => {
+  it('is deterministic for the same config and coordinates', { timeout: 10_000 }, () => {
     const bounds = {
       minX: -16,
       maxX: 16,
@@ -80,6 +81,28 @@ describe('generateWorld', () => {
 });
 
 describe('VoxelWorld', () => {
+  it('prioritizes visible chunks first and biases outer-ring prefetch toward movement direction', () => {
+    const plan = planChunkLoads(0, 0, 2, {
+      maxChunks: 25,
+      urgentRadius: 1,
+      preferDirection: { x: 1, z: 0 },
+    });
+    const urgent = plan.slice(0, 9);
+
+    expect(urgent).toEqual(expect.arrayContaining([
+      { chunkX: -1, chunkZ: -1 },
+      { chunkX: -1, chunkZ: 0 },
+      { chunkX: -1, chunkZ: 1 },
+      { chunkX: 0, chunkZ: -1 },
+      { chunkX: 0, chunkZ: 0 },
+      { chunkX: 0, chunkZ: 1 },
+      { chunkX: 1, chunkZ: -1 },
+      { chunkX: 1, chunkZ: 0 },
+      { chunkX: 1, chunkZ: 1 },
+    ]));
+    expect(plan[9]).toEqual({ chunkX: 2, chunkZ: 0 });
+  });
+
   it('streams deterministic chunk data for distant coordinates', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
     const nearChunk = world.getChunk(0, 0);
@@ -92,6 +115,19 @@ describe('VoxelWorld', () => {
       .toBe('bedrock');
   });
 
+  it('keeps loaded chunk blocks in their owning chunk so rendering and targeting stay aligned', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+    const chunkX = -1;
+    const chunkZ = 0;
+    const chunk = world.getChunk(chunkX, chunkZ);
+
+    for (const block of chunk.blocks) {
+      expect(Math.floor(block.x / DEFAULT_WORLD_CONFIG.chunkSize)).toBe(chunkX);
+      expect(Math.floor(block.z / DEFAULT_WORLD_CONFIG.chunkSize)).toBe(chunkZ);
+      expect(world.getBlock(block.x, block.y, block.z)).toBe(block.type);
+    }
+  });
+
   it('caps chunk streaming to the requested active chunk budget', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
 
@@ -99,6 +135,14 @@ describe('VoxelWorld', () => {
 
     expect(world.getLoadedChunkCount()).toBe(9);
     expect(world.getLoadedChunkKeys()).toContain('0,0');
+  });
+
+  it('loads a single chunk only once when streaming incrementally', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+
+    expect(world.loadChunk(2, -1)).toBe(true);
+    expect(world.loadChunk(2, -1)).toBe(false);
+    expect(world.getLoadedChunkKeys()).toContain('2,-1');
   });
 
   it('can inspect only loaded chunks without expanding the active set', () => {

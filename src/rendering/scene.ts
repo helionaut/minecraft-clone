@@ -61,6 +61,7 @@ import {
 import {
   DEFAULT_WORLD_CONFIG,
   VoxelWorld,
+  planChunkLoads,
   parseWorldPersistence,
 } from '../gameplay/world.ts';
 import { getNearbyStations } from '../gameplay/stations.ts';
@@ -90,12 +91,20 @@ import {
   getWebGpuPreference,
   persistWebGpuSafeMode,
   type SceneRenderer,
+  type WebGpuDeviceLossInfo,
+  type SceneRendererBackend,
+  type WebGpuPreferenceMode,
 } from './sceneRenderer.ts';
 import { createDesktopVolumetricLightVolume } from './desktopVolumetricLighting.ts';
 import {
   createStartupProfiler,
   type StartupProfileSnapshot,
 } from './startupProfiling.ts';
+import {
+  summarizeSamples,
+  type BrowserDiagnosticsSnapshot,
+  type NumericSummary,
+} from '../debug/browserDiagnostics.ts';
 
 export interface InventoryStatusEntry {
   readonly type: string;
@@ -144,6 +153,7 @@ export interface PlayableScene {
   readonly getBlockAt: (x: number, y: number, z: number) => WorldBlockType | null;
   readonly getStatusSnapshot: () => SandboxStatus | null;
   readonly getStartupProfile: () => StartupProfileSnapshot | null;
+  readonly getDiagnosticsSnapshot: (browserDiagnostics?: BrowserDiagnosticsSnapshot) => SceneDiagnosticsSnapshot;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
 }
@@ -173,6 +183,86 @@ export interface HotbarSelectionControls {
   readonly setActiveHotbarItem: (type: InventoryItemType | null) => void;
 }
 
+export interface SceneDiagnosticsSnapshot {
+  readonly capturedAt: string;
+  readonly browser: BrowserDiagnosticsSnapshot | null;
+  readonly renderer: {
+    readonly backend: SceneRendererBackend;
+    readonly summary: string;
+    readonly rendererMode: string;
+    readonly fallbackReason: string | null;
+    readonly volumetricLighting: {
+      readonly enabled: boolean;
+      readonly reason: string | null;
+    };
+    readonly webGpuPreference: WebGpuPreferenceMode;
+    readonly webGpuDeviceLost: boolean;
+    readonly webGpuDeviceLoss: WebGpuDeviceLossInfo | null;
+  };
+  readonly performance: {
+    readonly frameTimingMs: NumericSummary;
+    readonly averageFps: number | null;
+    readonly longAnimationFrames: readonly {
+      readonly timestamp: string;
+      readonly frameTimeMs: number;
+      readonly chunkKey: string;
+    }[];
+    readonly chunkLoadTimingMs: NumericSummary;
+    readonly recentChunkLoads: readonly {
+      readonly timestamp: string;
+      readonly phase: 'visible' | 'prefetch';
+      readonly durationMs: number;
+      readonly loadedChunks: number;
+      readonly queueDepth: number;
+      readonly loadedVisibleChunk: boolean;
+      readonly chunkKey: string;
+    }[];
+    readonly lastWorldRebuildMs: number | null;
+  };
+  readonly world: {
+    readonly selectedChunk: {
+      readonly x: number;
+      readonly z: number;
+      readonly key: string;
+    };
+    readonly focusedChunk: {
+      readonly x: number;
+      readonly z: number;
+      readonly key: string;
+    } | null;
+    readonly playerPosition: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    };
+    readonly cameraPosition: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    };
+    readonly targetBlock: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+      readonly type: string;
+    } | null;
+    readonly placementBlock: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+      readonly type: string | null;
+    } | null;
+  };
+  readonly resources: {
+    readonly loadedChunkCount: number;
+    readonly loadedChunkKeys: readonly string[];
+    readonly worldMeshCount: number;
+    readonly sceneObjectCount: number;
+  };
+  readonly recentStatus: SandboxStatus | null;
+  readonly unavailableSignals: readonly string[];
+}
+
 const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number, number, number]> = [
   ['px', 1, 0, 0],
   ['nx', -1, 0, 0],
@@ -185,11 +275,15 @@ const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number,
 const TARGET_REACH = 6;
 const HELD_ITEM_EQUIP_DURATION = 0.18;
 const HELD_ITEM_SWING_DURATION = 0.24;
+const MAX_FRAME_TIMING_SAMPLES = 240;
+const MAX_DIAGNOSTIC_EVENTS = 25;
+const LONG_ANIMATION_FRAME_MS = 50;
 
 interface StreamingProfile {
   readonly renderChunkRadius: number;
   readonly keepLoadedChunkRadius: number;
   readonly maxLoadedChunks: number;
+  readonly chunkLoadBudgetPerFrame: number;
   readonly pixelRatioCap: number;
 }
 
@@ -197,6 +291,7 @@ const DESKTOP_STREAMING_PROFILE: StreamingProfile = {
   renderChunkRadius: 1,
   keepLoadedChunkRadius: 2,
   maxLoadedChunks: 25,
+  chunkLoadBudgetPerFrame: 2,
   pixelRatioCap: 2,
 };
 
@@ -204,6 +299,7 @@ const MOBILE_STREAMING_PROFILE: StreamingProfile = {
   renderChunkRadius: 1,
   keepLoadedChunkRadius: 1,
   maxLoadedChunks: 9,
+  chunkLoadBudgetPerFrame: 1,
   pixelRatioCap: 1.25,
 };
 
@@ -217,6 +313,10 @@ function createVisibleFaces(): FaceVisibilityMask {
 
 function getRenderBrightness(block: CellTarget, lighting: VoxelLightResult): number {
   return lighting.getBlockBrightness(block.x, block.y, block.z);
+}
+
+function chunkKeyFromCoordinates(chunkX: number, chunkZ: number): string {
+  return `${chunkX},${chunkZ}`;
 }
 
 function inventoryStorageKey(): string {
@@ -235,6 +335,18 @@ function getBestTool(inventory: Inventory): ToolItemType | null {
 
 function getReadableName(value: string): string {
   return value.replaceAll('-', ' ');
+}
+
+function roundMetric(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function pushLimited<T>(buffer: T[], entry: T, limit: number): void {
+  buffer.push(entry);
+
+  if (buffer.length > limit) {
+    buffer.splice(0, buffer.length - limit);
+  }
 }
 
 function statusEntriesFromCounts(
@@ -303,6 +415,7 @@ export async function createPlayableScene(
   });
   let renderer: SceneRenderer | null = null;
   let webGpuDeviceLost = false;
+  let webGpuDeviceLossInfo: WebGpuDeviceLossInfo | null = null;
   let recoveryReloadQueued = false;
   const canvas = document.createElement('canvas');
   canvas.setAttribute('aria-label', 'Minecraft clone sandbox viewport');
@@ -396,6 +509,7 @@ export async function createPlayableScene(
       }
 
       webGpuDeviceLost = true;
+      webGpuDeviceLossInfo = info;
       renderer?.setAnimationLoop(null);
       persistWebGpuSafeMode(window.localStorage, info);
       if (recoveryReloadQueued) {
@@ -517,6 +631,22 @@ export async function createPlayableScene(
   let activeChunkKey = '';
   let fluidAccumulator = 0;
   let lastPublishedStatus: SandboxStatus | null = null;
+  let lastWorldRebuildMs: number | null = null;
+  const frameDurationsMs: number[] = [];
+  const longAnimationFrames: Array<{
+    timestamp: string;
+    frameTimeMs: number;
+    chunkKey: string;
+  }> = [];
+  const chunkLoadSamples: Array<{
+    timestamp: string;
+    phase: 'visible' | 'prefetch';
+    durationMs: number;
+    loadedChunks: number;
+    queueDepth: number;
+    loadedVisibleChunk: boolean;
+    chunkKey: string;
+  }> = [];
   const input = {
     forward: false,
     backward: false,
@@ -645,6 +775,103 @@ export async function createPlayableScene(
     heldItemSwingIntensity = intensity;
   };
 
+  const getPlayerChunkCoordinates = () => ({
+    chunkX: Math.floor(player.position.x / world.config.chunkSize),
+    chunkZ: Math.floor(player.position.z / world.config.chunkSize),
+  });
+
+  const getChunkLoadPlan = () => {
+    const { chunkX, chunkZ } = getPlayerChunkCoordinates();
+
+    return planChunkLoads(chunkX, chunkZ, streamingProfile.keepLoadedChunkRadius, {
+      maxChunks: streamingProfile.maxLoadedChunks,
+      urgentRadius: streamingProfile.renderChunkRadius,
+      preferDirection: player.velocity,
+    });
+  };
+
+  const loadVisibleChunksImmediately = () => {
+    const { chunkX: centerChunkX, chunkZ: centerChunkZ } = getPlayerChunkCoordinates();
+    const plan = getChunkLoadPlan();
+    let loadedVisibleChunk = false;
+    let loadedChunks = 0;
+    const startedAt = performance.now();
+
+    for (const candidate of plan) {
+      if (
+        Math.abs(candidate.chunkX - centerChunkX) > streamingProfile.renderChunkRadius ||
+        Math.abs(candidate.chunkZ - centerChunkZ) > streamingProfile.renderChunkRadius
+      ) {
+        continue;
+      }
+
+      if (world.loadChunk(candidate.chunkX, candidate.chunkZ)) {
+        loadedChunks += 1;
+        loadedVisibleChunk = true;
+      }
+    }
+
+    pushLimited(chunkLoadSamples, {
+      timestamp: new Date().toISOString(),
+      phase: 'visible',
+      durationMs: roundMetric(performance.now() - startedAt),
+      loadedChunks,
+      queueDepth: Math.max(0, plan.length - loadedChunks),
+      loadedVisibleChunk,
+      chunkKey: activeChunkKey,
+    }, MAX_DIAGNOSTIC_EVENTS);
+
+    return loadedVisibleChunk;
+  };
+
+  const streamPrefetchedChunks = () => {
+    const bounds = getVisibleBounds();
+    const plan = getChunkLoadPlan();
+    let loadedChunks = 0;
+    let loadedVisibleChunk = false;
+    const startedAt = performance.now();
+
+    for (const candidate of plan) {
+      if (loadedChunks >= streamingProfile.chunkLoadBudgetPerFrame) {
+        break;
+      }
+
+      if (!world.loadChunk(candidate.chunkX, candidate.chunkZ)) {
+        continue;
+      }
+
+      loadedChunks += 1;
+      const chunkMinX = candidate.chunkX * world.config.chunkSize;
+      const chunkMaxX = chunkMinX + world.config.chunkSize - 1;
+      const chunkMinZ = candidate.chunkZ * world.config.chunkSize;
+      const chunkMaxZ = chunkMinZ + world.config.chunkSize - 1;
+      loadedVisibleChunk ||= (
+        chunkMinX <= bounds.maxX &&
+        chunkMaxX >= bounds.minX &&
+        chunkMinZ <= bounds.maxZ &&
+        chunkMaxZ >= bounds.minZ
+      );
+    }
+
+    world.pruneLoadedChunks(
+      Math.floor(player.position.x),
+      Math.floor(player.position.z),
+      streamingProfile.keepLoadedChunkRadius,
+    );
+
+    pushLimited(chunkLoadSamples, {
+      timestamp: new Date().toISOString(),
+      phase: 'prefetch',
+      durationMs: roundMetric(performance.now() - startedAt),
+      loadedChunks,
+      queueDepth: Math.max(0, plan.length - loadedChunks),
+      loadedVisibleChunk,
+      chunkKey: activeChunkKey,
+    }, MAX_DIAGNOSTIC_EVENTS);
+
+    return loadedVisibleChunk;
+  };
+
   const rebuildWorld = (profilePhasePrefix?: string) => {
     const measureRebuildStep = <T,>(name: string, run: () => T): T => {
       if (!profilePhasePrefix) {
@@ -654,20 +881,7 @@ export async function createPlayableScene(
       return startupProfiler.measureSync(`${profilePhasePrefix}:${name}`, run);
     };
 
-    measureRebuildStep('sync-chunks', () => {
-      world.loadChunksAround(
-        Math.floor(player.position.x),
-        Math.floor(player.position.z),
-        streamingProfile.renderChunkRadius,
-        streamingProfile.maxLoadedChunks,
-      );
-      world.pruneLoadedChunks(
-        Math.floor(player.position.x),
-        Math.floor(player.position.z),
-        streamingProfile.keepLoadedChunkRadius,
-      );
-    });
-
+    const startedAt = performance.now();
     const bounds = getVisibleBounds();
     const lighting = measureRebuildStep(
       'compute-lighting',
@@ -753,6 +967,7 @@ export async function createPlayableScene(
     });
 
     worldDirty = false;
+    lastWorldRebuildMs = roundMetric(performance.now() - startedAt);
   };
 
   const updateStatus = () => {
@@ -1252,10 +1467,18 @@ export async function createPlayableScene(
     window.localStorage.removeItem(inventoryStorageKey());
     player = createPlayerState(world.getSpawnPoint());
     worldDirty = true;
+    loadVisibleChunksImmediately();
+    streamPrefetchedChunks();
     rebuildWorld();
     updateTargeting();
   };
 
+  activeChunkKey = chunkKeyFromCoordinates(
+    Math.floor(player.position.x / world.config.chunkSize),
+    Math.floor(player.position.z / world.config.chunkSize),
+  );
+  loadVisibleChunksImmediately();
+  streamPrefetchedChunks();
   startupProfiler.measureSync('initial-rebuild-world', () => rebuildWorld('initial-rebuild-world'));
   startupProfiler.measureSync('initial-sync-size', syncSize);
   startupProfiler.measureSync('initial-status-publish', updateStatus);
@@ -1387,11 +1610,24 @@ export async function createPlayableScene(
       return;
     }
 
-    const delta = (now - previousTime) / 1000;
-    startupProfiler.recordFrame(delta * 1000);
+    const deltaMs = now - previousTime;
+    const delta = deltaMs / 1000;
+    startupProfiler.recordFrame(deltaMs);
     previousTime = now;
     elapsedTime += delta;
     const previousPlayer = player;
+
+    if (deltaMs > 0) {
+      pushLimited(frameDurationsMs, deltaMs, MAX_FRAME_TIMING_SAMPLES);
+
+      if (deltaMs >= LONG_ANIMATION_FRAME_MS) {
+        pushLimited(longAnimationFrames, {
+          timestamp: new Date().toISOString(),
+          frameTimeMs: roundMetric(deltaMs),
+          chunkKey: activeChunkKey,
+        }, MAX_DIAGNOSTIC_EVENTS);
+      }
+    }
 
     player = stepPlayer(
       player,
@@ -1403,9 +1639,15 @@ export async function createPlayableScene(
     );
     audio.update(previousPlayer, player, input, delta);
 
-    const currentChunkKey = `${Math.floor(player.position.x / world.config.chunkSize)},${Math.floor(player.position.z / world.config.chunkSize)}`;
+    const { chunkX, chunkZ } = getPlayerChunkCoordinates();
+    const currentChunkKey = chunkKeyFromCoordinates(chunkX, chunkZ);
     if (currentChunkKey !== activeChunkKey) {
       activeChunkKey = currentChunkKey;
+      loadVisibleChunksImmediately();
+      worldDirty = true;
+    }
+
+    if (streamPrefetchedChunks()) {
       worldDirty = true;
     }
 
@@ -1465,6 +1707,91 @@ export async function createPlayableScene(
     getBlockAt: (x: number, y: number, z: number) => world.getBlock(x, y, z),
     getStatusSnapshot: () => lastPublishedStatus,
     getStartupProfile: () => startupProfiler.snapshot(),
+    getDiagnosticsSnapshot: (browserDiagnostics) => {
+      const { chunkX, chunkZ } = getPlayerChunkCoordinates();
+      const focusedChunkX = currentTarget ? Math.floor(currentTarget.x / world.config.chunkSize) : null;
+      const focusedChunkZ = currentTarget ? Math.floor(currentTarget.z / world.config.chunkSize) : null;
+      const frameTiming = summarizeSamples(frameDurationsMs);
+      const chunkLoadTiming = summarizeSamples(chunkLoadSamples.map((sample) => sample.durationMs));
+
+      return {
+        capturedAt: new Date().toISOString(),
+        browser: browserDiagnostics ?? null,
+        renderer: {
+          backend: rendererSelection.backend,
+          summary: rendererSummary,
+          rendererMode: rendererDiagnostics.mode,
+          fallbackReason: rendererSelection.fallbackReason,
+          volumetricLighting: {
+            enabled: volumetricLighting.enabled,
+            reason: volumetricLighting.reason ?? null,
+          },
+          webGpuPreference: webGpuPreference.mode,
+          webGpuDeviceLost,
+          webGpuDeviceLoss: webGpuDeviceLossInfo,
+        },
+        performance: {
+          frameTimingMs: frameTiming,
+          averageFps: frameTiming.average ? roundMetric(1000 / frameTiming.average) : null,
+          longAnimationFrames: [...longAnimationFrames],
+          chunkLoadTimingMs: chunkLoadTiming,
+          recentChunkLoads: [...chunkLoadSamples],
+          lastWorldRebuildMs,
+        },
+        world: {
+          selectedChunk: {
+            x: chunkX,
+            z: chunkZ,
+            key: activeChunkKey,
+          },
+          focusedChunk: focusedChunkX !== null && focusedChunkZ !== null
+            ? {
+              x: focusedChunkX,
+              z: focusedChunkZ,
+              key: chunkKeyFromCoordinates(focusedChunkX, focusedChunkZ),
+            }
+            : null,
+          playerPosition: {
+            x: roundMetric(player.position.x),
+            y: roundMetric(player.position.y),
+            z: roundMetric(player.position.z),
+          },
+          cameraPosition: {
+            x: roundMetric(camera.position.x),
+            y: roundMetric(camera.position.y),
+            z: roundMetric(camera.position.z),
+          },
+          targetBlock: currentTarget
+            ? {
+              x: currentTarget.x,
+              y: currentTarget.y,
+              z: currentTarget.z,
+              type: currentTarget.type,
+            }
+            : null,
+          placementBlock: currentPlacement
+            ? {
+              x: currentPlacement.x,
+              y: currentPlacement.y,
+              z: currentPlacement.z,
+              type: getActivePlaceableBlock(activeHotbarItem),
+            }
+            : null,
+        },
+        resources: {
+          loadedChunkCount: world.getLoadedChunkCount(),
+          loadedChunkKeys: world.getLoadedChunkKeys(),
+          worldMeshCount: worldGroup.children.length,
+          sceneObjectCount: scene.children.length,
+        },
+        recentStatus: lastPublishedStatus,
+        unavailableSignals: [
+          'worker timings are not instrumented in this slice',
+          'queue and backpressure stats are limited to chunk plan depth and per-frame load budget',
+          'browser pipeline and command buffer errors are only captured when surfaced as console or device-loss events',
+        ],
+      };
+    },
     resetWorld,
     dispose: () => {
       renderer.setAnimationLoop(null);

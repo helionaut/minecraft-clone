@@ -160,7 +160,7 @@ describe('runWebGpuStartupProfile', () => {
 
   it('builds an upload manifest for the generated artifact bundle', () => {
     const manifestBuilder = startupProfileScript as typeof startupProfileScript & {
-      buildStartupProfileUploadManifest: (artifactOutputDir: string) => {
+      buildStartupProfileUploadManifest: (artifactOutputDir: string, files?: string[]) => {
         json: {
           artifactDir: string;
           files: string[];
@@ -178,5 +178,30 @@ describe('runWebGpuStartupProfile', () => {
     expect(manifest.json.files).toContain('startup-profile-comparison.json');
     expect(manifest.markdown).toContain('startup-profile-report.json');
     expect(manifest.markdown).toContain('startup-profile-comparison.json');
+  });
+
+  it('filters the upload bundle down to files that actually exist', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'hel-142-profile-bundle-'));
+    const manifestHelpers = startupProfileScript as typeof startupProfileScript & {
+      collectExistingStartupProfileBundleFiles: (
+        artifactOutputDir: string,
+        pathExists?: (path: string) => boolean,
+      ) => string[];
+    };
+
+    try {
+      await mkdir(tempRoot, { recursive: true });
+      const files = manifestHelpers.collectExistingStartupProfileBundleFiles(
+        tempRoot,
+        (path: string) => path.endsWith('runtime-status.json') || path.endsWith('startup-profile-report.json'),
+      );
+
+      expect(files).toEqual([
+        'runtime-status.json',
+        'startup-profile-report.json',
+      ]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
   });
 });

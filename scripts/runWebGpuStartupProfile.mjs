@@ -8,6 +8,18 @@ const REPO_ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
 const CDP_CAPTURE_SCRIPT_PATH = fileURLToPath(new URL('./captureWebGpuStartupProfileOverCdp.mjs', import.meta.url));
 const REPORT_SCRIPT_PATH = fileURLToPath(new URL('./summarizeWebGpuStartupProfile.mjs', import.meta.url));
 const COMPARE_SCRIPT_PATH = fileURLToPath(new URL('./compareWebGpuStartupProfiles.mjs', import.meta.url));
+const DEFAULT_BASELINE_REPORT_PATH = 'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/startup-profile-report.json';
+const STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES = [
+  'runtime-status.json',
+  'console-messages.json',
+  'chrome-performance-trace.json',
+  'startup-profile.json',
+  'startup-profile-summary.json',
+  'startup-profile-report.json',
+  'startup-profile-report.md',
+  'startup-profile-comparison.json',
+  'startup-profile-comparison.md',
+];
 
 /**
  * @typedef {{
@@ -180,19 +192,12 @@ export async function findLatestArtifactOutputDir(resultsDir) {
   return directories[0]?.path ?? null;
 }
 
-export function buildStartupProfileUploadManifest(artifactOutputDir) {
-  const files = [
-    'runtime-status.json',
-    'console-messages.json',
-    'chrome-performance-trace.json',
-    'startup-profile.json',
-    'startup-profile-summary.json',
-    'startup-profile-report.json',
-    'startup-profile-report.md',
-    'startup-profile-comparison.json',
-    'startup-profile-comparison.md',
-  ];
+export function collectExistingStartupProfileBundleFiles(artifactOutputDir, pathExists = existsSync) {
+  return STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES
+    .filter((file) => pathExists(`${artifactOutputDir}/${file}`));
+}
 
+export function buildStartupProfileUploadManifest(artifactOutputDir, files = STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES) {
   return {
     json: {
       generatedAt: new Date().toISOString(),
@@ -215,7 +220,8 @@ export function buildStartupProfileUploadManifest(artifactOutputDir) {
 }
 
 async function writeStartupProfileUploadManifest(artifactOutputDir) {
-  const manifest = buildStartupProfileUploadManifest(artifactOutputDir);
+  const files = collectExistingStartupProfileBundleFiles(artifactOutputDir);
+  const manifest = buildStartupProfileUploadManifest(artifactOutputDir, files);
 
   await Promise.all([
     writeFile(
@@ -272,6 +278,19 @@ async function runPostCaptureReport(plan) {
 }
 
 async function runPostCaptureComparison(plan, artifactOutputDir) {
+  const baselineReportPath = process.env.STARTUP_PROFILE_BASELINE_REPORT?.trim() || DEFAULT_BASELINE_REPORT_PATH;
+  const candidateReportPath = `${artifactOutputDir}/startup-profile-report.json`;
+
+  if (!existsSync(candidateReportPath)) {
+    console.warn(`[webgpu-startup-profile] skipping comparison because candidate report is missing: ${candidateReportPath}`);
+    return false;
+  }
+
+  if (!existsSync(baselineReportPath)) {
+    console.warn(`[webgpu-startup-profile] skipping comparison because baseline report is missing: ${baselineReportPath}`);
+    return false;
+  }
+
   console.info(`[webgpu-startup-profile] generating baseline comparison for ${artifactOutputDir}`);
 
   await new Promise((resolve, reject) => {
@@ -280,7 +299,8 @@ async function runPostCaptureComparison(plan, artifactOutputDir) {
       cwd: REPO_ROOT_DIR,
       env: {
         ...process.env,
-        STARTUP_PROFILE_CANDIDATE_REPORT: `${artifactOutputDir}/startup-profile-report.json`,
+        STARTUP_PROFILE_BASELINE_REPORT: baselineReportPath,
+        STARTUP_PROFILE_CANDIDATE_REPORT: candidateReportPath,
       },
     });
 
@@ -298,6 +318,8 @@ async function runPostCaptureComparison(plan, artifactOutputDir) {
       resolve(undefined);
     });
   });
+
+  return true;
 }
 
 async function main() {
@@ -315,8 +337,9 @@ async function main() {
   console.info(`[webgpu-startup-profile] CDP endpoint: ${plan.cdpEndpointUrl}`);
   console.info(`[webgpu-startup-profile] artifacts: ${plan.artifactDir}`);
   console.info(`[webgpu-startup-profile] report command: ${plan.reportCommand} ${plan.reportArgs.join(' ')}`);
-  console.info('[webgpu-startup-profile] comparison is auto-generated after a successful capture');
-  console.info('[webgpu-startup-profile] upload manifest is auto-generated after a successful capture');
+  console.info('[webgpu-startup-profile] post-capture report generation is attempted whenever a Playwright artifact directory exists');
+  console.info('[webgpu-startup-profile] comparison is auto-generated when both baseline and candidate reports are available');
+  console.info('[webgpu-startup-profile] upload manifest is auto-generated from the files that were actually produced');
 
   if (plan.dryRun) {
     console.info(`[webgpu-startup-profile] dry run command: ${plan.command} ${plan.args.join(' ')}`);
@@ -348,10 +371,6 @@ async function main() {
 
   process.exitCode = childExitCode;
 
-  if (childExitCode !== 0) {
-    return;
-  }
-
   try {
     const artifactOutputDir = await runPostCaptureReport(plan);
     if (artifactOutputDir) {
@@ -360,7 +379,10 @@ async function main() {
     }
   } catch (error) {
     console.error(`[webgpu-startup-profile] ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
+
+    if (childExitCode === 0) {
+      process.exitCode = 1;
+    }
   }
 }
 

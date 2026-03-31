@@ -47,6 +47,13 @@ export const defaultImportedUploadDir =
     sourcePath: string,
   ) => string;
 
+export const buildRemoteUploadRequestOptions =
+  analyzeStartupProfileUploadScript.buildRemoteUploadRequestOptions as (
+    sourcePath: string,
+    env?: Record<string, string | undefined>,
+    resolveAuthTokenFn?: (env?: Record<string, string | undefined>) => Promise<string | null>,
+  ) => Promise<Record<string, unknown>>;
+
 export const findStartupProfileArtifactDir =
   analyzeStartupProfileUploadScript.findStartupProfileArtifactDir as (
     rootDir: string,

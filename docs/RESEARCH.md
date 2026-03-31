@@ -298,6 +298,13 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 
    STARTUP_PROFILE_UPLOAD_SOURCE=https://.../startup-profile-upload-bundle.zip \
    npm run profile:webgpu-startup:analyze-upload
+
+   For private repo workflows, the analyzer also accepts a GitHub Actions
+   artifact API URL and will reuse `GITHUB_TOKEN`, `GH_TOKEN`, or the local
+   `gh auth token` session when available:
+
+   STARTUP_PROFILE_UPLOAD_SOURCE=https://api.github.com/repos/<owner>/<repo>/actions/artifacts/<id>/zip \
+   npm run profile:webgpu-startup:analyze-upload
    ```
 
    The analyzer accepts either a `.zip` bundle or an unpacked artifact directory. It regenerates `startup-profile-report.*`, `startup-profile-comparison.*`, and `startup-profile-upload-manifest.*` under the resolved artifact directory so the uploaded RTX capture is ready for review without extra hand assembly.

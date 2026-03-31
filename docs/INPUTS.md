@@ -104,6 +104,8 @@ Required external input for HEL-142:
 Accepted returned forms:
 - `startup-profile-upload-bundle.zip`
 - an HTTP(S) URL that points at `startup-profile-upload-bundle.zip`
+- a private GitHub Actions artifact API URL such as
+  `https://api.github.com/repos/<owner>/<repo>/actions/artifacts/<id>/zip`
 - an unpacked artifact directory containing at least:
   - `runtime-status.json`
   - `startup-profile.json`
@@ -119,6 +121,11 @@ Preferred generation paths on the RTX machine:
 How the returned input is consumed in this workspace:
 - `STARTUP_PROFILE_UPLOAD_SOURCE=/absolute/path/to/<bundle-or-dir> npm run profile:webgpu-startup:analyze-upload`
 - `STARTUP_PROFILE_UPLOAD_SOURCE=https://.../startup-profile-upload-bundle.zip npm run profile:webgpu-startup:analyze-upload`
+- `STARTUP_PROFILE_UPLOAD_SOURCE=https://api.github.com/repos/<owner>/<repo>/actions/artifacts/<id>/zip npm run profile:webgpu-startup:analyze-upload`
+
+For private GitHub artifact URLs, the analyzer will reuse `GITHUB_TOKEN`,
+`GH_TOKEN`, or the local `gh auth token` session from this machine when
+available.
 
 Source-of-truth repo paths for this lane:
 - operator instructions: `docs/RESEARCH.md`

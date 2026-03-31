@@ -65,6 +65,55 @@ export function resolveUploadSourceName(sourcePath) {
   }
 }
 
+export function isGitHubArtifactApiUrl(sourceUrl) {
+  return /^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/actions\/artifacts\/\d+\/zip(?:\?.*)?$/i.test(sourceUrl);
+}
+
+export async function resolveGitHubAuthToken(
+  env = process.env,
+  execAuthCommand = async () => {
+    const result = await execFile('gh', ['auth', 'token']);
+    return result.stdout;
+  },
+) {
+  const envToken = env.GITHUB_TOKEN?.trim() || env.GH_TOKEN?.trim();
+
+  if (envToken) {
+    return envToken;
+  }
+
+  try {
+    const stdout = await execAuthCommand();
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function buildRemoteUploadRequestOptions(
+  sourceUrl,
+  env = process.env,
+  resolveAuthTokenFn = resolveGitHubAuthToken,
+) {
+  if (!isGitHubArtifactApiUrl(sourceUrl)) {
+    return {};
+  }
+
+  const authToken = await resolveAuthTokenFn(env);
+
+  if (!authToken) {
+    return {};
+  }
+
+  return {
+    headers: {
+      Authorization: `Bearer ${authToken}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  };
+}
+
 export async function findStartupProfileArtifactDir(rootDir) {
   const queue = [rootDir];
   const visited = new Set();
@@ -122,12 +171,16 @@ export async function extractStartupProfileUploadArchive(sourcePath, outputDir) 
   return outputDir;
 }
 
-export async function downloadStartupProfileUploadSource(sourceUrl, outputDir) {
+export async function downloadStartupProfileUploadSource(
+  sourceUrl,
+  outputDir,
+  buildRequestOptions = buildRemoteUploadRequestOptions,
+) {
   await mkdir(outputDir, { recursive: true });
 
   const downloadName = resolveUploadSourceName(sourceUrl) || 'startup-profile-upload-bundle.zip';
   const downloadPath = `${outputDir}/${downloadName}`;
-  const response = await fetch(sourceUrl);
+  const response = await fetch(sourceUrl, await buildRequestOptions(sourceUrl));
 
   if (!response.ok) {
     throw new Error(`Could not download upload source ${sourceUrl}: HTTP ${response.status}.`);

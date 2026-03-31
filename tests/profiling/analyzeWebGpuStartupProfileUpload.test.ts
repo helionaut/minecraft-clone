@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeStartupProfileUpload,
   buildStartupProfileUploadAnalysisPlan,
+  buildRemoteUploadRequestOptions,
   defaultImportedUploadDir,
   findStartupProfileArtifactDir,
   resolveStartupProfileUploadSource,
@@ -128,6 +129,32 @@ describe('analyzeWebGpuStartupProfileUpload', () => {
       await rm(defaultImportedUploadDir(sourceUrl), { recursive: true, force: true });
       await rm(tempRoot, { recursive: true, force: true });
     }
+  });
+
+  it('adds GitHub auth headers for private GitHub artifact API URLs when a token is available', async () => {
+    const options = await buildRemoteUploadRequestOptions(
+      'https://api.github.com/repos/helionaut/minecraft-clone/actions/artifacts/123456789/zip',
+      {},
+      async () => 'test-token',
+    );
+
+    expect(options).toEqual({
+      headers: {
+        Authorization: 'Bearer test-token',
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+  });
+
+  it('keeps generic https bundle URLs unauthenticated', async () => {
+    const options = await buildRemoteUploadRequestOptions(
+      'https://example.com/profiles/startup-profile-upload-bundle.zip',
+      {},
+      async () => 'test-token',
+    );
+
+    expect(options).toEqual({});
   });
 
   it('writes report, comparison, and manifest artifacts for an uploaded artifact directory', async () => {

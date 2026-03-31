@@ -5,6 +5,8 @@ import {
 } from '../gameplay/blocks.ts';
 import type { InventoryItemType } from '../gameplay/progression.ts';
 import {
+  type ChunkTraversalProfileOptions,
+  type ChunkTraversalProfileReport,
   createPlayableScene,
   type HotbarSelectionControls,
   type InventoryStatusEntry,
@@ -36,6 +38,7 @@ declare global {
       readonly getBlockAt: (x: number, y: number, z: number) => string | null;
       readonly getStatus: () => SandboxStatus | null;
       readonly getDiagnostics?: () => SceneDiagnosticsSnapshot;
+      readonly profileChunkTraversal?: (options?: ChunkTraversalProfileOptions) => Promise<ChunkTraversalProfileReport>;
       readonly moveInventorySlot: (fromIndex: number, toIndex: number) => void;
       readonly setMenuOpen: (open: boolean) => void;
     };
@@ -1120,6 +1123,7 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
       getBlockAt: (x: number, y: number, z: number) => sandbox.getBlockAt(x, y, z),
       getStatus: () => sandbox.getStatusSnapshot(),
       getDiagnostics: () => sandbox.getDiagnosticsSnapshot(browserDiagnosticsMonitor?.captureSnapshot()),
+      profileChunkTraversal: (profileOptions) => sandbox.profileChunkTraversal(profileOptions),
       moveInventorySlot: (fromIndex: number, toIndex: number) => {
         moveInventorySlot(fromIndex, toIndex);
       },

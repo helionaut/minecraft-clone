@@ -11,6 +11,7 @@ type StatusListener = (status: SandboxStatus) => void;
 const sandboxStub = {
   setSelectedBlock: vi.fn(),
   craftRecipe: vi.fn(),
+  profileChunkTraversal: vi.fn(),
   placeSelectedBlockOnNearestSurface: vi.fn(),
   getBlockAt: vi.fn(),
   getStatusSnapshot: vi.fn(),
@@ -44,6 +45,7 @@ describe('createAppShell', () => {
     hotbarControls = null;
     sandboxStub.setSelectedBlock.mockReset();
     sandboxStub.craftRecipe.mockReset();
+    sandboxStub.profileChunkTraversal.mockReset();
     sandboxStub.placeSelectedBlockOnNearestSurface.mockReset();
     sandboxStub.getBlockAt.mockReset();
     sandboxStub.getStatusSnapshot.mockReset();
@@ -225,6 +227,47 @@ describe('createAppShell', () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:diagnostics');
     expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes chunk traversal profiling through the QA harness', async () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    sandboxStub.profileChunkTraversal.mockResolvedValue({
+      capturedAt: '2026-04-01T00:00:00.000Z',
+      options: {
+        chunkRadius: 2,
+        samplesPerChunk: 3,
+        clearanceAboveTerrain: 2.2,
+        cameraPitch: -0.26,
+      },
+      route: [],
+      summary: {
+        sampledFrames: 0,
+        frameTimingMs: { count: 0, min: null, max: null, average: null, p95: null },
+        chunkLoadTimingMs: { count: 0, min: null, max: null, average: null, p95: null },
+        rebuildTimingMs: { count: 0, min: null, max: null, average: null, p95: null },
+        averageFps: null,
+        maxLoadedChunkCount: 0,
+        maxWorldMeshCount: 0,
+      },
+      samples: [],
+    });
+    window.history.replaceState({}, '', '/?qaHarness=1');
+
+    await createAppShell(root);
+
+    const result = await window.__minecraftCloneQa?.profileChunkTraversal?.({
+      chunkRadius: 2,
+    });
+
+    expect(sandboxStub.profileChunkTraversal).toHaveBeenCalledWith({
+      chunkRadius: 2,
+    });
+    expect(result?.options.chunkRadius).toBe(2);
   });
 
   it('renders the main HUD hotbar from the real hotbar layout after moving a crafting table into it', async () => {

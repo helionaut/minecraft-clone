@@ -40,6 +40,7 @@ import {
   playerIntersectsBlock,
   stepPlayer,
   withLook,
+  type PlayerState,
 } from '../gameplay/player.ts';
 import {
   Inventory,
@@ -101,6 +102,14 @@ import {
   type BrowserDiagnosticsSnapshot,
   type NumericSummary,
 } from '../debug/browserDiagnostics.ts';
+import {
+  buildChunkTraversalRoute,
+  chunkCoordinatesFromKey,
+  chunkKeyFromCoordinates,
+  getChunkKeysNeedingRefreshForBlock,
+  getVisibleChunkKeys,
+  planChunkMeshUpdates,
+} from './chunkTraversal.ts';
 
 export interface InventoryStatusEntry {
   readonly type: string;
@@ -149,6 +158,7 @@ export interface PlayableScene {
   readonly getBlockAt: (x: number, y: number, z: number) => WorldBlockType | null;
   readonly getStatusSnapshot: () => SandboxStatus | null;
   readonly getDiagnosticsSnapshot: (browserDiagnostics?: BrowserDiagnosticsSnapshot) => SceneDiagnosticsSnapshot;
+  readonly profileChunkTraversal: (options?: ChunkTraversalProfileOptions) => Promise<ChunkTraversalProfileReport>;
   readonly resetWorld: () => void;
   readonly dispose: () => void;
 }
@@ -257,6 +267,51 @@ export interface SceneDiagnosticsSnapshot {
   readonly unavailableSignals: readonly string[];
 }
 
+export interface ChunkTraversalProfileOptions {
+  readonly chunkRadius?: number;
+  readonly samplesPerChunk?: number;
+  readonly clearanceAboveTerrain?: number;
+  readonly cameraPitch?: number;
+}
+
+export interface ChunkTraversalProfileSample {
+  readonly index: number;
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly surfaceY: number;
+  readonly selectedChunkKey: string;
+  readonly loadedChunkCount: number;
+  readonly worldMeshCount: number;
+  readonly frameTimeMs: number;
+  readonly chunkLoadMs: number;
+  readonly rebuildMs: number | null;
+}
+
+export interface ChunkTraversalProfileReport {
+  readonly capturedAt: string;
+  readonly options: {
+    readonly chunkRadius: number;
+    readonly samplesPerChunk: number;
+    readonly clearanceAboveTerrain: number;
+    readonly cameraPitch: number;
+  };
+  readonly route: readonly {
+    readonly x: number;
+    readonly z: number;
+  }[];
+  readonly summary: {
+    readonly sampledFrames: number;
+    readonly frameTimingMs: NumericSummary;
+    readonly chunkLoadTimingMs: NumericSummary;
+    readonly rebuildTimingMs: NumericSummary;
+    readonly averageFps: number | null;
+    readonly maxLoadedChunkCount: number;
+    readonly maxWorldMeshCount: number;
+  };
+  readonly samples: readonly ChunkTraversalProfileSample[];
+}
+
 const FACE_VISIBILITY: ReadonlyArray<readonly [keyof FaceVisibilityMask, number, number, number]> = [
   ['px', 1, 0, 0],
   ['nx', -1, 0, 0],
@@ -297,6 +352,13 @@ const MOBILE_STREAMING_PROFILE: StreamingProfile = {
   pixelRatioCap: 1.25,
 };
 
+const DEFAULT_CHUNK_TRAVERSAL_PROFILE_OPTIONS = {
+  chunkRadius: 3,
+  samplesPerChunk: 3,
+  clearanceAboveTerrain: 2.2,
+  cameraPitch: -0.26,
+} satisfies Required<ChunkTraversalProfileOptions>;
+
 function formatCoords(value: number): string {
   return value.toFixed(1);
 }
@@ -307,10 +369,6 @@ function createVisibleFaces(): FaceVisibilityMask {
 
 function getRenderBrightness(block: CellTarget, lighting: VoxelLightResult): number {
   return lighting.getBlockBrightness(block.x, block.y, block.z);
-}
-
-function chunkKeyFromCoordinates(chunkX: number, chunkZ: number): string {
-  return `${chunkX},${chunkZ}`;
 }
 
 function inventoryStorageKey(): string {
@@ -619,6 +677,10 @@ export async function createPlayableScene(
   let fluidAccumulator = 0;
   let lastPublishedStatus: SandboxStatus | null = null;
   let lastWorldRebuildMs: number | null = null;
+  let worldMeshCount = 0;
+  let visibleChunkKeys = new Set<string>();
+  const chunkMeshes = new Map<string, Group>();
+  const dirtyChunkKeys = new Set<string>();
   const frameDurationsMs: number[] = [];
   const longAnimationFrames: Array<{
     timestamp: string;
@@ -672,6 +734,43 @@ export async function createPlayableScene(
 
   const getVisibleBounds = () => {
     return getVisibleBoundsForPlayer(player.position, world.config, streamingProfile.renderChunkRadius);
+  };
+
+  const removeChunkMesh = (chunkKey: string) => {
+    const chunkMesh = chunkMeshes.get(chunkKey);
+
+    if (!chunkMesh) {
+      return;
+    }
+
+    worldGroup.remove(chunkMesh);
+    chunkMesh.clear();
+    chunkMeshes.delete(chunkKey);
+  };
+
+  const clearChunkMeshes = () => {
+    for (const chunkKey of [...chunkMeshes.keys()]) {
+      removeChunkMesh(chunkKey);
+    }
+  };
+
+  const recalculateWorldMeshCount = () => {
+    worldMeshCount = [...chunkMeshes.values()]
+      .reduce((sum, chunkMesh) => sum + chunkMesh.children.length, 0);
+  };
+
+  const markChunkKeysDirty = (chunkKeys: Iterable<string>) => {
+    for (const chunkKey of chunkKeys) {
+      dirtyChunkKeys.add(chunkKey);
+    }
+  };
+
+  const markChunksDirtyForBlock = (x: number, z: number) => {
+    markChunkKeysDirty(getChunkKeysNeedingRefreshForBlock(x, z, world.config.chunkSize));
+  };
+
+  const markVisibleChunksDirty = () => {
+    markChunkKeysDirty(visibleChunkKeys);
   };
 
   const hasInventoryCount = (type: HotbarBlockType) => inventory.getCount(type as InventoryItemType) > 0;
@@ -863,43 +962,81 @@ export async function createPlayableScene(
     const startedAt = performance.now();
     const bounds = getVisibleBounds();
     const lighting = computeVoxelLighting(bounds, (x, y, z) => world.getBlock(x, y, z));
-    worldGroup.clear();
-
-    world.forEachLoadedBlockInBounds(bounds, (block) => {
-      const visibleFaces = createVisibleFaces();
-      let hasVisibleFace = false;
-
-      for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
-        const neighbor = world.getLoadedBlock(block.x + dx, block.y + dy, block.z + dz);
-        const visible = !neighbor || (
-          block.type === 'water' || block.type === 'lava'
-            ? neighbor !== block.type
-            : !BLOCK_DEFINITIONS[neighbor].opaque
-        );
-        visibleFaces[face] = visible;
-        hasVisibleFace ||= visible;
-      }
-
-      if (!hasVisibleFace) {
-        return;
-      }
-
-      const brightness = getRenderBrightness(block, lighting);
-      const voxel = new Mesh(
-        block.type === 'water' ? waterGeometry : blockGeometry,
-        blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
-      );
-      voxel.position.set(
-        block.x + 0.5,
-        block.y + (block.type === 'water' ? 0.44 : 0.5),
-        block.z + 0.5,
-      );
-      voxel.userData.cell = block;
-      voxel.castShadow = block.type !== 'water' && block.type !== 'lava';
-      voxel.receiveShadow = block.type !== 'water';
-      worldGroup.add(voxel);
+    const nextVisibleChunkKeys = new Set(getVisibleChunkKeys(bounds, world.config.chunkSize));
+    const meshUpdatePlan = planChunkMeshUpdates({
+      currentVisibleChunkKeys: visibleChunkKeys,
+      nextVisibleChunkKeys,
+      dirtyChunkKeys,
     });
 
+    for (const chunkKey of meshUpdatePlan.removeChunkKeys) {
+      removeChunkMesh(chunkKey);
+      dirtyChunkKeys.delete(chunkKey);
+    }
+
+    for (const chunkKey of meshUpdatePlan.rebuildChunkKeys) {
+      const { chunkX, chunkZ } = chunkCoordinatesFromKey(chunkKey);
+      const chunk = world.getChunk(chunkX, chunkZ);
+      const chunkMesh = new Group();
+
+      removeChunkMesh(chunkKey);
+
+      for (const block of chunk.blocks) {
+        if (
+          block.x < bounds.minX ||
+          block.x > bounds.maxX ||
+          block.y < bounds.minY ||
+          block.y > bounds.maxY ||
+          block.z < bounds.minZ ||
+          block.z > bounds.maxZ
+        ) {
+          continue;
+        }
+
+        const visibleFaces = createVisibleFaces();
+        let hasVisibleFace = false;
+
+        for (const [face, dx, dy, dz] of FACE_VISIBILITY) {
+          const neighbor = world.getLoadedBlock(block.x + dx, block.y + dy, block.z + dz);
+          const visible = !neighbor || (
+            block.type === 'water' || block.type === 'lava'
+              ? neighbor !== block.type
+              : !BLOCK_DEFINITIONS[neighbor].opaque
+          );
+          visibleFaces[face] = visible;
+          hasVisibleFace ||= visible;
+        }
+
+        if (!hasVisibleFace) {
+          continue;
+        }
+
+        const brightness = getRenderBrightness(block, lighting);
+        const voxel = new Mesh(
+          block.type === 'water' ? waterGeometry : blockGeometry,
+          blockMaterialFactory.getMaterials(block.type, brightness, visibleFaces),
+        );
+        voxel.position.set(
+          block.x + 0.5,
+          block.y + (block.type === 'water' ? 0.44 : 0.5),
+          block.z + 0.5,
+        );
+        voxel.userData.cell = block;
+        voxel.castShadow = block.type !== 'water' && block.type !== 'lava';
+        voxel.receiveShadow = block.type !== 'water';
+        chunkMesh.add(voxel);
+      }
+
+      if (chunkMesh.children.length > 0) {
+        worldGroup.add(chunkMesh);
+        chunkMeshes.set(chunkKey, chunkMesh);
+      }
+
+      dirtyChunkKeys.delete(chunkKey);
+    }
+
+    visibleChunkKeys = nextVisibleChunkKeys;
+    recalculateWorldMeshCount();
     worldDirty = false;
     lastWorldRebuildMs = roundMetric(performance.now() - startedAt);
   };
@@ -1056,6 +1193,8 @@ export async function createPlayableScene(
     triggerHeldItemSwing(0.65);
     world.tickFluids(2);
     persistWorld();
+    markChunksDirtyForBlock(x, z);
+    markVisibleChunksDirty();
     worldDirty = true;
     rebuildWorld();
     updateTargeting();
@@ -1092,6 +1231,8 @@ export async function createPlayableScene(
     triggerHeldItemSwing(1);
     world.tickFluids(4);
     persistWorld();
+    markChunksDirtyForBlock(x, z);
+    markVisibleChunksDirty();
     worldDirty = true;
     rebuildWorld();
     updateTargeting();
@@ -1400,6 +1541,10 @@ export async function createPlayableScene(
     window.localStorage.removeItem(world.storageKey);
     window.localStorage.removeItem(inventoryStorageKey());
     player = createPlayerState(world.getSpawnPoint());
+    clearChunkMeshes();
+    visibleChunkKeys.clear();
+    dirtyChunkKeys.clear();
+    worldMeshCount = 0;
     worldDirty = true;
     loadVisibleChunksImmediately();
     streamPrefetchedChunks();
@@ -1539,6 +1684,136 @@ export async function createPlayableScene(
     renderer.render(scene, camera);
   };
 
+  const setPlayerStateForTraversal = (
+    nextPosition: PlayerState['position'],
+    yaw: number,
+    pitch: number,
+  ) => {
+    player = {
+      ...player,
+      position: nextPosition,
+      velocity: { x: 0, y: 0, z: 0 },
+      yaw,
+      pitch,
+      grounded: false,
+      inFluid: false,
+      headInFluid: false,
+    };
+  };
+
+  const profileChunkTraversal = async (
+    options: ChunkTraversalProfileOptions = {},
+  ): Promise<ChunkTraversalProfileReport> => {
+    const profileOptions = {
+      chunkRadius: Math.max(0, Math.floor(options.chunkRadius ?? DEFAULT_CHUNK_TRAVERSAL_PROFILE_OPTIONS.chunkRadius)),
+      samplesPerChunk: Math.max(1, Math.floor(options.samplesPerChunk ?? DEFAULT_CHUNK_TRAVERSAL_PROFILE_OPTIONS.samplesPerChunk)),
+      clearanceAboveTerrain: options.clearanceAboveTerrain ?? DEFAULT_CHUNK_TRAVERSAL_PROFILE_OPTIONS.clearanceAboveTerrain,
+      cameraPitch: options.cameraPitch ?? DEFAULT_CHUNK_TRAVERSAL_PROFILE_OPTIONS.cameraPitch,
+    };
+    const startingPlayer = player;
+    const startingActiveChunkKey = activeChunkKey;
+    const { chunkX: centerChunkX, chunkZ: centerChunkZ } = getPlayerChunkCoordinates();
+    const route = buildChunkTraversalRoute({
+      centerChunkX,
+      centerChunkZ,
+      chunkRadius: profileOptions.chunkRadius,
+      chunkSize: world.config.chunkSize,
+      samplesPerChunk: profileOptions.samplesPerChunk,
+    });
+    const samples: ChunkTraversalProfileSample[] = [];
+
+    renderer.setAnimationLoop(null);
+
+    try {
+      for (const [index, waypoint] of route.entries()) {
+        const previousPlayer = player;
+        const surfaceY = world.getSurfaceHeight(Math.floor(waypoint.x), Math.floor(waypoint.z));
+        const nextWaypoint = route[Math.min(route.length - 1, index + 1)] ?? waypoint;
+        const yaw = Math.atan2(nextWaypoint.x - waypoint.x, nextWaypoint.z - waypoint.z);
+        const chunkLoadStart = performance.now();
+
+        setPlayerStateForTraversal({
+          x: waypoint.x,
+          y: surfaceY + profileOptions.clearanceAboveTerrain,
+          z: waypoint.z,
+        }, yaw, profileOptions.cameraPitch);
+        activeChunkKey = chunkKeyFromCoordinates(
+          Math.floor(player.position.x / world.config.chunkSize),
+          Math.floor(player.position.z / world.config.chunkSize),
+        );
+        worldDirty = true;
+        loadVisibleChunksImmediately();
+
+        if (streamPrefetchedChunks()) {
+          worldDirty = true;
+        }
+
+        const chunkLoadMs = roundMetric(performance.now() - chunkLoadStart);
+        const frameStart = performance.now();
+
+        if (worldDirty) {
+          rebuildWorld();
+        }
+
+        syncFrameVisuals(previousPlayer, 1 / 60);
+        const frameTimeMs = roundMetric(performance.now() - frameStart);
+
+        samples.push({
+          index,
+          x: roundMetric(player.position.x),
+          y: roundMetric(player.position.y),
+          z: roundMetric(player.position.z),
+          surfaceY,
+          selectedChunkKey: activeChunkKey,
+          loadedChunkCount: world.getLoadedChunkCount(),
+          worldMeshCount,
+          frameTimeMs,
+          chunkLoadMs,
+          rebuildMs: lastWorldRebuildMs,
+        });
+      }
+    } finally {
+      setPlayerStateForTraversal(startingPlayer.position, startingPlayer.yaw, startingPlayer.pitch);
+      player = {
+        ...player,
+        velocity: startingPlayer.velocity,
+        grounded: startingPlayer.grounded,
+        inFluid: startingPlayer.inFluid,
+        headInFluid: startingPlayer.headInFluid,
+      };
+      activeChunkKey = startingActiveChunkKey;
+      worldDirty = true;
+      rebuildWorld();
+      syncFrameVisuals(startingPlayer, 0);
+      previousTime = performance.now();
+      renderer.setAnimationLoop(tick);
+    }
+
+    const frameTimingMs = summarizeSamples(samples.map((sample) => sample.frameTimeMs));
+    const chunkLoadTimingMs = summarizeSamples(samples.map((sample) => sample.chunkLoadMs));
+    const rebuildTimingMs = summarizeSamples(
+      samples
+        .map((sample) => sample.rebuildMs)
+        .filter((value): value is number => value !== null),
+    );
+
+    return {
+      capturedAt: new Date().toISOString(),
+      options: profileOptions,
+      route,
+      summary: {
+        sampledFrames: samples.length,
+        frameTimingMs,
+        chunkLoadTimingMs,
+        rebuildTimingMs,
+        averageFps: frameTimingMs.average ? roundMetric(1000 / frameTimingMs.average) : null,
+        maxLoadedChunkCount: samples.reduce((max, sample) => Math.max(max, sample.loadedChunkCount), 0),
+        maxWorldMeshCount: samples.reduce((max, sample) => Math.max(max, sample.worldMeshCount), 0),
+      },
+      samples,
+    };
+  };
+
   const tick = (now: DOMHighResTimeStamp) => {
     if (webGpuDeviceLost) {
       return;
@@ -1589,6 +1864,7 @@ export async function createPlayableScene(
       fluidAccumulator = 0;
       if (world.tickFluids(1) > 0) {
         persistWorld();
+        markVisibleChunksDirty();
         worldDirty = true;
       }
     }
@@ -1709,7 +1985,7 @@ export async function createPlayableScene(
         resources: {
           loadedChunkCount: world.getLoadedChunkCount(),
           loadedChunkKeys: world.getLoadedChunkKeys(),
-          worldMeshCount: worldGroup.children.length,
+          worldMeshCount,
           sceneObjectCount: scene.children.length,
         },
         recentStatus: lastPublishedStatus,
@@ -1720,6 +1996,7 @@ export async function createPlayableScene(
         ],
       };
     },
+    profileChunkTraversal,
     resetWorld,
     dispose: () => {
       renderer.setAnimationLoop(null);
@@ -1746,6 +2023,7 @@ export async function createPlayableScene(
         touchControls.hotbarPrevButton.removeEventListener('pointerdown', onHotbarPrevPointerDown);
         touchControls.hotbarNextButton.removeEventListener('pointerdown', onHotbarNextPointerDown);
       }
+      clearChunkMeshes();
       renderer.dispose();
       blockGeometry.dispose();
       waterGeometry.dispose();

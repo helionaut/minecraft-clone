@@ -11,6 +11,7 @@ const CDP_CAPTURE_SCRIPT_PATH = fileURLToPath(new URL('./captureWebGpuStartupPro
 const REPORT_SCRIPT_PATH = fileURLToPath(new URL('./summarizeWebGpuStartupProfile.mjs', import.meta.url));
 const COMPARE_SCRIPT_PATH = fileURLToPath(new URL('./compareWebGpuStartupProfiles.mjs', import.meta.url));
 const DEFAULT_BASELINE_REPORT_PATH = 'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/startup-profile-report.json';
+const DEFAULT_BASELINE_ARTIFACT_DIR = DEFAULT_BASELINE_REPORT_PATH.replace(/\/startup-profile-report\.json$/, '');
 const STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES = [
   'runtime-status.json',
   'console-messages.json',
@@ -221,6 +222,13 @@ export function buildStartupProfileUploadManifest(artifactOutputDir, files = STA
   };
 }
 
+export function hasStartupProfileBaselineArtifacts(artifactDir, pathExists = existsSync) {
+  return [
+    'runtime-status.json',
+    'console-messages.json',
+  ].every((file) => pathExists(`${artifactDir}/${file}`));
+}
+
 async function writeStartupProfileUploadManifest(artifactOutputDir) {
   const files = collectExistingStartupProfileBundleFiles(artifactOutputDir);
   const manifest = buildStartupProfileUploadManifest(artifactOutputDir, files);
@@ -281,6 +289,7 @@ async function runPostCaptureReport(plan) {
 
 async function runPostCaptureComparison(plan, artifactOutputDir) {
   const baselineReportPath = process.env.STARTUP_PROFILE_BASELINE_REPORT?.trim() || DEFAULT_BASELINE_REPORT_PATH;
+  const baselineArtifactDir = process.env.STARTUP_PROFILE_BASELINE_ARTIFACT_DIR?.trim() || DEFAULT_BASELINE_ARTIFACT_DIR;
   const candidateReportPath = `${artifactOutputDir}/startup-profile-report.json`;
 
   if (!existsSync(candidateReportPath)) {
@@ -288,8 +297,8 @@ async function runPostCaptureComparison(plan, artifactOutputDir) {
     return false;
   }
 
-  if (!existsSync(baselineReportPath)) {
-    console.warn(`[webgpu-startup-profile] skipping comparison because baseline report is missing: ${baselineReportPath}`);
+  if (!existsSync(baselineReportPath) && !hasStartupProfileBaselineArtifacts(baselineArtifactDir)) {
+    console.warn(`[webgpu-startup-profile] skipping comparison because baseline report and baseline artifacts are missing: ${baselineReportPath}`);
     return false;
   }
 
@@ -302,6 +311,7 @@ async function runPostCaptureComparison(plan, artifactOutputDir) {
       env: {
         ...process.env,
         STARTUP_PROFILE_BASELINE_REPORT: baselineReportPath,
+        STARTUP_PROFILE_BASELINE_ARTIFACT_DIR: baselineArtifactDir,
         STARTUP_PROFILE_CANDIDATE_REPORT: candidateReportPath,
       },
     });

@@ -204,4 +204,19 @@ describe('runWebGpuStartupProfile', () => {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('accepts raw baseline artifacts when the baseline report file is missing', () => {
+    const baselineHelpers = startupProfileScript as typeof startupProfileScript & {
+      hasStartupProfileBaselineArtifacts: (
+        artifactDir: string,
+        pathExists?: (path: string) => boolean,
+      ) => boolean;
+    };
+    const hasBaseline = baselineHelpers.hasStartupProfileBaselineArtifacts(
+      'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path',
+      (path: string) => path.endsWith('runtime-status.json') || path.endsWith('console-messages.json'),
+    );
+
+    expect(hasBaseline).toBe(true);
+  });
 });

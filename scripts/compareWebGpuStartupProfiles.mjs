@@ -185,7 +185,7 @@ export function buildStartupProfileComparison({
 
 async function main() {
   const baselineReportPath = process.env.STARTUP_PROFILE_BASELINE_REPORT?.trim()
-    ?? 'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/startup-profile-report.json';
+    ?? 'artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json';
   const baselineArtifactDir = process.env.STARTUP_PROFILE_BASELINE_ARTIFACT_DIR?.trim()
     ?? dirname(baselineReportPath);
   const candidateReportPath = process.env.STARTUP_PROFILE_CANDIDATE_REPORT?.trim();
@@ -208,7 +208,7 @@ async function main() {
   ]);
 
   const comparison = buildStartupProfileComparison({
-    baselineLabel: process.env.STARTUP_PROFILE_BASELINE_LABEL?.trim() || 'swiftshader-control',
+    baselineLabel: process.env.STARTUP_PROFILE_BASELINE_LABEL?.trim() || 'windows-intel-control',
     candidateLabel: process.env.STARTUP_PROFILE_CANDIDATE_LABEL?.trim() || 'candidate',
     baselineReport,
     candidateReport,

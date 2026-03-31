@@ -76,7 +76,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - What still remains unproven:
   - this machine still does not satisfy the issue's RTX requirement
   - the visible NVIDIA adapter from WSL is GTX 965M, while the successful hardware-accelerated browser run actually bound to Intel HD 4600
-  - the previously prepared SwiftShader control comparison could not be regenerated automatically in this pass because the baseline `startup-profile-report.json` is no longer present in the current workspace; only a stale `trace.zip` remains under `webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/`
+  - the earlier SwiftShader-only control report was not durable enough to keep as the default comparison baseline, so the branch now publishes a committed hardware-accelerated control report at `artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json`
   - a follow-up WSL session on 2026-03-31 confirmed an additional transport limit: `/dev/dxg` and the Windows Chrome path are visible, but direct execution of `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe`, `cmd.exe`, and `chrome.exe` failed with `Invalid argument`, so the previously working Windows-local runtime bundle cannot be relaunched from every runner
 
 ### Current profiler-backed findings summary
@@ -268,14 +268,14 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile-report.md`
 
    The report summarizes top startup phases, long-frame counts, console warnings/errors, top Chrome trace hotspots from `chrome-performance-trace.json`, and remediation candidates so the RTX machine operator only has to upload the generated artifact directory.
-6. If the auto-generated comparison files are missing for any reason, compare the RTX report bundle against the published SwiftShader control baseline from this workspace:
+6. If the auto-generated comparison files are missing for any reason, compare the RTX report bundle against the published Windows Intel control baseline from this workspace:
 
    ```bash
    STARTUP_PROFILE_CANDIDATE_REPORT="reports/startup-profiling/test-results/<playwright-output-dir>/startup-profile-report.json" \
    npm run profile:webgpu-startup:compare
    ```
 
-   By default, this compares against `reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/startup-profile-report.json` and writes:
+   By default, this compares against `artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json` and writes:
    - `startup-profile-comparison.json`
    - `startup-profile-comparison.md`
 

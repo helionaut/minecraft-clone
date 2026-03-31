@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-03-30T23:05:44.226Z",
+  "startupTotalDurationMs": 2762.2999999523163,
+  "longFrameCount": 19,
+  "maxFrameDurationMs": 2527.464,
+  "runtime": {
+    "browserSupportsWebGpu": true,
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/146.0.0.0 Safari/537.36",
+    "webglVendor": "Google Inc. (Intel)",
+    "webglRenderer": "ANGLE (Intel, Intel(R) HD Graphics 4600 (0x00000416) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "rendererStatus": "WebGL 2 | hardware accelerated | ANGLE (Intel, Intel(R) HD Graphics 4600 (0x00000416) Direct3D11 vs_5_0 ps_5_0, D3D11) | volumetric lighting disabled (webgpu-fallback-adapter)"
+  },
+  "topPhases": [
+    {
+      "name": "initial-rebuild-world",
+      "durationMs": 2142.6999999284744
+    },
+    {
+      "name": "initial-rebuild-world:compute-lighting",
+      "durationMs": 1302
+    },
+    {
+      "name": "create-scene-renderer",
+      "durationMs": 480.8000000715256
+    },
+    {
+      "name": "initial-rebuild-world:rebuild-visible-meshes",
+      "durationMs": 437.6999999284744
+    },
+    {
+      "name": "initial-rebuild-world:sync-chunks",
+      "durationMs": 402.5
+    }
+  ],
+  "traceSummary": {
+    "topGpuTasks": [
+      {
+        "name": "GpuChannelHost::CreateViewCommandBuffer",
+        "cat": "gpu",
+        "durMs": 170.115
+      },
+      {
+        "name": "CommandBufferProxyImpl::Initialize",
+        "cat": "gpu",
+        "durMs": 170.046
+      }
+    ]
+  },
+  "remediationCandidates": [
+    {
+      "priority": "high",
+      "suspect": "initial-rebuild-world:compute-lighting",
+      "rationale": "Lighting recomputation is large enough to appear among top startup phases; compare computeVoxelLighting cost against the full rebuild-world span."
+    },
+    {
+      "priority": "high",
+      "suspect": "initial-rebuild-world:rebuild-visible-meshes",
+      "rationale": "Visible mesh reconstruction is large enough to appear among top startup phases; compare scene clearing and per-block mesh rebuild cost against lighting and renderer init."
+    },
+    {
+      "priority": "high",
+      "suspect": "initial-rebuild-world",
+      "rationale": "Initial world rebuild dominates startup time; inspect voxel iteration, mesh creation, and lighting work before first interaction."
+    },
+    {
+      "priority": "medium",
+      "suspect": "post-startup frame loop",
+      "rationale": "Observed 19 long frames after startup; correlate Chrome trace main-thread slices against world rebuild and render-loop work."
+    }
+  ]
+}

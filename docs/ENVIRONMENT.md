@@ -100,6 +100,7 @@ Expected post-cleanup result:
 - Browser-flag portability update: `scripts/captureWebGpuStartupProfileOverCdp.mjs` now also accepts `PLAYWRIGHT_PROFILE_BROWSER_ARGS`, split by newline or `;;`, so the eventual RTX run can inject flags such as `--force_high_performance_gpu`, `--enable-unsafe-webgpu`, or `--ignore-gpu-blocklist` without patching the repo again.
 - Target-surface gate update: `npm run profile:webgpu-startup` now requires an RTX-class renderer by default. If the run lands on a fallback adapter or a non-RTX hardware surface, the wrapper fails instead of treating that capture as valid proof.
 - Control-run escape hatch: set `PLAYWRIGHT_PROFILE_REQUIRE_RTX=0` only when intentionally collecting a non-RTX control/baseline run. The low-level capture script and Windows staging flow preserve that override when explicitly requested.
+- Comparison baseline durability update: the automatic compare step now defaults to the committed control report at `artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json` instead of an ephemeral workspace-only SwiftShader artifact path.
 - Hosted preview limitation: the shared GitHub Pages site serves `main`, and the `github-pages` environment branch policy rejects PR-branch deploys for PR #52.
 
 Required execution surface for the remaining proof:

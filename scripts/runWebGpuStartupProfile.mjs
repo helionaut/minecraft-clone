@@ -10,7 +10,7 @@ const REPO_ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
 const CDP_CAPTURE_SCRIPT_PATH = fileURLToPath(new URL('./captureWebGpuStartupProfileOverCdp.mjs', import.meta.url));
 const REPORT_SCRIPT_PATH = fileURLToPath(new URL('./summarizeWebGpuStartupProfile.mjs', import.meta.url));
 const COMPARE_SCRIPT_PATH = fileURLToPath(new URL('./compareWebGpuStartupProfiles.mjs', import.meta.url));
-const DEFAULT_BASELINE_REPORT_PATH = 'reports/startup-profiling/test-results/webgpuStartup.profile-capt-28d63-e-WebGPU-scene-startup-path/startup-profile-report.json';
+const DEFAULT_BASELINE_REPORT_PATH = 'artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json';
 const DEFAULT_BASELINE_ARTIFACT_DIR = DEFAULT_BASELINE_REPORT_PATH.replace(/\/startup-profile-report\.json$/, '');
 const STARTUP_PROFILE_UPLOAD_FILE_CANDIDATES = [
   'runtime-status.json',

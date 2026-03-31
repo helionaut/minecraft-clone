@@ -127,4 +127,47 @@ describe('compareWebGpuStartupProfiles', () => {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it('uses the committed Windows Intel control baseline by default when no baseline env is provided', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'hel-142-default-baseline-'));
+    const candidateDir = `${tempRoot}/candidate`;
+
+    try {
+      await mkdir(candidateDir, { recursive: true });
+      await writeFile(`${candidateDir}/startup-profile-report.json`, JSON.stringify({
+        startupTotalDurationMs: 1180,
+        longFrameCount: 8,
+        maxFrameDurationMs: 410.4,
+        runtime: {
+          webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Direct3D12 vs_5_1 ps_5_1)',
+        },
+        topPhases: [
+          { name: 'initial-rebuild-world', durationMs: 640.0 },
+          { name: 'create-scene-renderer', durationMs: 402.5 },
+        ],
+        traceSummary: {
+          topGpuTasks: [
+            { name: 'RenderPass', durMs: 88.2 },
+          ],
+        },
+      }), 'utf8');
+
+      execFileSync('node', ['scripts/compareWebGpuStartupProfiles.mjs'], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          STARTUP_PROFILE_CANDIDATE_REPORT: `${candidateDir}/startup-profile-report.json`,
+        },
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+
+      const comparisonJson = JSON.parse(await readFile(`${candidateDir}/startup-profile-comparison.json`, 'utf8'));
+      expect(comparisonJson.baselineLabel).toBe('windows-intel-control');
+      expect(comparisonJson.baseline.renderer).toContain('Intel(R) HD Graphics 4600');
+      expect(comparisonJson.phaseComparisons[0]?.name).toBe('initial-rebuild-world');
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });

@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
+import { isExecutedDirectly } from './isExecutedDirectly.mjs';
+
 const REPO_ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
 const DEFAULT_WINDOWS_RUNTIME_DIR = '/mnt/c/Temp/hel142-startup-runtime';
 const DEFAULT_WINDOWS_NODE_EXE = '/home/helionaut/srv/research-cache/minecraft-clone/toolchains/node-v22.22.1-win-x64/node-v22.22.1-win-x64/node.exe';
@@ -130,8 +132,6 @@ async function main() {
   console.info(`[webgpu-startup-profile:windows-runtime] instructions: ${plan.readmePath}`);
 }
 
-const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).pathname : '';
-
-if (import.meta.url.endsWith(scriptPath)) {
+if (isExecutedDirectly(import.meta.url)) {
   await main();
 }

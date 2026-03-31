@@ -4,6 +4,8 @@ import { readdir, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
+import { isExecutedDirectly } from './isExecutedDirectly.mjs';
+
 const REPO_ROOT_DIR = fileURLToPath(new URL('..', import.meta.url));
 const CDP_CAPTURE_SCRIPT_PATH = fileURLToPath(new URL('./captureWebGpuStartupProfileOverCdp.mjs', import.meta.url));
 const REPORT_SCRIPT_PATH = fileURLToPath(new URL('./summarizeWebGpuStartupProfile.mjs', import.meta.url));
@@ -386,8 +388,6 @@ async function main() {
   }
 }
 
-const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).pathname : '';
-
-if (import.meta.url.endsWith(scriptPath)) {
+if (isExecutedDirectly(import.meta.url)) {
   await main();
 }

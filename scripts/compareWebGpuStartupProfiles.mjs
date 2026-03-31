@@ -1,6 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import process from 'node:process';
 
+import { isExecutedDirectly } from './isExecutedDirectly.mjs';
+
 function formatNumber(value, digits = 1) {
   return Number.isFinite(value) ? Number(value).toFixed(digits) : 'unknown';
 }
@@ -198,8 +200,6 @@ async function main() {
   console.info(`[webgpu-startup-profile-compare] markdown: ${outputMarkdownPath}`);
 }
 
-const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).pathname : '';
-
-if (import.meta.url.endsWith(scriptPath)) {
+if (isExecutedDirectly(import.meta.url)) {
   await main();
 }

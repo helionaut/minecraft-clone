@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import process from 'node:process';
 
+import { isExecutedDirectly } from './isExecutedDirectly.mjs';
+
 import { chromium } from '../node_modules/playwright-core/index.mjs';
 
 const STARTUP_PROFILE_QUERY = './?renderer=webgpu&qaHarness=1&startupProfile=1';
@@ -283,8 +285,6 @@ async function main() {
   }
 }
 
-const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).pathname : '';
-
-if (import.meta.url.endsWith(scriptPath)) {
+if (isExecutedDirectly(import.meta.url)) {
   await main();
 }

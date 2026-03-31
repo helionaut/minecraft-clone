@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
 import process from 'node:process';
 
+import { isExecutedDirectly } from './isExecutedDirectly.mjs';
+
 const DEFAULT_PREVIEW_HOST = '127.0.0.1';
 const DEFAULT_PREVIEW_PORT = '4173';
 const DEFAULT_PREVIEW_PATH = '/minecraft-clone/';
@@ -134,8 +136,6 @@ async function main() {
   }
 }
 
-const scriptPath = process.argv[1] ? new URL(`file://${process.argv[1]}`).pathname : '';
-
-if (import.meta.url.endsWith(scriptPath)) {
+if (isExecutedDirectly(import.meta.url)) {
   await main();
 }

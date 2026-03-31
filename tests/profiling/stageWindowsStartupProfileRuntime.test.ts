@@ -12,7 +12,12 @@ const scriptPath = 'scripts/stageWindowsStartupProfileRuntime.mjs';
 
 describe('stageWindowsStartupProfileRuntime', () => {
   it('builds the expected default staging plan', () => {
-    const plan = buildWindowsStartupRuntimePlan({}, () => true);
+    const plan = buildWindowsStartupRuntimePlan({}, () => true) as ReturnType<typeof buildWindowsStartupRuntimePlan> & {
+      sharedHelperTarget: string;
+      reportScriptTarget: string;
+      compareScriptTarget: string;
+      baselineReportTarget: string;
+    };
 
     expect(plan.ok).toBe(true);
     expect(plan.runtimeDir).toBe('/mnt/c/Temp/hel142-startup-runtime');

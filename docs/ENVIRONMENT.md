@@ -98,6 +98,8 @@ Expected post-cleanup result:
 - Attached browser-tool limitation: the available Playwright MCP browser wrapper is configured for system Chrome at `/opt/google/chrome/chrome`; that binary is missing on this host, and `npx playwright install chrome` cannot complete unattended because it requires `sudo`.
 - Wrapper portability update: `npm run profile:webgpu-startup` now accepts `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=/absolute/path/to/chrome` and will prefer that explicit browser binary over Playwright channel discovery. This removes the requirement for a system-installed `/opt/google/chrome/chrome` on the eventual RTX machine.
 - Browser-flag portability update: `scripts/captureWebGpuStartupProfileOverCdp.mjs` now also accepts `PLAYWRIGHT_PROFILE_BROWSER_ARGS`, split by newline or `;;`, so the eventual RTX run can inject flags such as `--force_high_performance_gpu`, `--enable-unsafe-webgpu`, or `--ignore-gpu-blocklist` without patching the repo again.
+- Target-surface gate update: `npm run profile:webgpu-startup` now requires an RTX-class renderer by default. If the run lands on a fallback adapter or a non-RTX hardware surface, the wrapper fails instead of treating that capture as valid proof.
+- Control-run escape hatch: set `PLAYWRIGHT_PROFILE_REQUIRE_RTX=0` only when intentionally collecting a non-RTX control/baseline run. The low-level capture script and Windows staging flow preserve that override when explicitly requested.
 - Hosted preview limitation: the shared GitHub Pages site serves `main`, and the `github-pages` environment branch policy rejects PR-branch deploys for PR #52.
 
 Required execution surface for the remaining proof:
@@ -114,6 +116,14 @@ npm ci
 npm run build
 npm run preview -- --host 127.0.0.1 --port 4173
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:4173/minecraft-clone/ npm run profile:webgpu-startup
+```
+
+For an intentional non-RTX control run, override the default gate explicitly:
+
+```bash
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:4173/minecraft-clone/ \
+PLAYWRIGHT_PROFILE_REQUIRE_RTX=0 \
+npm run profile:webgpu-startup
 ```
 
 Equivalent one-command local-preview flow on the RTX machine:

@@ -157,13 +157,21 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    npm run profile:webgpu-startup
    ```
 
-   The wrapper validates `PLAYWRIGHT_BASE_URL`, defaults the browser channel to `chrome`, and prints the artifact directory before launching Playwright. Use `PLAYWRIGHT_PROFILE_DRY_RUN=1` for a preflight check without starting the browser.
+   The wrapper validates `PLAYWRIGHT_BASE_URL`, defaults the browser channel to `chrome`, requires an RTX-class renderer by default, and prints the artifact directory before launching Playwright. Use `PLAYWRIGHT_PROFILE_DRY_RUN=1` for a preflight check without starting the browser.
 
    If the RTX machine does not expose Chrome as a Playwright channel, point the wrapper at an explicit binary instead:
 
    ```bash
    PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173/minecraft-clone/" \
    PLAYWRIGHT_PROFILE_EXECUTABLE_PATH="/absolute/path/to/chrome" \
+   npm run profile:webgpu-startup
+   ```
+
+   If the operator is intentionally collecting a non-RTX control run instead of the requested proof, disable the default RTX gate explicitly:
+
+   ```bash
+   PLAYWRIGHT_BASE_URL="http://127.0.0.1:4173/minecraft-clone/" \
+   PLAYWRIGHT_PROFILE_REQUIRE_RTX=0 \
    npm run profile:webgpu-startup
    ```
 
@@ -185,7 +193,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    npm run profile:webgpu-startup
    ```
 
-   On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` and `npm run profile:webgpu-startup:compare`, then writes an upload manifest against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json`, `startup-profile-report.md`, `startup-profile-comparison.json`, `startup-profile-comparison.md`, `startup-profile-upload-manifest.json`, and `startup-profile-upload-manifest.md`.
+   On success, the wrapper now also auto-runs `npm run profile:webgpu-startup:report` and `npm run profile:webgpu-startup:compare`, then writes an upload manifest against the newest Playwright output directory, so the resulting artifact folder already contains `startup-profile-report.json`, `startup-profile-report.md`, `startup-profile-comparison.json`, `startup-profile-comparison.md`, `startup-profile-upload-manifest.json`, and `startup-profile-upload-manifest.md`. The generated report and upload manifest also include the target-surface verdict, which should confirm an RTX/WebGPU match on the real proof run.
 
    For the lowest-ceremony path on the RTX machine, the repo also now exposes a one-command local-preview flow:
 

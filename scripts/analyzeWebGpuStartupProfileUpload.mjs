@@ -42,8 +42,27 @@ export function buildStartupProfileUploadAnalysisPlan(env = process.env) {
 }
 
 export function defaultImportedUploadDir(sourcePath) {
-  const sourceBaseName = basename(sourcePath, extname(sourcePath)) || 'startup-profile-upload';
+  const sourceBaseName = basename(resolveUploadSourceName(sourcePath), extname(resolveUploadSourceName(sourcePath)))
+    || 'startup-profile-upload';
   return `${DEFAULT_IMPORTED_UPLOAD_DIR}/${sourceBaseName}`;
+}
+
+export function isRemoteUploadSource(sourcePath) {
+  return /^https?:\/\//i.test(sourcePath);
+}
+
+export function resolveUploadSourceName(sourcePath) {
+  if (!isRemoteUploadSource(sourcePath)) {
+    return sourcePath;
+  }
+
+  try {
+    const sourceUrl = new URL(sourcePath);
+    const pathName = sourceUrl.pathname.trim();
+    return pathName ? basename(pathName) : 'startup-profile-upload-bundle.zip';
+  } catch {
+    return 'startup-profile-upload-bundle.zip';
+  }
 }
 
 export async function findStartupProfileArtifactDir(rootDir) {
@@ -103,36 +122,65 @@ export async function extractStartupProfileUploadArchive(sourcePath, outputDir) 
   return outputDir;
 }
 
-export async function resolveStartupProfileUploadSource(plan, extractArchive = extractStartupProfileUploadArchive) {
-  const sourceStats = await stat(plan.sourcePath);
-  const isZipSource = sourceStats.isFile() && /\.zip$/i.test(plan.sourcePath);
-  const analysisRootDir = isZipSource
-    ? (plan.outputDir || defaultImportedUploadDir(plan.sourcePath))
+export async function downloadStartupProfileUploadSource(sourceUrl, outputDir) {
+  await mkdir(outputDir, { recursive: true });
+
+  const downloadName = resolveUploadSourceName(sourceUrl) || 'startup-profile-upload-bundle.zip';
+  const downloadPath = `${outputDir}/${downloadName}`;
+  const response = await fetch(sourceUrl);
+
+  if (!response.ok) {
+    throw new Error(`Could not download upload source ${sourceUrl}: HTTP ${response.status}.`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  await writeFile(downloadPath, Buffer.from(arrayBuffer));
+  return downloadPath;
+}
+
+export async function resolveStartupProfileUploadSource(
+  plan,
+  extractArchive = extractStartupProfileUploadArchive,
+  downloadRemoteSource = downloadStartupProfileUploadSource,
+) {
+  const remoteSource = isRemoteUploadSource(plan.sourcePath);
+  const preferredImportedDir = plan.outputDir || defaultImportedUploadDir(plan.sourcePath);
+  const localSourcePath = remoteSource
+    ? await downloadRemoteSource(plan.sourcePath, preferredImportedDir)
     : plan.sourcePath;
+  const sourceStats = await stat(localSourcePath);
+  const isZipSource = sourceStats.isFile() && /\.zip$/i.test(localSourcePath);
+  const resolvedAnalysisRootDir = isZipSource
+    ? preferredImportedDir
+    : localSourcePath;
 
   if (!sourceStats.isDirectory() && !isZipSource) {
-    throw new Error(`Unsupported upload source: ${plan.sourcePath}. Provide an artifact directory or a .zip bundle.`);
+    throw new Error(`Unsupported upload source: ${plan.sourcePath}. Provide an artifact directory, a .zip bundle, or an HTTP(S) URL to a .zip bundle.`);
   }
 
   if (isZipSource) {
-    await extractArchive(plan.sourcePath, analysisRootDir);
+    await extractArchive(localSourcePath, resolvedAnalysisRootDir);
   }
 
-  const artifactDir = await findStartupProfileArtifactDir(analysisRootDir);
+  const artifactDir = await findStartupProfileArtifactDir(resolvedAnalysisRootDir);
 
   if (!artifactDir) {
-    throw new Error(`Could not locate runtime-status.json and console-messages.json under ${analysisRootDir}.`);
+    throw new Error(`Could not locate runtime-status.json and console-messages.json under ${resolvedAnalysisRootDir}.`);
   }
 
   return {
-    analysisRootDir,
+    analysisRootDir: resolvedAnalysisRootDir,
     artifactDir,
     importedFromZip: isZipSource,
   };
 }
 
-export async function analyzeStartupProfileUpload(plan, extractArchive = extractStartupProfileUploadArchive) {
-  const resolvedUpload = await resolveStartupProfileUploadSource(plan, extractArchive);
+export async function analyzeStartupProfileUpload(
+  plan,
+  extractArchive = extractStartupProfileUploadArchive,
+  downloadRemoteSource = downloadStartupProfileUploadSource,
+) {
+  const resolvedUpload = await resolveStartupProfileUploadSource(plan, extractArchive, downloadRemoteSource);
   const report = await buildStartupProfilingReportFromArtifactDir(resolvedUpload.artifactDir);
   const reportJsonPath = `${resolvedUpload.artifactDir}/startup-profile-report.json`;
   const reportMarkdownPath = `${resolvedUpload.artifactDir}/startup-profile-report.md`;

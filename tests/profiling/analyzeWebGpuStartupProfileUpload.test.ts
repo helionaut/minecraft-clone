@@ -94,6 +94,42 @@ describe('analyzeWebGpuStartupProfileUpload', () => {
     }
   });
 
+  it('downloads https upload bundles into the default imported analysis directory before extraction', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'hel-142-upload-remote-'));
+    const sourceUrl = 'https://example.com/profiles/startup-profile-upload-bundle.zip';
+
+    try {
+      const result = await resolveStartupProfileUploadSource(
+        {
+          sourcePath: sourceUrl,
+          outputDir: '',
+        },
+        async (_sourcePath: string, outputDir: string) => {
+          const artifactDir = `${outputDir}/artifacts`;
+          await mkdir(artifactDir, { recursive: true });
+          await Promise.all([
+            writeFile(`${artifactDir}/runtime-status.json`, JSON.stringify(createRuntimeStatus()), 'utf8'),
+            writeFile(`${artifactDir}/console-messages.json`, JSON.stringify([]), 'utf8'),
+          ]);
+          return outputDir;
+        },
+        async (_sourceUrl: string, outputDir: string) => {
+          const downloadPath = `${outputDir}/startup-profile-upload-bundle.zip`;
+          await mkdir(outputDir, { recursive: true });
+          await writeFile(downloadPath, 'not-a-real-zip', 'utf8');
+          return downloadPath;
+        },
+      );
+
+      expect(result.importedFromZip).toBe(true);
+      expect(result.analysisRootDir).toBe(defaultImportedUploadDir(sourceUrl));
+      expect(result.artifactDir).toBe(`${defaultImportedUploadDir(sourceUrl)}/artifacts`);
+    } finally {
+      await rm(defaultImportedUploadDir(sourceUrl), { recursive: true, force: true });
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('writes report, comparison, and manifest artifacts for an uploaded artifact directory', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'hel-142-upload-analyze-'));
     const sourceDir = `${tempRoot}/upload`;

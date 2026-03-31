@@ -291,6 +291,13 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    ```bash
    STARTUP_PROFILE_UPLOAD_SOURCE=/absolute/path/to/startup-profile-upload-bundle.zip \
    npm run profile:webgpu-startup:analyze-upload
+
+   The analyzer also now accepts a direct HTTP(S) bundle URL, so a future pass
+   can skip the manual download step if the RTX operator shares a reachable
+   `startup-profile-upload-bundle.zip` link:
+
+   STARTUP_PROFILE_UPLOAD_SOURCE=https://.../startup-profile-upload-bundle.zip \
+   npm run profile:webgpu-startup:analyze-upload
    ```
 
    The analyzer accepts either a `.zip` bundle or an unpacked artifact directory. It regenerates `startup-profile-report.*`, `startup-profile-comparison.*`, and `startup-profile-upload-manifest.*` under the resolved artifact directory so the uploaded RTX capture is ready for review without extra hand assembly.

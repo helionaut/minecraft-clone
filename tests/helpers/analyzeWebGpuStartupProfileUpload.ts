@@ -22,6 +22,11 @@ export type ResolvedStartupProfileUploadSource = {
   importedFromZip: boolean;
 };
 
+export type StartupProfileUploadDownloader = (
+  sourcePath: string,
+  outputDir: string,
+) => Promise<string>;
+
 export type StartupProfileUploadAnalysisResult = ResolvedStartupProfileUploadSource & {
   reportJsonPath: string;
   reportMarkdownPath: string;
@@ -51,6 +56,7 @@ export const resolveStartupProfileUploadSource =
   analyzeStartupProfileUploadScript.resolveStartupProfileUploadSource as (
     plan: { sourcePath: string; outputDir?: string },
     extractArchive?: (sourcePath: string, outputDir: string) => Promise<string>,
+    downloadRemoteSource?: StartupProfileUploadDownloader,
   ) => Promise<ResolvedStartupProfileUploadSource>;
 
 export const analyzeStartupProfileUpload =
@@ -64,4 +70,5 @@ export const analyzeStartupProfileUpload =
       candidateLabel: string;
     },
     extractArchive?: (sourcePath: string, outputDir: string) => Promise<string>,
+    downloadRemoteSource?: StartupProfileUploadDownloader,
   ) => Promise<StartupProfileUploadAnalysisResult>;

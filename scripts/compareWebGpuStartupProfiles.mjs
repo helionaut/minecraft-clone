@@ -13,7 +13,7 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
 }
 
-async function resolveStartupProfilingReport({ reportPath, artifactDir }) {
+export async function resolveStartupProfilingReport({ reportPath, artifactDir }) {
   try {
     return await readJson(reportPath);
   } catch (error) {

@@ -286,6 +286,14 @@ Attempted to execute the profiling pass from the current Symphony host workspace
    - `startup-profile-comparison.md`
 
    Use that comparison output to separate true RTX-only hotspots from the already known SwiftShader control costs such as `initial-rebuild-world` and `ReadPixels`-driven stalls.
+7. If the RTX machine returns a copied artifact directory or `startup-profile-upload-bundle.zip`, ingest it from the Linux workspace with one command instead of re-running the report/comparison steps manually:
+
+   ```bash
+   STARTUP_PROFILE_UPLOAD_SOURCE=/absolute/path/to/startup-profile-upload-bundle.zip \
+   npm run profile:webgpu-startup:analyze-upload
+   ```
+
+   The analyzer accepts either a `.zip` bundle or an unpacked artifact directory. It regenerates `startup-profile-report.*`, `startup-profile-comparison.*`, and `startup-profile-upload-manifest.*` under the resolved artifact directory so the uploaded RTX capture is ready for review without extra hand assembly.
    Compare the RTX deltas against these code paths first:
    - `computeVoxelLighting(...)` in `src/gameplay/lighting.ts`
    - `worldGroup.clear()` plus the `world.forEachLoadedBlockInBounds(...)` loop in `src/rendering/scene.ts`

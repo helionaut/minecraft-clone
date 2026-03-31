@@ -39,7 +39,7 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - GitHub Actions also does not provide a hidden fallback execution lane here: the repo currently has zero registered self-hosted runners, and `.github/workflows/ci.yml` runs PR validation only on `ubuntu-latest`.
 - A blocker revalidation pass on 2026-03-31 confirmed the environment has not improved since publication:
   - `gh api repos/helionaut/minecraft-clone/actions/runners` still returns `total_count=0`
-  - PR #52 still points at `3fa99de15ff8c5521b24d23a587ccb6fa18ffc83`, `CI / check` is green, and `Profile WebGPU Startup` run `23786573281` remains queued with no runner assignment
+  - PR #52 now points at `5609adff6bbdc09d5d5bb1c0b9636592342ba5ad`, `CI / check` is green, and `Profile WebGPU Startup` run `23787292496` remains queued with no runner assignment
   - a fresh local Playwright Chromium probe still reports `navigator.gpu === false`
   - `/dev/dri` is absent and Linux `nvidia-smi` is still unavailable
 - A sharper limitation emerged after publishing `.github/workflows/profile-webgpu-startup.yml`: GitHub does not register or dispatch that `workflow_dispatch` lane while it exists only on the PR branch. `gh workflow list` and `GET /repos/helionaut/minecraft-clone/actions/workflows` still expose only `CI`, `Deploy Pages`, and `PRD Docs`, and direct dispatch/get requests for `profile-webgpu-startup.yml` return `404 workflow ... not found on the default branch`.
@@ -47,6 +47,10 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - To remove that default-branch-only dependency, the profiling workflow now also listens to issue-branch `push` and profiling-related `pull_request` updates. That means a future self-hosted Windows/x64/GPU runner can execute this branch without waiting for `workflow_dispatch` registration on `main`; the remaining hard blocker is the missing runner or external RTX artifact, not the branch event wiring.
 - That still leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
+- A later artifact-input check on 2026-03-31 still found no uploaded RTX capture bundle to analyze:
+  - `reports/startup-profiling/` is still empty in this workspace
+  - only the committed Intel control baseline remains under `artifacts/startup-profiling-baselines/`
+  - PR #52 comments still contain no attached profiling artifact handoff
 
 ### Windows-side host capture from this pass
 

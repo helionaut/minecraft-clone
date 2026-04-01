@@ -405,6 +405,11 @@ function getColumnData(config: WorldConfig, x: number, z: number): ColumnData {
   };
 }
 
+function getColumnSurfaceY(config: WorldConfig, x: number, z: number): number {
+  const column = getColumnData(config, x, z);
+  return column.flooded ? Math.max(column.height, config.seaLevel) : column.height;
+}
+
 function getDecorationScore(seed: number, x: number, z: number): number {
   return fbm2d(seed + 211, x * 0.33, z * 0.33, 2, 2.1, 0.55);
 }
@@ -918,6 +923,28 @@ export class VoxelWorld {
     }
 
     return this.#peekBlock(x, y, z);
+  }
+
+  getSurfaceHeight(x: number, z: number): number {
+    const loadedChunk = this.#getLoadedChunkForBlock(x, z);
+
+    if (!loadedChunk) {
+      return getColumnSurfaceY(this.config, x, z);
+    }
+
+    let surfaceY = Number.NEGATIVE_INFINITY;
+
+    for (const key of loadedChunk.currentBlocks.keys()) {
+      const [blockX, y, blockZ] = splitBlockKey(key);
+
+      if (blockX !== x || blockZ !== z) {
+        continue;
+      }
+
+      surfaceY = Math.max(surfaceY, y);
+    }
+
+    return Number.isFinite(surfaceY) ? surfaceY : getColumnSurfaceY(this.config, x, z);
   }
 
   isSolidBlock(x: number, y: number, z: number): boolean {

@@ -8,6 +8,7 @@
     "build:debug": "tsc --noEmit && vite build --mode debug",
     "generate:inventory-icons": "node scripts/generateInventoryIcons.mjs",
     "build": "tsc --noEmit && vite build",
+    "profile:chunk-traversal": "node scripts/profileChunkTraversal.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

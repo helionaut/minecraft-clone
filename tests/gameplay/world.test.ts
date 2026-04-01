@@ -155,6 +155,18 @@ describe('VoxelWorld', () => {
     expect(world.getLoadedChunkCount()).toBe(before);
   });
 
+  it('samples surface height without loading new chunks', () => {
+    const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
+
+    world.loadChunksAround(0, 0, 1, 9);
+    const before = world.getLoadedChunkCount();
+    const height = world.getSurfaceHeight(DEFAULT_WORLD_CONFIG.chunkSize * 3, 0);
+
+    expect(height).toBeGreaterThanOrEqual(DEFAULT_WORLD_CONFIG.minY);
+    expect(height).toBeLessThanOrEqual(DEFAULT_WORLD_CONFIG.maxY);
+    expect(world.getLoadedChunkCount()).toBe(before);
+  });
+
   it('finds a deterministic spawn above non-fluid terrain', () => {
     const world = new VoxelWorld(DEFAULT_WORLD_CONFIG);
     const spawn = world.getSpawnPoint();

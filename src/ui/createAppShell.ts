@@ -35,6 +35,7 @@ declare global {
       };
       readonly getBlockAt: (x: number, y: number, z: number) => string | null;
       readonly getStatus: () => SandboxStatus | null;
+      readonly getStartupProfile: () => unknown;
       readonly getDiagnostics?: () => SceneDiagnosticsSnapshot;
       readonly moveInventorySlot: (fromIndex: number, toIndex: number) => void;
       readonly setMenuOpen: (open: boolean) => void;
@@ -1096,6 +1097,7 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
   const exposeQaHarness = searchParams.has('qaHarness');
   const freezeAtSpawnFrame = exposeQaHarness && searchParams.has('freezeScene');
   const autoOpenMenu = exposeQaHarness && searchParams.has('autoOpenMenu');
+  const exposeStartupProfile = searchParams.has('startupProfile');
   const browserDiagnosticsMonitor = diagnosticsEnabled
     ? createBrowserDiagnosticsMonitor(window)
     : null;
@@ -1104,8 +1106,18 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
     applyStatus,
     touchControls,
     hotbarControls,
-    { freezeAtSpawnFrame },
+    {
+      freezeAtSpawnFrame,
+      startupProfilingEnabled: exposeStartupProfile,
+    },
   );
+
+  if (exposeStartupProfile) {
+    console.info(
+      '[minecraft-clone][startup-profile]',
+      JSON.stringify(sandbox.getStartupProfile()),
+    );
+  }
 
   if (exposeQaHarness) {
     window.__minecraftCloneQa = {
@@ -1119,6 +1131,7 @@ export async function createAppShell(root: HTMLDivElement): Promise<void> {
       placeSelectedBlockOnNearestSurface: () => sandbox.placeSelectedBlockOnNearestSurface(),
       getBlockAt: (x: number, y: number, z: number) => sandbox.getBlockAt(x, y, z),
       getStatus: () => sandbox.getStatusSnapshot(),
+      getStartupProfile: () => sandbox.getStartupProfile(),
       getDiagnostics: () => sandbox.getDiagnosticsSnapshot(browserDiagnosticsMonitor?.captureSnapshot()),
       moveInventorySlot: (fromIndex: number, toIndex: number) => {
         moveInventorySlot(fromIndex, toIndex);

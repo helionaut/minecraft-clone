@@ -14,6 +14,7 @@ const sandboxStub = {
   placeSelectedBlockOnNearestSurface: vi.fn(),
   getBlockAt: vi.fn(),
   getStatusSnapshot: vi.fn(),
+  getStartupProfile: vi.fn(),
   getDiagnosticsSnapshot: vi.fn(),
   resetWorld: vi.fn(),
   dispose: vi.fn(),
@@ -47,9 +48,20 @@ describe('createAppShell', () => {
     sandboxStub.placeSelectedBlockOnNearestSurface.mockReset();
     sandboxStub.getBlockAt.mockReset();
     sandboxStub.getStatusSnapshot.mockReset();
+    sandboxStub.getStartupProfile.mockReset();
     sandboxStub.getDiagnosticsSnapshot.mockReset();
     sandboxStub.resetWorld.mockReset();
     sandboxStub.dispose.mockReset();
+    sandboxStub.getStartupProfile.mockReturnValue({
+      phases: [{ name: 'create-scene-renderer', durationMs: 42 }],
+      frameSamples: [{ index: 1, durationMs: 16.7 }],
+      totalDurationMs: 80,
+      completedAt: 80,
+      startedAt: 0,
+      longFrameCount: 0,
+      maxFrameDurationMs: 16.7,
+      longFrameThresholdMs: 50,
+    });
     window.history.replaceState({}, '', '/');
   });
 
@@ -57,6 +69,36 @@ describe('createAppShell', () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('exposes the startup profile through the QA harness when requested', async () => {
+    const root = document.querySelector<HTMLDivElement>('#app');
+
+    if (!root) {
+      throw new Error('Expected #app test root.');
+    }
+
+    const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    window.history.replaceState({}, '', '/?qaHarness=1&startupProfile=1');
+
+    await createAppShell(root);
+
+    expect(window.__minecraftCloneQa?.getStartupProfile()).toEqual({
+      phases: [{ name: 'create-scene-renderer', durationMs: 42 }],
+      frameSamples: [{ index: 1, durationMs: 16.7 }],
+      totalDurationMs: 80,
+      completedAt: 80,
+      startedAt: 0,
+      longFrameCount: 0,
+      maxFrameDurationMs: 16.7,
+      longFrameThresholdMs: 50,
+    });
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      '[minecraft-clone][startup-profile]',
+      JSON.stringify(sandboxStub.getStartupProfile()),
+    );
+
+    consoleInfoSpy.mockRestore();
   });
 
   it('opens a Minecraft-style inventory window with storage grid, hotbar row, and recipe book', async () => {

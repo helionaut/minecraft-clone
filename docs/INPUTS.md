@@ -1,7 +1,7 @@
 # External Inputs Contract: Minecraft Clone
 
-Status: First-slice contract defined
-Last Updated: 2026-03-24
+Status: First-slice contract defined, HEL-142 profiling addendum recorded
+Last Updated: 2026-03-31
 
 ## Project Intent
 
@@ -90,3 +90,54 @@ None.
 
 The repo can proceed on the assumption that the first vertical slice uses only
 local code, local fixtures, and optional checked-in placeholder assets.
+
+## HEL-142 Profiling Artifact Contract
+
+HEL-142 is not blocked on a private asset, but it does depend on one external
+proof artifact that cannot be generated on the current machine.
+
+Required external input for HEL-142:
+- one startup profiling artifact bundle or unpacked artifact directory captured
+  from desktop Chrome running on RTX-class hardware against branch
+  `eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene`
+
+Accepted returned forms:
+- `startup-profile-upload-bundle.zip`
+- an HTTP(S) URL that points at `startup-profile-upload-bundle.zip`
+- a private GitHub Actions artifact API URL such as
+  `https://api.github.com/repos/<owner>/<repo>/actions/artifacts/<id>/zip`
+- a GitHub web artifact page URL such as
+  `https://github.com/<owner>/<repo>/actions/runs/<run-id>/artifacts/<id>`
+- an unpacked artifact directory containing at least:
+  - `runtime-status.json`
+  - `startup-profile.json`
+  - `chrome-performance-trace.json`
+  - `console-messages.json`
+
+Preferred generation paths on the RTX machine:
+- `PLAYWRIGHT_PROFILE_EXECUTABLE_PATH=/absolute/path/to/chrome npm run profile:webgpu-startup:local-preview`
+- `PLAYWRIGHT_BASE_URL=http://127.0.0.1:4173/minecraft-clone/ npm run profile:webgpu-startup`
+- if WSL is only hosting the preview, `npm run profile:webgpu-startup:stage-windows-runtime`
+  followed by `C:\\Temp\\hel142-startup-runtime\\run-startup-profile.cmd`
+
+How the returned input is consumed in this workspace:
+- `STARTUP_PROFILE_UPLOAD_SOURCE=/absolute/path/to/<bundle-or-dir> npm run profile:webgpu-startup:analyze-upload`
+- `STARTUP_PROFILE_UPLOAD_SOURCE=https://.../startup-profile-upload-bundle.zip npm run profile:webgpu-startup:analyze-upload`
+- `STARTUP_PROFILE_UPLOAD_SOURCE=https://api.github.com/repos/<owner>/<repo>/actions/artifacts/<id>/zip npm run profile:webgpu-startup:analyze-upload`
+- `STARTUP_PROFILE_UPLOAD_SOURCE=https://github.com/<owner>/<repo>/actions/runs/<run-id>/artifacts/<id> npm run profile:webgpu-startup:analyze-upload`
+
+For private GitHub artifact URLs, the analyzer will reuse `GITHUB_TOKEN`,
+`GH_TOKEN`, or the local `gh auth token` session from this machine when
+available, and GitHub web artifact URLs are normalized internally to the API
+download endpoint before fetching.
+
+Source-of-truth repo paths for this lane:
+- operator instructions: `docs/RESEARCH.md`
+- upload analyzer: `scripts/analyzeWebGpuStartupProfileUpload.mjs`
+- imported artifact staging root: `reports/startup-profiling/imported/`
+- committed control baseline for comparison:
+  `artifacts/startup-profiling-baselines/hel-142-windows-intel-control-startup-profile-report.json`
+
+Current HEL-142 gap:
+- no qualifying RTX startup profiling artifact has been uploaded yet, so the
+  analyzer path exists but still has no external input to process

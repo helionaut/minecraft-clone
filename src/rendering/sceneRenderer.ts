@@ -7,6 +7,7 @@ import {
   type VolumetricLightingDisableReason,
 } from './volumetricLighting.ts';
 import type { RendererDiagnostics } from './sandboxStatus.ts';
+import type { StartupProfiler } from './startupProfiling.ts';
 
 export type SceneRenderer = WebGLRenderer | WebGPURenderer;
 export type SceneRendererBackend = 'webgl' | 'webgpu';
@@ -53,6 +54,7 @@ interface CreateSceneRendererOptions {
   readonly touchDevice: boolean;
   readonly rendererDiagnostics: RendererDiagnostics;
   readonly webGpuPreference?: WebGpuPreference;
+  readonly startupProfiler?: Pick<StartupProfiler, 'measure' | 'measureSync'>;
   readonly userAgent?: string;
   readonly onWebGpuDeviceLost?: (info: WebGpuDeviceLossInfo) => void;
 }
@@ -202,6 +204,7 @@ export async function createSceneRenderer(
   options: CreateSceneRendererOptions,
 ): Promise<SceneRendererSelection> {
   const { canvas, touchDevice, rendererDiagnostics } = options;
+  const startupProfiler = options.startupProfiler;
   const webGpuPreference = options.webGpuPreference ?? {
     mode: 'auto',
     reason: null,
@@ -238,9 +241,13 @@ export async function createSceneRenderer(
     );
   }
 
-  const adapter = await navigator.gpu.requestAdapter({
-    powerPreference: 'high-performance',
-  });
+  const adapter = await (startupProfiler
+    ? startupProfiler.measure('create-scene-renderer:request-adapter', () => navigator.gpu.requestAdapter({
+      powerPreference: 'high-performance',
+    }))
+    : navigator.gpu.requestAdapter({
+      powerPreference: 'high-performance',
+    }));
 
   if (!isUsableWebGpuAdapter(adapter as { readonly isFallbackAdapter?: boolean } | null)) {
     return fallbackSelection(
@@ -251,11 +258,17 @@ export async function createSceneRenderer(
     );
   }
 
-  const renderer = new WebGPURenderer({
-    antialias: true,
-    alpha: true,
-    canvas,
-  });
+  const renderer = startupProfiler
+    ? startupProfiler.measureSync('create-scene-renderer:create-renderer-instance', () => new WebGPURenderer({
+      antialias: true,
+      alpha: true,
+      canvas,
+    }))
+    : new WebGPURenderer({
+      antialias: true,
+      alpha: true,
+      canvas,
+    });
   attachWebGpuDeviceLossHandler(renderer, options.onWebGpuDeviceLost, (info) => ({
     api: info.api,
     message: info.message,
@@ -263,7 +276,11 @@ export async function createSceneRenderer(
   }));
 
   try {
-    await renderer.init();
+    if (startupProfiler) {
+      await startupProfiler.measure('create-scene-renderer:init-renderer', () => renderer.init());
+    } else {
+      await renderer.init();
+    }
   } catch {
     renderer.dispose();
     return fallbackSelection(canvas, touchDevice, rendererDiagnostics, 'webgpu-init-failed');

@@ -72,4 +72,50 @@ describe('computeVoxelLighting', () => {
     expect(lighting.getCellLight(1, 0, 0).blocklight).toBeGreaterThan(10);
     expect(lighting.getBlockBrightness(0, 0, 0)).toBeGreaterThan(0.9);
   });
+
+  it('emits nested timing phases when a profiler is provided', () => {
+    const phases: string[] = [];
+    const phaseMetrics = new Map<string, Record<string, number>>();
+
+    computeVoxelLighting(
+      {
+        minX: -1,
+        maxX: 1,
+        minY: -1,
+        maxY: 1,
+        minZ: -1,
+        maxZ: 1,
+      },
+      createBlockGetter([[0, 0, 0, 'lava']]),
+      {
+        measureSync<T>(name: string, run: () => T): T {
+          phases.push(name);
+          return run();
+        },
+        recordPhaseMetrics(name, metrics) {
+          phaseMetrics.set(name, metrics);
+        },
+      },
+    );
+
+    expect(phases).toEqual([
+      'seed-sunlight-columns',
+      'seed-emissive-blocks',
+      'propagate-light-queue',
+    ]);
+    expect(phaseMetrics.get('seed-sunlight-columns')).toEqual({
+      columnCount: 25,
+      cellVisits: 100,
+    });
+    expect(phaseMetrics.get('seed-emissive-blocks')).toEqual({
+      scannedCells: 27,
+      emissiveBlocks: 1,
+    });
+    expect(phaseMetrics.get('propagate-light-queue')).toEqual({
+      queueSeeds: 101,
+      processedEntries: 200,
+      neighborChecks: 1200,
+      lightWrites: 99,
+    });
+  });
 });

@@ -45,13 +45,15 @@ Attempted to execute the profiling pass from the current Symphony host workspace
 - A current GitHub-hosted fallback check on 2026-03-31 also closed one remaining ambiguity:
   - GitHub now documents GPU-powered larger runners, but that feature is limited to organizations and enterprises on Team or Enterprise Cloud plans
   - `helionaut/minecraft-clone` is owned by the user account `helionaut`, not an organization, so this repo cannot switch the profiling workflow to a GitHub-hosted GPU larger runner without first changing repo ownership or account plan eligibility
-- A sharper limitation emerged after publishing `.github/workflows/profile-webgpu-startup.yml`: GitHub does not register or dispatch that `workflow_dispatch` lane while it exists only on the PR branch. `gh workflow list` and `GET /repos/helionaut/minecraft-clone/actions/workflows` still expose only `CI`, `Deploy Pages`, and `PRD Docs`, and direct dispatch/get requests for `profile-webgpu-startup.yml` return `404 workflow ... not found on the default branch`.
-- A follow-up CLI probe on 2026-03-31 removed the last ambiguity there: `gh workflow run profile-webgpu-startup.yml --ref eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene` also returns `HTTP 404: workflow profile-webgpu-startup.yml not found on the default branch`, so manual dispatch is still unavailable until the workflow lands on `main`.
 - A follow-up cleanup on 2026-04-01 removed those branch auto-triggers again. In this user-owned repo with `total_count=0` self-hosted runners, the `push`/`pull_request` wiring only left PR #52 with a permanently queued `profile` check and did not create a new usable execution surface.
-- The remote path is therefore back to the two truthful options only:
-  - manual `workflow_dispatch` after `.github/workflows/profile-webgpu-startup.yml` exists on `main` and an eligible self-hosted Windows/x64/GPU runner is attached
+- A follow-up probe on 2026-04-01 narrowed the GitHub blocker further:
+  - `gh workflow list --all` now exposes `Profile WebGPU Startup`
+  - `gh workflow run "Profile WebGPU Startup" --ref eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene -f ref=eugeniy/hel-142-profile-desktop-frame-spikes-on-rtx-chrome-for-webgpu-scene -f require_rtx=true` succeeded and created run `23825143229`
+  - that run's `profile` job `69446289159` stayed `queued` until cancellation because `gh api repos/helionaut/minecraft-clone/actions/runners` still returned `total_count=0`
+- The remote path is therefore down to the two truthful options only:
+  - manual `workflow_dispatch` of `Profile WebGPU Startup` once an eligible self-hosted Windows/x64/GPU runner is attached
   - an externally run RTX Chrome capture that uploads `reports/startup-profiling/*` back to the issue or PR
-- That still leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured. The remaining external lanes are now narrower and explicit: either provide a self-hosted Windows/x64/GPU runner that this user-owned repo can target, or upload an RTX artifact bundle captured off-box.
+- That still leaves the ticket's requested RTX execution surface unavailable from this machine before any truthful target-surface profiler trace can be captured. The remaining external lanes are now narrower and explicit: either attach a self-hosted Windows/x64/GPU runner that this user-owned repo can target, or upload an RTX artifact bundle captured off-box.
 - A manual `workflow_dispatch` deployment attempt for this PR branch built successfully but failed at the Pages deploy gate because the `github-pages` environment rejects this branch under its custom branch policy.
 - A later artifact-input check on 2026-03-31 still found no uploaded RTX capture bundle to analyze:
   - `reports/startup-profiling/` is still empty in this workspace
